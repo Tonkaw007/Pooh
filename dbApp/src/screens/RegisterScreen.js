@@ -54,7 +54,6 @@ const RegisterScreen = ({ navigation }) => {
         <Text style={styles.title}>Create Account</Text>
       </View>
 
-      {/* Username */}
       <SearchBox
         placeHolder="Username"
         value={username}
