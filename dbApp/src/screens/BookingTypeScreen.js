@@ -8,9 +8,9 @@ const BookingTypeScreen = ({ navigation, route }) => {
 
   const handleContinue = () => {
     if (selectedType === 'resident') {
-      navigation.navigate('Parking', { username, bookingType: selectedType });
+      navigation.navigate('Parking', { username, bookingType: selectedType }); //ไปที่หน้าการจองต่อ
     } else if (selectedType === 'visitor') {
-      navigation.navigate('NextScreen', { username, bookingType: selectedType });
+      navigation.navigate('NextScreen', { username, bookingType: selectedType }); //รอแก้
     }
   };
 
