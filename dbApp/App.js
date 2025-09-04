@@ -5,6 +5,7 @@ import Homescreen from "./src/screens/Homescreen";
 import ListCard from "./src/component/ParkingSlot";
 import RegisterScreen from "./src/screens/RegisterScreen";
 import LoginScreen from "./src/screens/LoginScreen";
+import BookingTypeScreen from "./src/screens/BookingTypeScreen";
 import CarparkingScreen from "./src/screens/CarparkingScreen";
 import ReservationScreen from "./src/screens/ReservationScreen";
 import PaymentScreen from "./src/screens/PaymentScreen";
@@ -31,6 +32,13 @@ const App = () => {
         component={LoginScreen}
         options={{ headerShown: false }}
         />
+
+        <Stack.Screen 
+        name="BookingType" 
+        component={BookingTypeScreen}
+        options={{ headerShown: false }}
+        />
+
          <Stack.Screen 
         name="Parking" 
         component={CarparkingScreen}

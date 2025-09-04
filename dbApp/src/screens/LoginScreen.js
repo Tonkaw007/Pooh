@@ -25,8 +25,8 @@ const LoginScreen = ({ navigation }) => {
 
         Alert.alert("Login Successful", `Welcome back ${username}!`);
 
-        // ส่ง username ไปหน้า Parking
-        navigation.navigate("Parking", {  
+        // ส่ง username ไปหน้า BookingType
+        navigation.navigate("BookingType", {  
           username: username,
         });
       } else {
@@ -65,7 +65,7 @@ const LoginScreen = ({ navigation }) => {
 
       <CustomButton
         title="Log In"
-        backgroundColor="#FFFFFF"
+        backgroundColor="#fff"
         textColor="#B19CD8"
         fontSize={18}
         width="100%"
