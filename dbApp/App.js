@@ -40,13 +40,11 @@ const App = () => {
         options={{ headerShown: false }}
         />
 
-       <Stack.Screen 
+        <Stack.Screen 
         name="VisitorRegister" 
         component={VisitorRegisterScreen}
         options={{ headerShown: false }}
         />
-
-
 
 
          <Stack.Screen 

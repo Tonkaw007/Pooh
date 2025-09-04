@@ -7,36 +7,53 @@ import { db } from "../firebaseConfig";
 import { ref, push, set } from "firebase/database";
 
 const VisitorRegisterScreen = ({ navigation, route }) => {
-  const username = route.params?.username || 'User';
-  const [visitorName, setVisitorName] = useState("");
+  const username = route.params?.username || "User";
+
+  const [visitorUsername, setVisitorUsername] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
 
   const handleRegisterVisitor = async () => {
     try {
-      if (!visitorName || !email || !licensePlate) {
-        Alert.alert("Error", "Please fill in all fields");
+      if (!visitorUsername || !phoneNumber || !email || !licensePlate) {
+        Alert.alert("Error", "กรุณากรอกข้อมูลให้ครบทุกช่อง");
         return;
       }
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
-        Alert.alert("Error", "Invalid email format");
+        Alert.alert("Error", "รูปแบบอีเมลไม่ถูกต้อง");
+        return;
+      }
+
+      const phoneRegex = /^[0-9]{9,10}$/;
+      if (!phoneRegex.test(phoneNumber)) {
+        Alert.alert("Error", "เบอร์โทรต้องเป็นตัวเลข 9-10 หลัก");
         return;
       }
 
       const newVisitorRef = push(ref(db, "visitors"));
       await set(newVisitorRef, {
-        visitorName,
+        visitorUsername,
+        phoneNumber,
         email,
         licensePlate,
         createdAt: new Date().toISOString(),
         createdBy: username,
       });
-
-      Alert.alert("Success", "Visitor registered!");
-      navigation.navigate("Parking", { username, bookingType: "visitor" });
-
+      //รอแก้
+      Alert.alert("Success", "ลงทะเบียนผู้มาเยือนเรียบร้อยแล้ว!");
+      navigation.navigate("Parking", {
+        username,
+        bookingType: "visitor",
+        visitorInfo: {
+          visitorUsername,
+          phoneNumber,
+          email,
+          licensePlate,
+        },
+      });
     } catch (error) {
       console.error(error);
       Alert.alert("Register Failed", error.message);
@@ -51,19 +68,29 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
       </View>
 
       <SearchBox
-        placeHolder="Visitor Name"
-        value={visitorName}
-        onChangeText={setVisitorName}
+        placeHolder="Username"
+        value={visitorUsername}
+        onChangeText={setVisitorUsername}
         icon="person"
         containerStyle={styles.input}
       />
 
       <SearchBox
-        placeHolder="Visitor Email"
+        placeHolder="Phone Number"
+        value={phoneNumber}
+        onChangeText={setPhoneNumber}
+        icon="phone"
+        containerStyle={styles.input}
+        keyboardType="phone-pad"
+      />
+
+      <SearchBox
+        placeHolder="Email"
         value={email}
         onChangeText={setEmail}
         icon="email"
         containerStyle={styles.input}
+        keyboardType="email-address"
       />
 
       <SearchBox
@@ -75,7 +102,7 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
       />
 
       <CustomButton
-        title="Save Visitor"
+        title="Submit Visitor"
         backgroundColor="#FFFFFF"
         textColor="#B19CD8"
         fontSize={18}
@@ -85,7 +112,10 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
         onPress={handleRegisterVisitor}
       />
 
-      <TouchableOpacity style={styles.loginLink} onPress={() => navigation.goBack()}>
+      <TouchableOpacity
+        style={styles.loginLink}
+        onPress={() => navigation.goBack()}
+      >
         <Text style={styles.loginText}>
           Back to <Text style={styles.loginHighlight}>Booking</Text>
         </Text>
@@ -98,36 +128,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",
-    backgroundColor: '#B19CD8',
+    backgroundColor: "#B19CD8",
     padding: 25,
   },
   header: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 40,
   },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: 'white',
+    fontWeight: "bold",
+    color: "white",
     marginTop: 15,
   },
   input: {
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderRadius: 10,
     marginBottom: 20,
-    width: '100%',
+    width: "100%",
   },
   loginLink: {
     marginTop: 25,
-    alignItems: 'center',
+    alignItems: "center",
   },
   loginText: {
-    color: 'white',
+    color: "white",
     fontSize: 16,
   },
   loginHighlight: {
-    fontWeight: 'bold',
-    textDecorationLine: 'underline',
+    fontWeight: "bold",
+    textDecorationLine: "underline",
   },
 });
 
