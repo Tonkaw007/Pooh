@@ -6,6 +6,7 @@ import ListCard from "./src/component/ParkingSlot";
 import RegisterScreen from "./src/screens/RegisterScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import BookingTypeScreen from "./src/screens/BookingTypeScreen";
+import VisitorRegisterScreen from "./src/screens/VisitorRegisterScreen";
 import CarparkingScreen from "./src/screens/CarparkingScreen";
 import ReservationScreen from "./src/screens/ReservationScreen";
 import PaymentScreen from "./src/screens/PaymentScreen";
@@ -38,6 +39,15 @@ const App = () => {
         component={BookingTypeScreen}
         options={{ headerShown: false }}
         />
+
+       <Stack.Screen 
+        name="VisitorRegister" 
+        component={VisitorRegisterScreen}
+        options={{ headerShown: false }}
+        />
+
+
+
 
          <Stack.Screen 
         name="Parking" 
