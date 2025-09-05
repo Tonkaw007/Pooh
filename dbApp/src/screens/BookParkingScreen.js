@@ -1,13 +1,5 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  KeyboardAvoidingView
-} from 'react-native';
+import { View,Text,StyleSheet,TouchableOpacity,ScrollView,Alert, KeyboardAvoidingView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { db } from '../firebaseConfig';
 import { ref, push, set } from 'firebase/database';
@@ -366,10 +358,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginHorizontal: 5,
   },
-  selectedDuration: { backgroundColor: '#B19CD8' },
-  durationText: { fontSize: 16, color: '#333', fontWeight: 'bold' },
-  selectedDurationText: { color: 'white' },
-  searchButton: {
+  selectedDuration: { 
+    backgroundColor: '#B19CD8' },
+  durationText: { 
+    fontSize: 16, 
+    color: '#333', 
+    fontWeight: 'bold' },
+  selectedDurationText: { 
+    color: 'white' },
+    searchButton: {
     backgroundColor: '#fff',
     padding: 18,
     borderRadius: 15,
