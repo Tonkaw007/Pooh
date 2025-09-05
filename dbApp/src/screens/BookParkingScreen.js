@@ -381,8 +381,12 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
-  searchText: { color: '#B19CD8', fontSize: 20, fontWeight: 'bold' },
-  disabledButton: { opacity: 0.5 },
+  searchText: { 
+    color: '#B19CD8', 
+    fontSize: 20, 
+    fontWeight: 'bold' },
+  disabledButton: { 
+    opacity: 0.5 },
 });
 
 export default BookParkingScreen;

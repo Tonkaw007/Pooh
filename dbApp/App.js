@@ -41,9 +41,9 @@ const App = () => {
         />
         <Stack.Screen 
         name="BookParking" 
-  component={BookParkingScreen} 
-  options={{ headerShown: false }}
-/>
+        component={BookParkingScreen} 
+        options={{ headerShown: false }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
