@@ -21,24 +21,34 @@ const BookingTypeScreen = ({ navigation, route }) => {
             'Limit Reached',
             'You cannot register more than 3 visitors.'
           );
-          return;
+          return false;
         }
       }
-      navigation.navigate('VisitorRegister', {
-        username,
-        bookingType: 'visitor',
-      });
+      return true;
     } catch (error) {
       console.error(error);
       Alert.alert('Error', 'Unable to check visitor limit.');
+      return false;
     }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (selectedType === 'resident') {
-      navigation.navigate('Parking', { username, bookingType: selectedType }); //แก้
+      // Navigate directly to BookParkingScreen for residents
+      navigation.navigate('BookParking', { 
+        username, 
+        bookingType: selectedType 
+      });
     } else if (selectedType === 'visitor') {
-      checkVisitorLimit();
+      // Check visitor limit first
+      const canProceed = await checkVisitorLimit();
+      if (canProceed) {
+        // Navigate to BookParkingScreen for visitors
+        navigation.navigate('BookParking', { 
+          username, 
+          bookingType: selectedType 
+        });
+      }
     }
   };
 
@@ -136,6 +146,7 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: '#fff',
+    opacity: 0.5,
   },
 });
 
