@@ -8,7 +8,8 @@ import { createUserWithEmailAndPassword } from "firebase/auth";
 import { ref, set } from "firebase/database";
 
 const RegisterScreen = ({ navigation }) => {
-  const [username, setUsername] = useState(""); 
+  const [username, setUsername] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState(""); 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -33,6 +34,7 @@ const RegisterScreen = ({ navigation }) => {
       // บันทึกเพิ่มใน Realtime Database
       await set(ref(db, "users/" + userId), {
         username,       // เก็บชื่อ-นามสกุล (username)
+        phoneNumber,    // เก็บเบอร์โทร
         email,          // เก็บอีเมล
         licensePlate,   // เก็บทะเบียนรถ
         createdAt: new Date().toISOString(),
@@ -59,6 +61,14 @@ const RegisterScreen = ({ navigation }) => {
         value={username}
         onChangeText={setUsername}
         icon="person"
+        containerStyle={styles.input}
+      />
+
+      <SearchBox
+        placeHolder="Phone Number"
+        value={phoneNumber}
+        onChangeText={setPhoneNumber}
+        icon="phone"
         containerStyle={styles.input}
       />
 

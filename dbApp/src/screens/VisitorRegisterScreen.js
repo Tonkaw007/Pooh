@@ -17,19 +17,19 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
   const handleRegisterVisitor = async () => {
     try {
       if (!visitorUsername || !phoneNumber || !email || !licensePlate) {
-        Alert.alert("Error", "กรุณากรอกข้อมูลให้ครบทุกช่อง");
+        Alert.alert("Error", "Please fill in all fields");
         return;
       }
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
-        Alert.alert("Error", "รูปแบบอีเมลไม่ถูกต้อง");
+        Alert.alert("Error", "Invalid email format");
         return;
       }
 
       const phoneRegex = /^[0-9]{9,10}$/;
       if (!phoneRegex.test(phoneNumber)) {
-        Alert.alert("Error", "เบอร์โทรต้องเป็นตัวเลข 9-10 หลัก");
+        Alert.alert("Error", "Phone number must be 9-10 digits");
         return;
       }
 
@@ -42,8 +42,8 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
         createdAt: new Date().toISOString(),
         createdBy: username,
       });
-      //รอแก้
-      Alert.alert("Success", "ลงทะเบียนผู้มาเยือนเรียบร้อยแล้ว!");
+
+      Alert.alert("Success", "Visitor registered successfully!");
       navigation.navigate("Parking", {
         username,
         bookingType: "visitor",
@@ -59,6 +59,7 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
       Alert.alert("Register Failed", error.message);
     }
   };
+
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior="padding">
@@ -102,7 +103,7 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
       />
 
       <CustomButton
-        title="Submit Visitor"
+        title="Submit"
         backgroundColor="#FFFFFF"
         textColor="#B19CD8"
         fontSize={18}

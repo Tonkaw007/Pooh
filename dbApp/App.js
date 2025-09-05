@@ -33,13 +33,11 @@ const App = () => {
         component={LoginScreen}
         options={{ headerShown: false }}
         />
-
         <Stack.Screen 
         name="BookingType" 
         component={BookingTypeScreen}
         options={{ headerShown: false }}
         />
-
         <Stack.Screen 
         name="VisitorRegister" 
         component={VisitorRegisterScreen}
