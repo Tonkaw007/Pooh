@@ -79,10 +79,15 @@ const BookParkingScreen = ({ navigation, route }) => {
       }
 
       await set(bookingRef, bookingData);
-
-      Alert.alert('Success', 'Parking booked successfully!', [
-        { text: 'OK', onPress: () => navigation.navigate('Home', { username }) }
-      ]);
+      
+      // Navigate to ReservationScreen instead of showing alert
+      navigation.navigate('Reservation', { 
+        username,
+        bookingData: {
+          ...bookingData,
+          id: bookingRef.key // Include the booking ID
+        }
+      });
     } catch (error) {
       console.error(error);
       Alert.alert('Error', 'Failed to book parking. Please try again.');
@@ -285,10 +290,14 @@ const BookParkingScreen = ({ navigation, route }) => {
         {showPicker && (
           <DateTimePicker
             value={
-              pickerMode?.includes('Date')
+              pickerMode === 'entryDate'
                 ? entryDate
-                : pickerMode?.includes('Time')
+                : pickerMode === 'entryTime'
                 ? entryTime
+                : pickerMode === 'exitDate'
+                ? exitDate
+                : pickerMode === 'exitTime'
+                ? exitTime
                 : new Date()
             }
             mode={pickerMode?.includes('Date') ? 'date' : 'time'}
@@ -303,7 +312,10 @@ const BookParkingScreen = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#B19CD8' },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#B19CD8' 
+  },
   scrollContainer: { padding: 25, paddingTop: 60 },
   backButton: { position: 'absolute', top: 40, left: 20, zIndex: 1, padding: 8 },
   header: { alignItems: 'center', marginBottom: 40, marginTop: 20 },
@@ -332,7 +344,7 @@ const styles = StyleSheet.create({
     padding: 15,
     marginHorizontal: 10,
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: 'black',
     shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
