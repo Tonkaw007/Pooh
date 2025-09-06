@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Modal } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { db } from '../firebaseConfig';
 import { ref, onValue, update } from 'firebase/database';
@@ -17,60 +17,60 @@ const ReservationScreen = ({ navigation, route }) => {
   // Parking slots data structure for each floor
   const floorSlots = {
     '1st Floor': {
-      'A-12': { status: 'available' },
-      'A-13': { status: 'available' },
-      'A-14': { status: 'unavailable' },
-      'A-15': { status: 'available' },
-      'B-12': { status: 'unavailable' },
-      'B-13': { status: 'available' },
-      'B-14': { status: 'available' },
-      'B-15': { status: 'unavailable' },
-      'C-12': { status: 'available' },
-      'C-13': { status: 'unavailable' },
-      'C-14': { status: 'available' },
-      'C-15': { status: 'available' },
+      'A01': { status: 'available' },
+      'A02': { status: 'available' },
+      'A03': { status: 'available' },
+      'A04': { status: 'available' },
+      'B01': { status: 'available' },
+      'B02': { status: 'available' },
+      'B03': { status: 'available' },
+      'B04': { status: 'available' },
+      'C01': { status: 'available' },
+      'C02': { status: 'available' },
+      'C03': { status: 'available' },
+      'C04': { status: 'available' },
     },
     '2nd Floor': {
-      'D-01': { status: 'available' },
-      'D-02': { status: 'available' },
-      'D-03': { status: 'unavailable' },
-      'D-04': { status: 'available' },
-      'E-01': { status: 'unavailable' },
-      'E-02': { status: 'available' },
-      'E-03': { status: 'available' },
-      'E-04': { status: 'unavailable' },
-      'F-01': { status: 'available' },
-      'F-02': { status: 'unavailable' },
-      'F-03': { status: 'available' },
-      'F-04': { status: 'available' },
+      'D01': { status: 'available' },
+      'D02': { status: 'available' },
+      'D03': { status: 'available' },
+      'D04': { status: 'available' },
+      'E01': { status: 'available' },
+      'E02': { status: 'available' },
+      'E03': { status: 'available' },
+      'E04': { status: 'available' },
+      'F01': { status: 'available' },
+      'F02': { status: 'available' },
+      'F03': { status: 'available' },
+      'F04': { status: 'available' },
     },
     '3rd Floor': {
-      'G-05': { status: 'available' },
-      'G-06': { status: 'available' },
-      'G-07': { status: 'unavailable' },
-      'G-08': { status: 'available' },
-      'H-05': { status: 'unavailable' },
-      'H-06': { status: 'available' },
-      'H-07': { status: 'available' },
-      'H-08': { status: 'unavailable' },
-      'I-05': { status: 'available' },
-      'I-06': { status: 'unavailable' },
-      'I-07': { status: 'available' },
-      'I-08': { status: 'available' },
+      'G01': { status: 'available' },
+      'G02': { status: 'available' },
+      'G03': { status: 'available' },
+      'G08': { status: 'available' },
+      'H01': { status: 'available' },
+      'H02': { status: 'available' },
+      'H03': { status: 'available' },
+      'H04': { status: 'available' },
+      'I01': { status: 'available' },
+      'I02': { status: 'available' },
+      'I03': { status: 'available' },
+      'I04': { status: 'available' },
     },
     '4th Floor': {
-      'J-09': { status: 'available' },
-      'J-10': { status: 'available' },
-      'J-11': { status: 'unavailable' },
-      'J-12': { status: 'available' },
-      'K-09': { status: 'unavailable' },
-      'K-10': { status: 'available' },
-      'K-11': { status: 'available' },
-      'K-12': { status: 'unavailable' },
-      'L-09': { status: 'available' },
-      'L-10': { status: 'unavailable' },
-      'L-11': { status: 'available' },
-      'L-12': { status: 'available' },
+      'J01': { status: 'available' },
+      'J02': { status: 'available' },
+      'J03': { status: 'available' },
+      'J04': { status: 'available' },
+      'K01': { status: 'available' },
+      'K02': { status: 'available' },
+      'K03': { status: 'available' },
+      'K04': { status: 'available' },
+      'L01': { status: 'available' },
+      'L02': { status: 'available' },
+      'L03': { status: 'available' },
+      'L04': { status: 'available' },
     }
   };
 
@@ -138,45 +138,67 @@ const ReservationScreen = ({ navigation, route }) => {
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Ionicons name="arrow-back" size={24} color="white" />
+          <Ionicons name="arrow-back" size={24} color="black" />
         </TouchableOpacity>
 
         <View style={styles.header}>
-          <Text style={styles.title}>reservation</Text>
+          <Text style={styles.title}>Choose Slot</Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Choose Slot</Text>
           
-          {/* Floor Selection Dropdown */}
-          <View style={styles.floorSelector}>
-            <Text style={styles.floorLabel}>Select Floor:</Text>
+          
+          {/* Improved Floor Selection */}
+          <View style={styles.floorSelectorContainer}>
+            
             <TouchableOpacity
               style={styles.floorDropdown}
-              onPress={() => setShowFloorDropdown(!showFloorDropdown)}
+              onPress={() => setShowFloorDropdown(true)}
             >
               <Text style={styles.floorDropdownText}>{selectedFloor}</Text>
               <Ionicons 
-                name={showFloorDropdown ? "chevron-up" : "chevron-down"} 
+                name="chevron-down" 
                 size={20} 
                 color="white" 
               />
             </TouchableOpacity>
           </View>
 
-          {showFloorDropdown && (
-  <View style={styles.dropdownContainer}>
-    {floors.map((floor) => (
-      <TouchableOpacity
-        key={floor}
-        style={styles.floorItem}
-        onPress={() => handleFloorSelection(floor)}
-      >
-        <Text style={styles.floorItemText}>{floor}</Text>
-      </TouchableOpacity>
-    ))}
-  </View>
-)}
+          <Modal
+            visible={showFloorDropdown}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowFloorDropdown(false)}
+          >
+            <TouchableOpacity 
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setShowFloorDropdown(false)}
+            >
+              <View style={styles.modalContent}>
+                <View style={styles.dropdownContainer}>
+                  {floors.map((floor) => (
+                    <TouchableOpacity
+                      key={floor}
+                      style={[
+                        styles.floorItem,
+                        selectedFloor === floor && styles.selectedFloorItem
+                      ]}
+                      onPress={() => handleFloorSelection(floor)}
+                    >
+                      <Text style={[
+                        styles.floorItemText,
+                        selectedFloor === floor && styles.selectedFloorItemText
+                      ]}>{floor}</Text>
+                      {selectedFloor === floor && (
+                        <Ionicons name="checkmark" size={18} color="#B19CD8" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </TouchableOpacity>
+          </Modal>
 
           <Text style={styles.floorTitle}>{selectedFloor}</Text>
           
@@ -251,7 +273,7 @@ const ReservationScreen = ({ navigation, route }) => {
         <View style={styles.legendContainer}>
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, styles.availableLegend]} />
-            <Text style={styles.legendText}>Available</Text>
+            <Text style={styles.legendText}>Available</Text> 
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, styles.unavailableLegend]} />
@@ -276,10 +298,11 @@ const ReservationScreen = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#B19CD8' 
-  },
+    container: {
+        padding: 24,
+        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+      },
   scrollContainer: { 
     padding: 25, 
     paddingTop: 60,
@@ -297,72 +320,96 @@ const styles = StyleSheet.create({
     marginBottom: 30, 
     marginTop: 20 
   },
-  title: { 
-    fontSize: 32, 
-    fontWeight: 'bold', 
-    color: 'white', 
+  title: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#333', 
     textAlign: 'center',
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
   },
   section: { 
     marginBottom: 20, 
     width: '100%',
     alignItems: 'center'
   },
-  sectionTitle: { 
-    fontSize: 24, 
-    fontWeight: 'bold', 
-    color: 'white', 
-    marginBottom: 10,
-    textAlign: 'center'
-  },
-  floorSelector: {
+  floorSelectorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 20,
+    justifyContent: 'center',
+    width: '100%',
   },
   floorLabel: {
-    fontSize: 16,
+    fontSize: 18,
     color: 'white',
-    marginRight: 10,
+    marginRight: 15,
     fontWeight: 'bold',
   },
   floorDropdown: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    padding: 10,
-    borderRadius: 8,
-    minWidth: 120,
+    backgroundColor: '#B19CD8',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderRadius: 10,
+    minWidth: 140,
     justifyContent: 'space-between',
+    borderWidth: 2,
+    borderColor: '#B19CD8',
   },
   floorDropdownText: {
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  dropdownContainer: {
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
     backgroundColor: 'white',
-    borderRadius: 8,
-    marginTop: 5,
-    width: 150,
-    zIndex: 10,
+    borderRadius: 15,
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  dropdownContainer: {
+    borderRadius: 10,
+    overflow: 'hidden',
   },
   floorItem: {
-    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#f0f0f0',
+  },
+  selectedFloorItem: {
+    backgroundColor: '#f0e6ff',
   },
   floorItemText: {
     fontSize: 16,
     color: '#333',
   },
+  selectedFloorItemText: {
+    color: '#B19CD8',
+    fontWeight: 'bold',
+  },
   floorTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: 'white',
-    marginBottom: 20,
-    textAlign: 'center'
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: 'black',
+    marginBottom: 25,
+    textAlign: 'center',
+    marginTop: 10,
   },
   slotsContainer: {
     width: '100%',
@@ -377,18 +424,17 @@ const styles = StyleSheet.create({
   },
   slot: {
     width: 70,
-    height: 70,
-    borderRadius: 10,
+    height: 50,
+    borderRadius: 8,
+    marginHorizontal: 6,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent'
   },
   availableSlot: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#93DA97',
   },
   unavailableSlot: {
-    backgroundColor: '#F44336',
+    backgroundColor: '#F7CAC9',
   },
   selectedSlot: {
     borderColor: '#FFD700',
@@ -406,7 +452,7 @@ const styles = StyleSheet.create({
     marginVertical: 10
   },
   entranceExitText: {
-    color: 'white',
+    color: 'black',
     fontSize: 16,
     fontWeight: 'bold'
   },
@@ -427,22 +473,22 @@ const styles = StyleSheet.create({
     marginRight: 5
   },
   availableLegend: {
-    backgroundColor: '#4CAF50'
+    backgroundColor: '#93DA97'
   },
   unavailableLegend: {
-    backgroundColor: '#F44336'
+    backgroundColor: '#F7CAC9'
   },
   selectedLegend: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#93DA97',
     borderWidth: 2,
     borderColor: '#FFD700'
   },
   legendText: {
-    color: 'white',
+    color: 'black',
     fontSize: 14
   },
   confirmButton: {
-    backgroundColor: '#fff',
+    backgroundColor: '#B19CD8',
     padding: 18,
     borderRadius: 15,
     alignItems: 'center',
@@ -456,7 +502,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   confirmText: { 
-    color: '#B19CD8', 
+    color: 'white', 
     fontSize: 20, 
     fontWeight: 'bold' 
   },
