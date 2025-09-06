@@ -154,10 +154,10 @@ const BookParkingScreen = ({ navigation, route }) => {
                setPickerMode('entryDate');
                setShowPicker(true);
              }}
-            >
+              >
        <Text style={styles.dateTimeValue}>{formatDate(entryDate)}</Text>
        <Ionicons name="calendar" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
-</TouchableOpacity>
+            </TouchableOpacity>
             </View>
 
             <View style={styles.section}>
@@ -316,13 +316,41 @@ const styles = StyleSheet.create({
     flex: 1, 
     backgroundColor: '#B19CD8' 
   },
-  scrollContainer: { padding: 25, paddingTop: 60 },
-  backButton: { position: 'absolute', top: 40, left: 20, zIndex: 1, padding: 8 },
-  header: { alignItems: 'center', marginBottom: 40, marginTop: 20 },
-  title: { fontSize: 32, fontWeight: 'bold', color: 'white', textAlign: 'center' },
-  section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 8},
-  ratesContainer: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: 10 },
+  scrollContainer: { 
+    padding: 25, 
+    paddingTop: 60 
+  },
+  backButton: { 
+    position: 'absolute', 
+    top: 40, 
+    left: 20, 
+    zIndex: 1, 
+    padding: 8 
+  },
+  header: { 
+    alignItems: 'center', 
+    marginBottom: 40, marginTop: 20 
+  },
+  title: { 
+    fontSize: 32, 
+    fontWeight: 'bold', 
+    color: 'white', 
+    textAlign: 'center' 
+  },
+  section: { 
+    marginBottom: 20 
+  },
+  sectionTitle: { 
+    fontSize: 18, 
+    fontWeight: 'bold', 
+    color: '#333', 
+    marginBottom: 8
+  },
+  ratesContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginHorizontal: 10 
+  },
   rateButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 20,
@@ -333,11 +361,26 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  selectedRateButton: { backgroundColor: 'white', borderColor: '#007BFF' },
-  rateLabel: { fontSize: 16, fontWeight: 'bold', color: 'white' },
-  selectedRateLabel: { color: '#B19CD8' },
-  ratePrice: { fontSize: 12, color: 'rgba(255, 255, 255, 0.8)', marginTop: 4 },
-  selectedRatePrice: { color: '#666' },
+  selectedRateButton: { 
+    backgroundColor: 'white', 
+    borderColor: '#007BFF' 
+  },
+  rateLabel: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    color: 'white' 
+  },
+  selectedRateLabel: { 
+    color: '#B19CD8' 
+  },
+  ratePrice: { 
+    fontSize: 12, 
+    color: 'rgba(255, 255, 255, 0.8)', 
+    marginTop: 4 
+  },
+  selectedRatePrice: { 
+    color: '#666' 
+  },
   inputGroup: {
     backgroundColor: 'white',
     borderRadius: 15,
@@ -361,8 +404,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#aaa',   
   },
-  dateTimeValue: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-  durationContainer: { flexDirection: 'row', justifyContent: 'center', marginTop: 10 },
+  dateTimeValue: { 
+    fontSize: 16, 
+    fontWeight: 'bold', 
+    color: '#333' 
+  },
+  durationContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    marginTop: 10 
+  },
   durationButton: {
     backgroundColor: 'rgba(255,255,255,0.3)',
     borderRadius: 10,
@@ -371,14 +422,17 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   selectedDuration: { 
-    backgroundColor: '#B19CD8' },
+    backgroundColor: '#B19CD8' 
+  },
   durationText: { 
     fontSize: 16, 
     color: '#333', 
-    fontWeight: 'bold' },
+    fontWeight: 'bold' 
+  },
   selectedDurationText: { 
-    color: 'white' },
-    searchButton: {
+    color: 'white' 
+  },
+  searchButton: {
     backgroundColor: '#fff',
     padding: 18,
     borderRadius: 15,
@@ -396,9 +450,11 @@ const styles = StyleSheet.create({
   searchText: { 
     color: '#B19CD8', 
     fontSize: 20, 
-    fontWeight: 'bold' },
+    fontWeight: 'bold' 
+  },
   disabledButton: { 
-    opacity: 0.5 },
+    opacity: 0.5 
+  },
 });
 
 export default BookParkingScreen;
