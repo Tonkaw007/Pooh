@@ -48,7 +48,7 @@ const ReservationScreen = ({ navigation, route }) => {
       'G01': { status: 'available' },
       'G02': { status: 'available' },
       'G03': { status: 'available' },
-      'G08': { status: 'available' },
+      'G04': { status: 'available' },
       'H01': { status: 'available' },
       'H02': { status: 'available' },
       'H03': { status: 'available' },
@@ -135,22 +135,19 @@ const ReservationScreen = ({ navigation, route }) => {
   };
 
   return (
-    <View style={styles.container} behavior="padding">
+    <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Ionicons name="arrow-back" size={24} color="black" />
+          <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
 
         <View style={styles.header}>
-          <Text style={styles.title}>Choose Slot</Text>
+          <Text style={styles.title}>Choose Parking Slot</Text>
         </View>
 
         <View style={styles.section}>
-          
-          
-          {/* Improved Floor Selection */}
+          {/* Floor Selection */}
           <View style={styles.floorSelectorContainer}>
-            
             <TouchableOpacity
               style={styles.floorDropdown}
               onPress={() => setShowFloorDropdown(true)}
@@ -159,7 +156,7 @@ const ReservationScreen = ({ navigation, route }) => {
               <Ionicons 
                 name="chevron-down" 
                 size={20} 
-                color="white" 
+                color="#fff" 
               />
             </TouchableOpacity>
           </View>
@@ -200,10 +197,8 @@ const ReservationScreen = ({ navigation, route }) => {
             </TouchableOpacity>
           </Modal>
 
-          
-          
-          {/* Parking slots layout */}
-          <View style={styles.slotsContainer}>
+          {/* Simple Parking Layout */}
+          <View style={styles.parkingLayout}>
             {/* Row A */}
             <View style={styles.slotRow}>
               {Object.keys(slots).slice(0, 4).map(slotId => (
@@ -222,9 +217,9 @@ const ReservationScreen = ({ navigation, route }) => {
               ))}
             </View>
 
-            {/* Entrance/Exit indicators */}
+            {/* Simple Entrance Indicator */}
             <View style={styles.entranceExitRow}>
-              <Text style={styles.entranceExitText}>ENTRANCE &gt;&gt;&gt;</Text>
+              <Text style={styles.entranceExitText}> ENTRANCE &gt;&gt;&gt; </Text>
             </View>
 
             {/* Row B */}
@@ -245,9 +240,9 @@ const ReservationScreen = ({ navigation, route }) => {
               ))}
             </View>
 
-            {/* Exit indicator */}
+            {/* Simple Exit Indicator */}
             <View style={styles.entranceExitRow}>
-              <Text style={styles.entranceExitText}>&lt;&lt;&lt; EXIT</Text>
+              <Text style={styles.entranceExitText}>&lt;&lt;&lt; EXIT </Text>
             </View>
 
             {/* Row C */}
@@ -270,14 +265,15 @@ const ReservationScreen = ({ navigation, route }) => {
           </View>
         </View>
 
+        {/* Legend */}
         <View style={styles.legendContainer}>
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, styles.availableLegend]} />
-            <Text style={styles.legendText}>Available</Text> 
+            <Text style={styles.legendText}>Available</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, styles.unavailableLegend]} />
-            <Text style={styles.legendText}>Unavailable</Text>
+            <Text style={styles.legendText}>Occupied</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, styles.selectedLegend]} />
@@ -285,82 +281,87 @@ const ReservationScreen = ({ navigation, route }) => {
           </View>
         </View>
 
+        {/* Confirm Button */}
         <TouchableOpacity
           style={[styles.confirmButton, !selectedSlot && styles.disabledButton]}
           onPress={confirmReservation}
           disabled={!selectedSlot}
         >
-          <Text style={styles.confirmText}>Confirm Reservation</Text>
+          <Text style={styles.confirmText}>
+            {selectedSlot ? `Reserve ${selectedSlot}` : 'Select a parking slot'}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
-    </View >
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        padding: 24,
-        backgroundColor: '#FFFFFF',
-        alignItems: 'center',
-      },
-  scrollContainer: { 
-    padding: 25, 
+  container: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+  },
+  scrollContainer: {
+    padding: 20,
     paddingTop: 60,
-    alignItems: 'center'
+    alignItems: 'center',
   },
-  backButton: { 
-    position: 'absolute', 
-    top: 40, 
-    left: 20, 
-    zIndex: 1, 
-    padding: 8 
+  backButton: {
+    position: 'absolute',
+    top: 40,
+    left: 20,
+    zIndex: 1,
+    padding: 8,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  header: { 
-    alignItems: 'center', 
-    marginBottom: 30, 
-    marginTop: 20 
+  header: {
+    alignItems: 'center',
+    marginBottom: 25,
+    marginTop: 10,
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#333', 
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#2D3748',
     textAlign: 'center',
-    textTransform: 'uppercase',
   },
-  section: { 
-    marginBottom: 20, 
+  section: {
+    marginBottom: 20,
     width: '100%',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   floorSelectorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 25,
     justifyContent: 'center',
     width: '100%',
-  },
-  floorLabel: {
-    fontSize: 18,
-    color: 'white',
-    marginRight: 15,
-    fontWeight: 'bold',
+    alignItems: 'center',
   },
   floorDropdown: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#B19CD8',
     paddingVertical: 12,
-    paddingHorizontal: 15,
+    paddingHorizontal: 20,
     borderRadius: 10,
     minWidth: 140,
     justifyContent: 'space-between',
-    borderWidth: 2,
-    borderColor: '#B19CD8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   floorDropdownText: {
-    color: 'white',
+    color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    paddingHorizontal: 10,
   },
   modalOverlay: {
     flex: 1,
@@ -372,12 +373,12 @@ const styles = StyleSheet.create({
     width: '80%',
     backgroundColor: 'white',
     borderRadius: 15,
-    padding: 15,
+    padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 8,
   },
   dropdownContainer: {
     borderRadius: 10,
@@ -387,132 +388,145 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 15,
+    paddingVertical: 14,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#EDF2F7',
   },
   selectedFloorItem: {
-    backgroundColor: '#f0e6ff',
+    backgroundColor: '#F0E6FF',
   },
   floorItemText: {
     fontSize: 16,
-    color: '#333',
+    color: '#4A5568',
   },
   selectedFloorItemText: {
     color: '#B19CD8',
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
-  
-  slotsContainer: {
+  parkingLayout: {
     width: '100%',
     alignItems: 'center',
     marginBottom: 30,
   },
-  
-
   slotRow: {
     flexDirection: 'row',
-    justifyContent: 'center',   
-    flexWrap: 'wrap',           
-    marginBottom: 20,
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    marginBottom: 10,
+    width: '100%',
   },
   slot: {
-    width: 60,
+    width: 70,
     height: 100,
-    borderRadius: 5,
+    borderRadius: 8,
     margin: 8,
-    justifyContent: 'flex-start',  // ✅ เน้นให้ child เริ่มจากด้านบน
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#93DA97',    // ✅ ตัวอย่าง: ช่องว่างสีเขียว
-    position: 'relative',
-  },
-  availableSlot: {
-    backgroundColor: '#93DA97',
-  },
-  unavailableSlot: {
-    backgroundColor: '#F7CAC9',
-  },
-  selectedSlot: {
-    borderColor: '#FFD700',
-    borderWidth: 3,
-    transform: [{ scale: 1.1 }]
+    borderWidth: 2,
+    borderColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   slotText: {
-    position: 'absolute',          // ✅ ลอยอยู่ด้านบน
-    top: 10,                        // ✅ ห่างจากขอบบนเล็กน้อย
-    backgroundColor: 'white',      // ✅ วงรีสีขาว
-    color: 'black',                // ✅ ตัวอักษรสีดำ
-    fontSize: 14,
-    fontWeight: 'bold',
-    paddingHorizontal: 10,
-    paddingVertical: 2,
-    borderRadius: 20,              // ✅ ทำให้เป็นวงรี
-    overflow: 'hidden',
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  availableSlot: {
+    backgroundColor: '#48BB78',
+  },
+  unavailableSlot: {
+    backgroundColor: '#F56565',
+    opacity: 0.7,
+  },
+  selectedSlot: {
+    borderColor: '#F6E05E',
+    borderWidth: 3,
+    transform: [{ scale: 1.05 }],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   entranceExitRow: {
-    width: '80%',
+    width: '100%',
+    paddingVertical: 8,
+    marginBottom: 10,
     alignItems: 'center',
-    marginVertical: 10
+    justifyContent: 'center',
   },
   entranceExitText: {
-    color: 'black',
+    color: '#C9CDCF',
     fontSize: 16,
-    fontWeight: 'bold'
+    fontWeight: '700',
+    textAlign: 'center',
   },
   legendContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '100%',
-    marginBottom: 30
+    marginBottom: 30,
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   legendItem: {
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   legendColor: {
-    width: 20,
-    height: 20,
+    width: 16,
+    height: 16,
     borderRadius: 4,
-    marginRight: 5
+    marginRight: 8,
   },
   availableLegend: {
-    backgroundColor: '#93DA97'
+    backgroundColor: '#48BB78',
   },
   unavailableLegend: {
-    backgroundColor: '#F7CAC9'
+    backgroundColor: '#F56565',
   },
   selectedLegend: {
-    backgroundColor: '#93DA97',
+    backgroundColor: '#48BB78',
     borderWidth: 2,
-    borderColor: '#FFD700'
+    borderColor: '#F6E05E',
   },
   legendText: {
-    color: 'black',
-    fontSize: 14
+    color: '#4A5568',
+    fontSize: 14,
+    fontWeight: '500',
   },
   confirmButton: {
     backgroundColor: '#B19CD8',
     padding: 18,
-    borderRadius: 15,
+    borderRadius: 12,
     alignItems: 'center',
-    width: '80%',
-    borderWidth: 1,
-    borderColor: '#B19CD8',
+    width: '100%',
+    maxWidth: 350,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  confirmText: { 
-    color: 'white', 
-    fontSize: 20, 
-    fontWeight: 'bold' 
+  confirmText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
   },
-  disabledButton: { 
-    opacity: 0.5 
-  }
+  disabledButton: {
+    opacity: 0.5,
+  },
 });
 
 export default ReservationScreen;
