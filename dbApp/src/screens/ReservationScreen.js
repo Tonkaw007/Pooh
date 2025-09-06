@@ -135,7 +135,7 @@ const ReservationScreen = ({ navigation, route }) => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} behavior="padding">
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
           <Ionicons name="arrow-back" size={24} color="black" />
@@ -200,7 +200,7 @@ const ReservationScreen = ({ navigation, route }) => {
             </TouchableOpacity>
           </Modal>
 
-          <Text style={styles.floorTitle}>{selectedFloor}</Text>
+          
           
           {/* Parking slots layout */}
           <View style={styles.slotsContainer}>
@@ -293,7 +293,7 @@ const ReservationScreen = ({ navigation, route }) => {
           <Text style={styles.confirmText}>Confirm Reservation</Text>
         </TouchableOpacity>
       </ScrollView>
-    </View>
+    </View >
   );
 };
 
@@ -403,32 +403,29 @@ const styles = StyleSheet.create({
     color: '#B19CD8',
     fontWeight: 'bold',
   },
-  floorTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: 'black',
-    marginBottom: 25,
-    textAlign: 'center',
-    marginTop: 10,
-  },
+  
   slotsContainer: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: 30
+    marginBottom: 30,
   },
+  
+
   slotRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '80%',
-    marginBottom: 20
+    justifyContent: 'center',   
+    flexWrap: 'wrap',           
+    marginBottom: 20,
   },
   slot: {
-    width: 70,
-    height: 50,
-    borderRadius: 8,
-    marginHorizontal: 6,
-    justifyContent: 'center',
+    width: 60,
+    height: 100,
+    borderRadius: 5,
+    margin: 8,
+    justifyContent: 'flex-start',  // ✅ เน้นให้ child เริ่มจากด้านบน
     alignItems: 'center',
+    backgroundColor: '#93DA97',    // ✅ ตัวอย่าง: ช่องว่างสีเขียว
+    position: 'relative',
   },
   availableSlot: {
     backgroundColor: '#93DA97',
@@ -442,9 +439,16 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.1 }]
   },
   slotText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold'
+    position: 'absolute',          // ✅ ลอยอยู่ด้านบน
+    top: 10,                        // ✅ ห่างจากขอบบนเล็กน้อย
+    backgroundColor: 'white',      // ✅ วงรีสีขาว
+    color: 'black',                // ✅ ตัวอักษรสีดำ
+    fontSize: 14,
+    fontWeight: 'bold',
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    borderRadius: 20,              // ✅ ทำให้เป็นวงรี
+    overflow: 'hidden',
   },
   entranceExitRow: {
     width: '80%',
