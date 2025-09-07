@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View,Text,StyleSheet,TouchableOpacity,ScrollView,Alert, KeyboardAvoidingView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { db } from '../firebaseConfig';
 import { ref, push, set } from 'firebase/database';
@@ -8,15 +8,17 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 const BookParkingScreen = ({ navigation, route }) => {
   const { username, bookingType } = route.params;
   const [selectedRate, setSelectedRate] = useState(null);
+  const [totalAmount, setTotalAmount] = useState(0);
 
-  // Common states
-  const [entryDate, setEntryDate] = useState(new Date());
-  const [entryTime, setEntryTime] = useState(new Date());
-  const [exitDate, setExitDate] = useState(new Date());
-  const [exitTime, setExitTime] = useState(new Date());
+  // Common states - initialize with current date/time
+  const now = new Date();
+  const [entryDate, setEntryDate] = useState(now);
+  const [entryTime, setEntryTime] = useState(now);
+  const [exitDate, setExitDate] = useState(new Date(now.getTime() + 60 * 60 * 1000)); // 1 hour later
+  const [exitTime, setExitTime] = useState(new Date(now.getTime() + 60 * 60 * 1000)); // 1 hour later
   const [durationMonths, setDurationMonths] = useState(1);
 
-  const [pickerMode, setPickerMode] = useState(null); // "entryDate", "entryTime", "exitDate", "exitTime"
+  const [pickerMode, setPickerMode] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
 
   const rates = [
@@ -25,12 +27,63 @@ const BookParkingScreen = ({ navigation, route }) => {
     { id: 'monthly', label: 'Monthly', price: '3,000 baht/month' }
   ];
 
+  // Calculate total amount whenever relevant values change
+  useEffect(() => {
+    calculateTotalAmount();
+  }, [selectedRate, entryDate, entryTime, exitDate, exitTime, durationMonths]);
+
+  const calculateTotalAmount = () => {
+    if (!selectedRate) {
+      setTotalAmount(0);
+      return;
+    }
+
+    switch (selectedRate) {
+      case 'hourly':
+        // Calculate hours difference between entry and exit
+        const entryDateTime = new Date(entryDate);
+        entryDateTime.setHours(entryTime.getHours(), entryTime.getMinutes());
+        
+        const exitDateTime = new Date(exitDate);
+        exitDateTime.setHours(exitTime.getHours(), exitTime.getMinutes());
+        
+        const hoursDiff = Math.max(1, Math.ceil((exitDateTime - entryDateTime) / (1000 * 60 * 60)));
+        setTotalAmount(hoursDiff * 40);
+        break;
+
+      case 'daily':
+        // Daily rate is fixed at 250 baht
+        setTotalAmount(250);
+        break;
+
+      case 'monthly':
+        // Monthly rate multiplied by number of months
+        setTotalAmount(durationMonths * 3000);
+        break;
+
+      default:
+        setTotalAmount(0);
+    }
+  };
+
   const onChangeDateTime = (event, selectedValue) => {
     setShowPicker(false);
     if (!selectedValue) return;
+    
+    // Check if the selected date/time is in the past
+    const now = new Date();
+    if (selectedValue < now) {
+      Alert.alert('Error', 'Cannot select past dates or times');
+      return;
+    }
+
     switch (pickerMode) {
       case 'entryDate':
         setEntryDate(selectedValue);
+        // If entry date changes, adjust exit date to be at least the same or later
+        if (selectedRate === 'hourly' && selectedValue > exitDate) {
+          setExitDate(selectedValue);
+        }
         break;
       case 'entryTime':
         setEntryTime(selectedValue);
@@ -50,9 +103,86 @@ const BookParkingScreen = ({ navigation, route }) => {
   const formatTime = (time) =>
     time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
+  const validateReservation = () => {
+    const now = new Date();
+
+    // Check if any selected date/time is in the past
+    const entryDateTime = new Date(entryDate);
+    entryDateTime.setHours(entryTime.getHours(), entryTime.getMinutes());
+    
+    if (entryDateTime < now) {
+      Alert.alert('Error', 'Cannot make reservations for past dates or times');
+      return false;
+    }
+
+    // For hourly reservations, check exit date/time
+    if (selectedRate === 'hourly') {
+      const exitDateTime = new Date(exitDate);
+      exitDateTime.setHours(exitTime.getHours(), exitTime.getMinutes());
+      
+      if (exitDateTime < now) {
+        Alert.alert('Error', 'Cannot make reservations for past dates or times');
+        return false;
+      }
+      
+      if (exitDateTime <= entryDateTime) {
+        Alert.alert('Error', 'Exit date/time must be after entry date/time.');
+        return false;
+      }
+    }
+
+    // For daily reservations, check exit date
+    if (selectedRate === 'daily') {
+      const exitDateOnly = new Date(exitDate);
+      exitDateOnly.setHours(0, 0, 0, 0);
+      
+      if (exitDateOnly < new Date(now.setHours(0, 0, 0, 0))) {
+        Alert.alert('Error', 'Cannot make reservations for past dates');
+        return false;
+      }
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // For daily and monthly reservations, check if entry date is at least 1 day in advance
+    if (selectedRate === 'daily' || selectedRate === 'monthly') {
+      const entryDateOnly = new Date(entryDate);
+      entryDateOnly.setHours(0, 0, 0, 0);
+      
+      const minEntryDate = new Date(today);
+      minEntryDate.setDate(minEntryDate.getDate() + 1);
+      
+      if (entryDateOnly < minEntryDate) {
+        Alert.alert('Error', 'For daily and monthly reservations, you can only reserve 1 day in advance.');
+        return false;
+      }
+    }
+
+    // For daily reservations, check if entry and exit dates are the same
+    if (selectedRate === 'daily') {
+      const entryDateOnly = new Date(entryDate);
+      entryDateOnly.setHours(0, 0, 0, 0);
+      
+      const exitDateOnly = new Date(exitDate);
+      exitDateOnly.setHours(0, 0, 0, 0);
+      
+      if (entryDateOnly.getTime() !== exitDateOnly.getTime()) {
+        Alert.alert('Error', 'For daily reservations, entry and exit dates must be the same.');
+        return false;
+      }
+    }
+
+    return true;
+  };
+
   const handleSearch = async () => {
     if (!selectedRate) {
       Alert.alert('Error', 'Please select a parking rate');
+      return;
+    }
+
+    if (!validateReservation()) {
       return;
     }
 
@@ -62,6 +192,7 @@ const BookParkingScreen = ({ navigation, route }) => {
         username,
         bookingType,
         rateType: selectedRate,
+        total: totalAmount,
         createdAt: new Date().toISOString(),
       };
 
@@ -80,12 +211,12 @@ const BookParkingScreen = ({ navigation, route }) => {
 
       await set(bookingRef, bookingData);
       
-      // Navigate to ReservationScreen instead of showing alert
+      // Navigate to ReservationScreen
       navigation.navigate('Reservation', { 
         username,
         bookingData: {
           ...bookingData,
-          id: bookingRef.key // Include the booking ID
+          id: bookingRef.key
         }
       });
     } catch (error) {
@@ -111,7 +242,6 @@ const BookParkingScreen = ({ navigation, route }) => {
 
         {/* Rate Selection */}
         <View style={styles.section}>
-          
           <View style={styles.ratesContainer}>
             {rates.map((rate) => (
               <TouchableOpacity
@@ -149,15 +279,15 @@ const BookParkingScreen = ({ navigation, route }) => {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Entry Date</Text>
               <TouchableOpacity
-               style={styles.dateTimeBox}
-               onPress={() => {
-               setPickerMode('entryDate');
-               setShowPicker(true);
-             }}
+                style={styles.dateTimeBox}
+                onPress={() => {
+                  setPickerMode('entryDate');
+                  setShowPicker(true);
+                }}
               >
-       <Text style={styles.dateTimeValue}>{formatDate(entryDate)}</Text>
-       <Ionicons name="calendar" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
-            </TouchableOpacity>
+                <Text style={styles.dateTimeValue}>{formatDate(entryDate)}</Text>
+                <Ionicons name="calendar" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
+              </TouchableOpacity>
             </View>
 
             <View style={styles.section}>
@@ -279,6 +409,14 @@ const BookParkingScreen = ({ navigation, route }) => {
           </View>
         )}
 
+        {/* Total Amount Display */}
+        {selectedRate && (
+          <View style={styles.totalContainer}>
+            <Text style={styles.totalLabel}>Total Amount:</Text>
+            <Text style={styles.totalAmount}>{totalAmount} baht</Text>
+          </View>
+        )}
+
         <TouchableOpacity
           style={[styles.searchButton, !selectedRate && styles.disabledButton]}
           onPress={handleSearch}
@@ -304,6 +442,7 @@ const BookParkingScreen = ({ navigation, route }) => {
             is24Hour={false}
             display="default"
             onChange={onChangeDateTime}
+            minimumDate={new Date()} // Prevent selecting past dates
           />
         )}
       </ScrollView>
@@ -329,7 +468,8 @@ const styles = StyleSheet.create({
   },
   header: { 
     alignItems: 'center', 
-    marginBottom: 40, marginTop: 20 
+    marginBottom: 40, 
+    marginTop: 20 
   },
   title: { 
     fontSize: 32, 
@@ -431,6 +571,30 @@ const styles = StyleSheet.create({
   },
   selectedDurationText: { 
     color: 'white' 
+  },
+  totalContainer: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 15,
+    marginHorizontal: 10,
+    marginBottom: 20,
+    alignItems: 'center',
+    shadowColor: 'black',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  totalLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '333',
+    marginBottom: 5,
+  },
+  totalAmount: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#B19CD8',
   },
   searchButton: {
     backgroundColor: '#fff',

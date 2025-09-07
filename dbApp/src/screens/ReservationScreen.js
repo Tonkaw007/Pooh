@@ -118,12 +118,20 @@ const ReservationScreen = ({ navigation, route }) => {
 
       await update(ref(db), updates);
 
-      Alert.alert('Success', `Parking slot ${selectedSlot} on ${selectedFloor} reserved successfully!`, [
-        { 
-          text: 'OK', 
-          onPress: () => navigation.navigate('Home', { username }) 
-        }
-      ]);
+      // Prepare reservation details to pass to PaymentScreen
+      const reservationDetails = {
+        ...bookingData,
+        slotId: selectedSlot,
+        floor: selectedFloor,
+        status: 'confirmed'
+      };
+
+      // Navigate to PaymentScreen with reservation details
+      navigation.navigate('Payment', { 
+        username, 
+        reservationDetails 
+      });
+
     } catch (error) {
       console.error(error);
       Alert.alert('Error', 'Failed to reserve parking slot. Please try again.');

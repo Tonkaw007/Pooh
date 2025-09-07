@@ -8,6 +8,8 @@ import BookingTypeScreen from "./src/screens/BookingTypeScreen";
 import VisitorRegisterScreen from "./src/screens/VisitorRegisterScreen";
 import BookParkingScreen from "./src/screens/BookParkingScreen";
 import ReservationScreen from "./src/screens/ReservationScreen";
+import PaymentScreen from "./src/screens/PaymentScreen";
+
 const Stack = createStackNavigator();
 
 const App = () => {
@@ -48,6 +50,11 @@ const App = () => {
         <Stack.Screen 
         name="Reservation" 
         component={ReservationScreen} 
+        options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+        name="Payment" 
+        component={PaymentScreen} 
         options={{ headerShown: false }}
         />
       </Stack.Navigator>
