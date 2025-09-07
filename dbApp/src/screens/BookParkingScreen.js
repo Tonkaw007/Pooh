@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View,Text,StyleSheet,TouchableOpacity,ScrollView,Alert, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { db } from '../firebaseConfig';
 import { ref, push, set } from 'firebase/database';
@@ -26,73 +26,101 @@ const BookParkingScreen = ({ navigation, route }) => {
   ];
 
   const onChangeDateTime = (event, selectedValue) => {
-    setShowPicker(false);
-    if (!selectedValue) return;
-    switch (pickerMode) {
-      case 'entryDate':
-        setEntryDate(selectedValue);
-        break;
-      case 'entryTime':
-        setEntryTime(selectedValue);
-        break;
-      case 'exitDate':
-        setExitDate(selectedValue);
-        break;
-      case 'exitTime':
-        setExitTime(selectedValue);
-        break;
-    }
-  };
+  setShowPicker(false);
+  if (!selectedValue) return;
+
+  switch (pickerMode) {
+    case 'entryDate':
+      setEntryDate(selectedValue);
+      if (selectedRate === 'hourly') {
+        setExitDate(selectedValue); // Auto exitDate ให้ตรงกับ entryDate แค่แบบ hourly
+      }
+      break;
+    case 'entryTime':
+      setEntryTime(selectedValue);
+      break;
+    case 'exitDate':
+      setExitDate(selectedValue);
+      break;
+    case 'exitTime':
+      setExitTime(selectedValue);
+      break;
+  }
+};
+
 
   const formatDate = (date) =>
-    date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-  const formatTime = (time) =>
-    time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+const formatTime = (time) =>
+  time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
-  const handleSearch = async () => {
-    if (!selectedRate) {
-      Alert.alert('Error', 'Please select a parking rate');
-      return;
-    }
+const handleSearch = async () => {
+  if (!selectedRate) {
+    Alert.alert('Error', 'Please select a parking rate');
+    return;
+  }
 
-    try {
-      const bookingRef = push(ref(db, 'bookings'));
-      let bookingData = {
-        username,
-        bookingType,
-        rateType: selectedRate,
-        createdAt: new Date().toISOString(),
-      };
+  try {
+    const bookingRef = push(ref(db, 'bookings'));
 
-      if (selectedRate === 'hourly') {
-        bookingData.entryDate = entryDate.toISOString();
-        bookingData.entryTime = entryTime.toISOString();
-        bookingData.exitDate = exitDate.toISOString();
-        bookingData.exitTime = exitTime.toISOString();
-      } else if (selectedRate === 'daily') {
-        bookingData.entryDate = entryDate.toISOString();
-        bookingData.exitDate = exitDate.toISOString();
-      } else if (selectedRate === 'monthly') {
-        bookingData.entryDate = entryDate.toISOString();
-        bookingData.durationMonths = durationMonths;
-      }
+    let bookingData = {
+      username,
+      bookingType,
+      rateType: selectedRate,
+      createdAt: new Date().toISOString(),
+    };
 
-      await set(bookingRef, bookingData);
-      
-      // Navigate to ReservationScreen instead of showing alert
-      navigation.navigate('Reservation', { 
-        username,
-        bookingData: {
-          ...bookingData,
-          id: bookingRef.key // Include the booking ID
-        }
+    const entryDateStr = entryDate.toISOString().split('T')[0]; // yyyy-mm-dd
+    let exitDateStr = exitDate.toISOString().split('T')[0]; // yyyy-mm-dd
+    const bookingDateStr = new Date().toISOString().split('T')[0]; // วันที่จอง
+
+    if (selectedRate === 'hourly') {
+      // exitDate ให้ตรงกับ entryDate
+      exitDateStr = entryDateStr;
+
+      const entryTimeStr = entryTime.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
       });
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Failed to book parking. Please try again.');
+      const exitTimeStr = exitTime.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+
+      bookingData.entryDate = entryDateStr;
+      bookingData.entryTime = entryTimeStr;
+      bookingData.exitDate = exitDateStr;
+      bookingData.exitTime = exitTimeStr;
+    } else if (selectedRate === 'daily') {
+      bookingData.entryDate = entryDateStr;
+      bookingData.exitDate = exitDateStr;
+    } else if (selectedRate === 'monthly') {
+      bookingData.entryDate = entryDateStr;
+      bookingData.exitDate = exitDateStr;
+      bookingData.durationMonths = durationMonths;
     }
-  };
+
+    bookingData.bookingDate = bookingDateStr;
+
+    await set(bookingRef, bookingData);
+
+    navigation.navigate('Reservation', {
+      username,
+      bookingData: {
+        ...bookingData,
+        id: bookingRef.key,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    Alert.alert('Error', 'Failed to book parking. Please try again.');
+  }
+};
+
+
 
   const handleBack = () => {
     navigation.navigate('BookingType', { username });
@@ -111,7 +139,6 @@ const BookParkingScreen = ({ navigation, route }) => {
 
         {/* Rate Selection */}
         <View style={styles.section}>
-          
           <View style={styles.ratesContainer}>
             {rates.map((rate) => (
               <TouchableOpacity
@@ -149,15 +176,15 @@ const BookParkingScreen = ({ navigation, route }) => {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Entry Date</Text>
               <TouchableOpacity
-               style={styles.dateTimeBox}
-               onPress={() => {
-               setPickerMode('entryDate');
-               setShowPicker(true);
-             }}
+                style={styles.dateTimeBox}
+                onPress={() => {
+                  setPickerMode('entryDate');
+                  setShowPicker(true);
+                }}
               >
-       <Text style={styles.dateTimeValue}>{formatDate(entryDate)}</Text>
-       <Ionicons name="calendar" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
-            </TouchableOpacity>
+                <Text style={styles.dateTimeValue}>{formatDate(entryDate)}</Text>
+                <Ionicons name="calendar" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
+              </TouchableOpacity>
             </View>
 
             <View style={styles.section}>
@@ -314,22 +341,20 @@ const BookParkingScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#B19CD8' 
-  },
+    backgroundColor: '#B19CD8' },
   scrollContainer: { 
     padding: 25, 
     paddingTop: 60 
   },
   backButton: { 
     position: 'absolute', 
-    top: 40, 
-    left: 20, 
+    top: 40, left: 20, 
     zIndex: 1, 
-    padding: 8 
-  },
+    padding: 8 },
   header: { 
     alignItems: 'center', 
-    marginBottom: 40, marginTop: 20 
+    marginBottom: 40, 
+    marginTop: 20 
   },
   title: { 
     fontSize: 32, 
@@ -344,7 +369,7 @@ const styles = StyleSheet.create({
     fontSize: 18, 
     fontWeight: 'bold', 
     color: '#333', 
-    marginBottom: 8
+    marginBottom: 8 
   },
   ratesContainer: { 
     flexDirection: 'row', 
@@ -363,8 +388,8 @@ const styles = StyleSheet.create({
   },
   selectedRateButton: { 
     backgroundColor: 'white', 
-    borderColor: '#007BFF' 
-  },
+    borderColor: '#fff' }
+    ,
   rateLabel: { 
     fontSize: 16, 
     fontWeight: 'bold', 
@@ -376,9 +401,9 @@ const styles = StyleSheet.create({
   ratePrice: { 
     fontSize: 12, 
     color: 'rgba(255, 255, 255, 0.8)', 
-    marginTop: 4 
-  },
-  selectedRatePrice: { 
+    marginTop: 4 },
+  selectedRatePrice: 
+  { 
     color: '#666' 
   },
   inputGroup: {
@@ -407,13 +432,11 @@ const styles = StyleSheet.create({
   dateTimeValue: { 
     fontSize: 16, 
     fontWeight: 'bold', 
-    color: '#333' 
-  },
+    color: '#333' },
   durationContainer: { 
     flexDirection: 'row', 
     justifyContent: 'center', 
-    marginTop: 10 
-  },
+    marginTop: 10 },
   durationButton: {
     backgroundColor: 'rgba(255,255,255,0.3)',
     borderRadius: 10,
@@ -425,8 +448,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#B19CD8' 
   },
   durationText: { 
-    fontSize: 16, 
-    color: '#333', 
+    fontSize: 16, color: '#333', 
     fontWeight: 'bold' 
   },
   selectedDurationText: { 
