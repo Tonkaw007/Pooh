@@ -25,102 +25,150 @@ const BookParkingScreen = ({ navigation, route }) => {
     { id: 'monthly', label: 'Monthly', price: '3,000 baht/month' }
   ];
 
+  const calculatePrice = () => {
+    if (!selectedRate) return 0;
+  
+    switch (selectedRate) {
+      case 'hourly':
+        const hours = Math.ceil((exitTime - entryTime) / (1000 * 60 * 60)); // ชั่วโมง
+        return hours > 0 ? hours * 40 : 40;
+      case 'daily':
+        const days = Math.ceil((exitDate - entryDate) / (1000 * 60 * 60 * 24));
+        return days > 0 ? days * 250 : 250;
+      case 'monthly':
+        return durationMonths * 3000;
+      default:
+        return 0;
+    }
+  };
+
   const onChangeDateTime = (event, selectedValue) => {
-  setShowPicker(false);
-  if (!selectedValue) return;
+    setShowPicker(false);
+    if (!selectedValue) return;
+
+    const today = new Date();
+  const isToday =
+    selectedValue.getFullYear() === today.getFullYear() &&
+    selectedValue.getMonth() === today.getMonth() &&
+    selectedValue.getDate() === today.getDate();
 
   switch (pickerMode) {
     case 'entryDate':
-      setEntryDate(selectedValue);
-      if (selectedRate === 'hourly') {
-        setExitDate(selectedValue); // Auto exitDate ให้ตรงกับ entryDate แค่แบบ hourly
+      if (isToday) {
+        Alert.alert('Error', "Entry date/time can't be today.");
+        return; // ไม่อัปเดต entryDate
       }
+      setEntryDate(selectedValue);
+      if (selectedRate === 'hourly') setExitDate(selectedValue); // hourly exitDate = entryDate
       break;
     case 'entryTime':
-      setEntryTime(selectedValue);
-      break;
-    case 'exitDate':
-      setExitDate(selectedValue);
-      break;
-    case 'exitTime':
-      setExitTime(selectedValue);
-      break;
-  }
-};
-
+      // ถ้า entryDate คือวันปัจจุบัน ก็ไม่ให้เลือกเวลา
+      if (
+        entryDate.getFullYear() === today.getFullYear() &&
+        entryDate.getMonth() === today.getMonth() &&
+        entryDate.getDate() === today.getDate()
+      ) {
+        Alert.alert('Error', "Entry time can't be today.");
+        return;
+      }
+        setEntryTime(selectedValue);
+        break;
+      case 'exitDate':
+        setExitDate(selectedValue);
+        break;
+      case 'exitTime':
+        setExitTime(selectedValue);
+        break;
+    }
+  };
 
   const formatDate = (date) =>
-  date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-const formatTime = (time) =>
-  time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const formatTime = (time) =>
+    time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 
-const handleSearch = async () => {
-  if (!selectedRate) {
-    Alert.alert('Error', 'Please select a parking rate');
-    return;
-  }
-
-  try {
-    const bookingRef = push(ref(db, 'bookings'));
-
-    let bookingData = {
-      username,
-      bookingType,
-      rateType: selectedRate,
-      createdAt: new Date().toISOString(),
-    };
-
-    const entryDateStr = entryDate.toISOString().split('T')[0]; // yyyy-mm-dd
-    let exitDateStr = exitDate.toISOString().split('T')[0]; // yyyy-mm-dd
-    const bookingDateStr = new Date().toISOString().split('T')[0]; // วันที่จอง
-
-    if (selectedRate === 'hourly') {
-      // exitDate ให้ตรงกับ entryDate
-      exitDateStr = entryDateStr;
-
-      const entryTimeStr = entryTime.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
-      const exitTimeStr = exitTime.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
-
-      bookingData.entryDate = entryDateStr;
-      bookingData.entryTime = entryTimeStr;
-      bookingData.exitDate = exitDateStr;
-      bookingData.exitTime = exitTimeStr;
-    } else if (selectedRate === 'daily') {
-      bookingData.entryDate = entryDateStr;
-      bookingData.exitDate = exitDateStr;
-    } else if (selectedRate === 'monthly') {
-      bookingData.entryDate = entryDateStr;
-      bookingData.exitDate = exitDateStr;
-      bookingData.durationMonths = durationMonths;
+  const handleSearch = async () => {
+    if (!selectedRate) {
+      Alert.alert('Error', 'Please select a parking rate');
+      return;
     }
 
-    bookingData.bookingDate = bookingDateStr;
+    // 🔹 ตรวจสอบวัน/เวลา
+    const now = new Date();
+const entryDateTime = new Date(
+  entryDate.getFullYear(),
+  entryDate.getMonth(),
+  entryDate.getDate(),
+  entryTime.getHours(),
+  entryTime.getMinutes()
+);
+const exitDateTime = new Date(
+  exitDate.getFullYear(),
+  exitDate.getMonth(),
+  exitDate.getDate(),
+  exitTime.getHours(),
+  exitTime.getMinutes()
+);
 
-    await set(bookingRef, bookingData);
+    if (entryDateTime < now) {
+      Alert.alert('Error', 'Entry date/time cannot be in the past.');
+      return;
+    }
 
-    navigation.navigate('Reservation', {
-      username,
-      bookingData: {
-        ...bookingData,
-        id: bookingRef.key,
-      },
-    });
-  } catch (error) {
-    console.error(error);
-    Alert.alert('Error', 'Failed to book parking. Please try again.');
-  }
-};
+    if (exitDateTime <= entryDateTime && selectedRate === 'hourly') {
+      Alert.alert('Error', 'Exit time must be after entry time.');
+      return;
+    }
 
+    if ((selectedRate === 'daily' || selectedRate === 'monthly') && exitDate <= entryDate) {
+      Alert.alert('Error', 'Exit date must be after entry date.');
+      return;
+    }
+    
 
+    try {
+      const bookingRef = push(ref(db, 'bookings'));
+      const price = calculatePrice();
+      let bookingData = {
+        username,
+        bookingType,
+        rateType: selectedRate,
+        createdAt: new Date().toISOString(),
+        price,
+      };
+
+      const entryDateStr = entryDate.toISOString().split('T')[0];
+      const exitDateStr = exitDate.toISOString().split('T')[0];
+      const bookingDateStr = new Date().toISOString().split('T')[0];
+
+      if (selectedRate === 'hourly') {
+        bookingData.entryDate = entryDateStr;
+        bookingData.entryTime = entryTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        bookingData.exitDate = exitDateStr;
+        bookingData.exitTime = exitTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+      } else if (selectedRate === 'daily') {
+        bookingData.entryDate = entryDateStr;
+        bookingData.exitDate = exitDateStr;
+      } else if (selectedRate === 'monthly') {
+        bookingData.entryDate = entryDateStr;
+        bookingData.exitDate = exitDateStr;
+        bookingData.durationMonths = durationMonths;
+      }
+
+      bookingData.bookingDate = bookingDateStr;
+
+      await set(bookingRef, bookingData);
+
+      navigation.navigate('Reservation', {
+        username,
+        bookingData: { ...bookingData, id: bookingRef.key },
+      });
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Failed to book parking. Please try again.');
+    }
+  };
 
   const handleBack = () => {
     navigation.navigate('BookingType', { username });
@@ -143,26 +191,13 @@ const handleSearch = async () => {
             {rates.map((rate) => (
               <TouchableOpacity
                 key={rate.id}
-                style={[
-                  styles.rateButton,
-                  selectedRate === rate.id && styles.selectedRateButton
-                ]}
+                style={[styles.rateButton, selectedRate === rate.id && styles.selectedRateButton]}
                 onPress={() => setSelectedRate(rate.id)}
               >
-                <Text
-                  style={[
-                    styles.rateLabel,
-                    selectedRate === rate.id && styles.selectedRateLabel
-                  ]}
-                >
+                <Text style={[styles.rateLabel, selectedRate === rate.id && styles.selectedRateLabel]}>
                   {rate.label}
                 </Text>
-                <Text
-                  style={[
-                    styles.ratePrice,
-                    selectedRate === rate.id && styles.selectedRatePrice
-                  ]}
-                >
+                <Text style={[styles.ratePrice, selectedRate === rate.id && styles.selectedRatePrice]}>
                   {rate.price}
                 </Text>
               </TouchableOpacity>
@@ -171,140 +206,78 @@ const handleSearch = async () => {
         </View>
 
         {/* Dynamic Inputs */}
-        {selectedRate === 'hourly' && (
+        {(selectedRate === 'hourly' || selectedRate === 'daily' || selectedRate === 'monthly') && (
           <View style={styles.inputGroup}>
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Entry Date</Text>
               <TouchableOpacity
                 style={styles.dateTimeBox}
-                onPress={() => {
-                  setPickerMode('entryDate');
-                  setShowPicker(true);
-                }}
+                onPress={() => { setPickerMode('entryDate'); setShowPicker(true); }}
               >
                 <Text style={styles.dateTimeValue}>{formatDate(entryDate)}</Text>
                 <Ionicons name="calendar" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Entry Time</Text>
-              <TouchableOpacity
-                style={styles.dateTimeBox}
-                onPress={() => {
-                  setPickerMode('entryTime');
-                  setShowPicker(true);
-                }}
-              >
-                <Text style={styles.dateTimeValue}>{formatTime(entryTime)}</Text>
-                <Ionicons name="time" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Exit Date</Text>
-              <TouchableOpacity
-                style={styles.dateTimeBox}
-                onPress={() => {
-                  setPickerMode('exitDate');
-                  setShowPicker(true);
-                }}
-              >
-                <Text style={styles.dateTimeValue}>{formatDate(exitDate)}</Text>
-                <Ionicons name="calendar" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Exit Time</Text>
-              <TouchableOpacity
-                style={styles.dateTimeBox}
-                onPress={() => {
-                  setPickerMode('exitTime');
-                  setShowPicker(true);
-                }}
-              >
-                <Text style={styles.dateTimeValue}>{formatTime(exitTime)}</Text>
-                <Ionicons name="time" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {selectedRate === 'daily' && (
-          <View style={styles.inputGroup}>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Entry Date</Text>
-              <TouchableOpacity
-                style={styles.dateTimeBox}
-                onPress={() => {
-                  setPickerMode('entryDate');
-                  setShowPicker(true);
-                }}
-              >
-                <Text style={styles.dateTimeValue}>{formatDate(entryDate)}</Text>
-                <Ionicons name="calendar" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Exit Date</Text>
-              <TouchableOpacity
-                style={styles.dateTimeBox}
-                onPress={() => {
-                  setPickerMode('exitDate');
-                  setShowPicker(true);
-                }}
-              >
-                <Text style={styles.dateTimeValue}>{formatDate(exitDate)}</Text>
-                <Ionicons name="calendar" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {selectedRate === 'monthly' && (
-          <View style={styles.inputGroup}>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Entry Date</Text>
-              <TouchableOpacity
-                style={styles.dateTimeBox}
-                onPress={() => {
-                  setPickerMode('entryDate');
-                  setShowPicker(true);
-                }}
-              >
-                <Text style={styles.dateTimeValue}>{formatDate(entryDate)}</Text>
-                <Ionicons name="calendar" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Duration (months)</Text>
-              <View style={styles.durationContainer}>
-                {[1, 2, 3].map((m) => (
-                  <TouchableOpacity
-                    key={m}
-                    style={[
-                      styles.durationButton,
-                      durationMonths === m && styles.selectedDuration
-                    ]}
-                    onPress={() => setDurationMonths(m)}
-                  >
-                    <Text
-                      style={[
-                        styles.durationText,
-                        durationMonths === m && styles.selectedDurationText
-                      ]}
-                    >
-                      {m}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+            {selectedRate === 'hourly' && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Entry Time</Text>
+                <TouchableOpacity
+                  style={styles.dateTimeBox}
+                  onPress={() => { setPickerMode('entryTime'); setShowPicker(true); }}
+                >
+                  <Text style={styles.dateTimeValue}>{formatTime(entryTime)}</Text>
+                  <Ionicons name="time" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
+                </TouchableOpacity>
               </View>
-            </View>
+            )}
+
+            {(selectedRate === 'hourly' || selectedRate === 'daily') && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Exit {selectedRate === 'hourly' ? 'Time' : 'Date'}</Text>
+                <TouchableOpacity
+                  style={styles.dateTimeBox}
+                  onPress={() => { setPickerMode(selectedRate === 'hourly' ? 'exitTime' : 'exitDate'); setShowPicker(true); }}
+                >
+                  <Text style={styles.dateTimeValue}>
+                    {selectedRate === 'hourly' ? formatTime(exitTime) : formatDate(exitDate)}
+                  </Text>
+                  <Ionicons
+                    name={selectedRate === 'hourly' ? "time" : "calendar"}
+                    size={22}
+                    color="#B19CD8"
+                    style={{ marginLeft: 10 }}
+                  />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {selectedRate === 'monthly' && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Duration (months)</Text>
+                <View style={styles.durationContainer}>
+                  {[1, 2, 3].map((m) => (
+                    <TouchableOpacity
+                      key={m}
+                      style={[styles.durationButton, durationMonths === m && styles.selectedDuration]}
+                      onPress={() => setDurationMonths(m)}
+                    >
+                      <Text style={[styles.durationText, durationMonths === m && styles.selectedDurationText]}>{m}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
           </View>
         )}
+        {selectedRate && (
+          <View style={styles.priceContainer}>
+            <Text style={styles.priceText}>
+             Price: {calculatePrice()} baht
+            </Text>
+          </View>
+        )}
+        
 
         <TouchableOpacity
           style={[styles.searchButton, !selectedRate && styles.disabledButton]}
@@ -316,22 +289,19 @@ const handleSearch = async () => {
 
         {showPicker && (
           <DateTimePicker
-            value={
-              pickerMode === 'entryDate'
-                ? entryDate
-                : pickerMode === 'entryTime'
-                ? entryTime
-                : pickerMode === 'exitDate'
-                ? exitDate
-                : pickerMode === 'exitTime'
-                ? exitTime
-                : new Date()
-            }
-            mode={pickerMode?.includes('Date') ? 'date' : 'time'}
-            is24Hour={false}
-            display="default"
-            onChange={onChangeDateTime}
-          />
+          value={
+            pickerMode === 'entryDate' ? entryDate
+              : pickerMode === 'entryTime' ? entryTime
+              : pickerMode === 'exitDate' ? exitDate
+              : pickerMode === 'exitTime' ? exitTime
+              : new Date()
+          }
+          mode={pickerMode?.includes('Date') ? 'date' : 'time'}
+          is24Hour={true}
+          display="default"
+          onChange={onChangeDateTime}
+          minimumDate={pickerMode === 'entryDate' || pickerMode === 'entryTime' ? new Date() : undefined}
+        />
         )}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -477,6 +447,25 @@ const styles = StyleSheet.create({
   disabledButton: { 
     opacity: 0.5 
   },
+  priceContainer: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 15,
+    marginHorizontal: 10,
+    marginBottom: 20,
+    alignItems: 'center',
+    shadowColor: 'black',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  priceText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#B19CD8',
+  },
+  
 });
 
 export default BookParkingScreen;
