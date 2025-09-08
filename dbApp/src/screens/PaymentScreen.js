@@ -8,36 +8,40 @@ const PaymentScreen = ({ navigation, route }) => {
   const { username, bookingData, selectedSlot, selectedFloor } = route.params;
 
   const handlePaymentSuccess = async () => {
-  try {
-    const updates = {};
+    try {
+      const updates = {};
 
-    // แปลงวันที่เป็น YYYY-MM-DD
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0'); // เดือน 0-11
-    const dd = String(today.getDate()).padStart(2, '0');
-    const formattedDate = `${yyyy}-${mm}-${dd}`;
+      // แปลงวันที่เป็น YYYY-MM-DD
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0'); // เดือน 0-11
+      const dd = String(today.getDate()).padStart(2, '0');
+      const formattedDate = `${yyyy}-${mm}-${dd}`;
 
-    updates[`parkingSlots/${selectedFloor}/${selectedSlot}/status`] = 'unavailable';
-    updates[`bookings/${bookingData.id}/slotId`] = selectedSlot;
-    updates[`bookings/${bookingData.id}/floor`] = selectedFloor;
-    updates[`bookings/${bookingData.id}/status`] = 'confirmed';
-    updates[`bookings/${bookingData.id}/bookingDate`] = formattedDate;
+      // อัพเดตสถานะ slot
+      updates[`parkingSlots/${selectedFloor}/${selectedSlot}/status`] = 'unavailable';
 
-    await update(ref(db), updates);
+      // อัพเดต booking
+      updates[`bookings/${bookingData.id}/status`] = 'confirmed';
+      updates[`bookings/${bookingData.id}/slotId`] = selectedSlot;
+      updates[`bookings/${bookingData.id}/floor`] = selectedFloor;
+      updates[`bookings/${bookingData.id}/bookingDate`] = formattedDate;
+      updates[`bookings/${bookingData.id}/paymentStatus`] = 'paid';
+      updates[`bookings/${bookingData.id}/paymentDate`] = formattedDate;
 
-    Alert.alert('Success', 'Payment successful and slot reserved!', [
-      {
-        text: 'OK',
-        onPress: () => navigation.navigate('Home', { username }),
-      },
-    ]);
-  } catch (error) {
-    console.error(error);
-    Alert.alert('Error', 'Payment failed. Please try again.');
-  }
-};
+      await update(ref(db), updates);
 
+      Alert.alert('Success', 'Payment successful and slot reserved!', [
+        {
+          text: 'OK',
+          onPress: () => navigation.navigate('Home', { username }),
+        },
+      ]);
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Payment failed. Please try again.');
+    }
+  };
 
   const handleBack = () => navigation.goBack();
 
@@ -71,17 +75,14 @@ const PaymentScreen = ({ navigation, route }) => {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {/* Back Button */}
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
 
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Payment</Text>
         </View>
 
-        {/* Payment Card */}
         <View style={styles.paymentCard}>
           <Text style={styles.cardTitle}>Booking Details</Text>
 
@@ -96,7 +97,6 @@ const PaymentScreen = ({ navigation, route }) => {
           {bookingData.exitTime && renderBookingDetail('Exit Time', bookingData.exitTime)}
           {bookingData.durationMonths && renderBookingDetail('Duration (Months)', bookingData.durationMonths)}
 
-          {/* QR Code */}
           <View style={styles.qrContainer}>
             <Image
               source={require('../../assets/images/demo-qr.png')}
@@ -105,14 +105,12 @@ const PaymentScreen = ({ navigation, route }) => {
             />
           </View>
 
-          {/* Total Amount */}
           <View style={styles.totalContainer}>
             <Text style={styles.totalLabel}>Total Amount:</Text>
             <Text style={styles.totalAmount}>{formatPrice()}</Text>
           </View>
         </View>
 
-        {/* Pay Button */}
         <TouchableOpacity style={styles.payButton} onPress={handlePaymentSuccess}>
           <Text style={styles.payButtonText}>Pay & Confirm</Text>
         </TouchableOpacity>
