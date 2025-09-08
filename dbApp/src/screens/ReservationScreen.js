@@ -60,33 +60,19 @@ const ReservationScreen = ({ navigation, route }) => {
     setSelectedSlot(null);
   };
 
-  const confirmReservation = async () => {
+  const confirmReservation =  () => {
     if (!selectedSlot) {
       Alert.alert('Error', 'Please select an available parking slot');
       return;
     }
-
-    try {
-      const updates = {};
-      updates[`parkingSlots/${selectedFloor}/${selectedSlot}/status`] = 'unavailable';
-      updates[`bookings/${bookingData.id}/slotId`] = selectedSlot;
-      updates[`bookings/${bookingData.id}/floor`] = selectedFloor;
-      updates[`bookings/${bookingData.id}/status`] = 'confirmed';
-      updates[`bookings/${bookingData.id}/bookingDate`] = new Date().toISOString(); // เพิ่มตรงนี้
-
-      await update(ref(db), updates);
-
-      Alert.alert('Success', `Parking slot ${selectedSlot} on ${selectedFloor} reserved successfully!`, [
-        { 
-          text: 'OK', 
-          onPress: () => navigation.navigate('Home', { username }) 
-        }
-      ]);
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Failed to reserve parking slot. Please try again.');
-    }
+    navigation.navigate('Payment', {
+      username,
+      bookingData,
+      selectedSlot,
+      selectedFloor,
+    });
   };
+  
 
   const handleBack = () => {
     navigation.goBack();
@@ -225,41 +211,211 @@ const ReservationScreen = ({ navigation, route }) => {
 
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA' },
-  scrollContainer: { padding: 20, paddingTop: 60, alignItems: 'center' },
-  backButton: { position: 'absolute', top: 40, left: 20, zIndex: 1, padding: 8, backgroundColor: '#fff', borderRadius: 20 },
-  header: { alignItems: 'center', marginBottom: 25, marginTop: 10 },
-  title: { fontSize: 28, fontWeight: '700', color: '#2D3748', textAlign: 'center' },
-  section: { marginBottom: 20, width: '100%', alignItems: 'center' },
-  floorSelectorContainer: { marginBottom: 25, justifyContent: 'center', width: '100%', alignItems: 'center' },
-  floorDropdown: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#B19CD8', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 10, minWidth: 140, justifyContent: 'space-between' },
-  floorDropdownText: { color: '#fff', fontSize: 16, fontWeight: '600', paddingHorizontal: 10 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '80%', backgroundColor: 'white', borderRadius: 15, padding: 20 },
-  dropdownContainer: { borderRadius: 10, overflow: 'hidden' },
-  floorItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#EDF2F7' },
-  selectedFloorItem: { backgroundColor: '#F0E6FF' },
-  floorItemText: { fontSize: 16, color: '#4A5568' },
-  selectedFloorItemText: { color: '#B19CD8', fontWeight: '600' },
-  parkingLayout: { width: '100%', alignItems: 'center', marginBottom: 30 },
-  slotRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', marginBottom: 10 },
-  slot: { width: 70, height: 100, borderRadius: 8, margin: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'transparent' },
-  slotText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  availableSlot: { backgroundColor: '#48BB78' },
-  unavailableSlot: { backgroundColor: '#F56565', opacity: 0.7 },
-  selectedSlot: { borderColor: '#F6E05E', borderWidth: 3, transform: [{ scale: 1.05 }] },
-  entranceExitRow: { width: '100%', paddingVertical: 8, marginBottom: 10, alignItems: 'center', justifyContent: 'center' },
-  entranceExitText: { color: '#C9CDCF', fontSize: 16, fontWeight: '700', textAlign: 'center' },
-  legendContainer: { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginBottom: 30, backgroundColor: '#fff', padding: 15, borderRadius: 12 },
-  legendItem: { flexDirection: 'row', alignItems: 'center' },
-  legendColor: { width: 16, height: 16, borderRadius: 4, marginRight: 8 },
-  availableLegend: { backgroundColor: '#48BB78' },
-  unavailableLegend: { backgroundColor: '#F56565' },
-  selectedLegend: { backgroundColor: '#48BB78', borderWidth: 2, borderColor: '#F6E05E' },
-  legendText: { color: '#4A5568', fontSize: 14, fontWeight: '500' },
-  confirmButton: { backgroundColor: '#B19CD8', padding: 18, borderRadius: 12, alignItems: 'center', width: '100%', maxWidth: 350 },
-  confirmText: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  disabledButton: { opacity: 0.5 },
+  container: 
+  { 
+    flex: 1, 
+    backgroundColor: '#F8F9FA' 
+  },
+  scrollContainer: { 
+    padding: 20, 
+    paddingTop: 60, 
+    alignItems: 'center' 
+  },
+  backButton: 
+  { 
+    position: 'absolute', 
+    top: 40, 
+    left: 20, 
+    zIndex: 1, 
+    padding: 8, 
+    backgroundColor: '#fff', 
+    borderRadius: 20
+  },
+  header: { 
+    alignItems: 'center',
+    marginBottom: 25, 
+    marginTop: 10 
+  },
+  title: { 
+    fontSize: 28, 
+    fontWeight: '700', 
+    color: '#2D3748', 
+    textAlign: 'center' 
+  },
+  section: { 
+    marginBottom: 20, 
+    width: '100%', 
+    alignItems: 'center' 
+  },
+  floorSelectorContainer: { 
+    marginBottom: 25, 
+    justifyContent: 'center', 
+    width: '100%', 
+    alignItems: 'center' 
+  },
+  floorDropdown: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#B19CD8', 
+    paddingVertical: 12, 
+    paddingHorizontal: 20, 
+    borderRadius: 10, 
+    minWidth: 140, 
+    justifyContent: 'space-between' 
+  },
+  floorDropdownText: { 
+    color: '#fff', 
+    fontSize: 16, 
+    fontWeight: '600', 
+    paddingHorizontal: 10 
+  },
+  modalOverlay: { 
+    flex: 1, 
+    backgroundColor: 'rgba(0,0,0,0.5)', 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  modalContent: { 
+    width: '80%', 
+    backgroundColor: 'white', 
+    borderRadius: 15, 
+    padding: 20 
+  },
+  dropdownContainer: { 
+    borderRadius: 10, 
+    overflow: 'hidden' 
+  },
+  floorItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingVertical: 14, 
+    paddingHorizontal: 20, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#EDF2F7'
+   },
+  selectedFloorItem: { 
+    backgroundColor: '#F0E6FF' 
+  },
+  floorItemText: { 
+    fontSize: 16, 
+    color: '#4A5568' 
+  },
+  selectedFloorItemText: { 
+    color: '#B19CD8', 
+    fontWeight: '600' 
+  },
+  parkingLayout: { 
+    width: '100%', 
+    alignItems: 'center', 
+    marginBottom: 30 
+  },
+  slotRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    flexWrap: 'wrap', 
+    marginBottom: 10 
+  },
+  slot: { 
+    width: 70, 
+    height: 100, 
+    borderRadius: 8, 
+    margin: 8, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    borderWidth: 2, 
+    borderColor: 'transparent' 
+  },
+  slotText: { 
+    color: '#fff', 
+    fontSize: 16, 
+    fontWeight: '700' 
+  },
+  availableSlot: 
+  { 
+    backgroundColor: '#48BB78' 
+  },
+  unavailableSlot: 
+  { 
+    backgroundColor: '#F56565', 
+    opacity: 0.7 
+  },
+  selectedSlot: 
+  {
+    borderColor: '#F6E05E', 
+    borderWidth: 3, 
+    transform: [{ scale: 1.05 }] 
+  },
+  entranceExitRow: 
+  { 
+    width: '100%', 
+    paddingVertical: 8, 
+    marginBottom: 10, 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
+  entranceExitText: 
+  { 
+    color: '#C9CDCF', 
+    fontSize: 16, 
+    fontWeight: '700', 
+    textAlign: 'center' 
+  },
+  legendContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-around', 
+    width: '100%', 
+    marginBottom: 30,
+    backgroundColor: '#fff', 
+    padding: 15, 
+    borderRadius: 12 
+  },
+  legendItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  legendColor: { 
+    width: 16, 
+    height: 16, 
+    borderRadius: 4, 
+    marginRight: 8 
+  },
+  availableLegend: 
+  { 
+    backgroundColor: '#48BB78' 
+  },
+  unavailableLegend: 
+  { 
+    backgroundColor: '#F56565' 
+  },
+  selectedLegend: { 
+    backgroundColor: '#48BB78', 
+    borderWidth: 2, 
+    borderColor: '#F6E05E' 
+  },
+  legendText: 
+  { 
+    color: '#4A5568', 
+    fontSize: 14, 
+    fontWeight: '500'
+  },
+  confirmButton: { 
+    backgroundColor: '#B19CD8', 
+    padding: 18, 
+    borderRadius: 12, 
+    alignItems: 'center', 
+    width: '100%', 
+    maxWidth: 350 
+  },
+  confirmText: { 
+    color: '#fff', 
+    fontSize: 18, 
+    fontWeight: '700' 
+  },
+  disabledButton: 
+  { 
+    opacity: 0.5 
+  },
 });
 
 export default ReservationScreen;
