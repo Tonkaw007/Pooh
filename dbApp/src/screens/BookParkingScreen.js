@@ -27,14 +27,15 @@ const BookParkingScreen = ({ navigation, route }) => {
 
   const calculatePrice = () => {
     if (!selectedRate) return 0;
-  
     switch (selectedRate) {
-      case 'hourly':
-        const hours = Math.ceil((exitTime - entryTime) / (1000 * 60 * 60)); // ชั่วโมง
+      case 'hourly': {
+        const hours = Math.ceil((exitTime - entryTime) / (1000 * 60 * 60));
         return hours > 0 ? hours * 40 : 40;
-      case 'daily':
+      }
+      case 'daily': {
         const days = Math.ceil((exitDate - entryDate) / (1000 * 60 * 60 * 24));
         return days > 0 ? days * 250 : 250;
+      }
       case 'monthly':
         return durationMonths * 3000;
       default:
@@ -47,37 +48,55 @@ const BookParkingScreen = ({ navigation, route }) => {
     if (!selectedValue) return;
 
     const today = new Date();
-  const isToday =
-    selectedValue.getFullYear() === today.getFullYear() &&
-    selectedValue.getMonth() === today.getMonth() &&
-    selectedValue.getDate() === today.getDate();
 
-  switch (pickerMode) {
-    case 'entryDate':
-      if (isToday) {
-        Alert.alert('Error', "Entry date/time can't be today.");
-        return; // ไม่อัปเดต entryDate
-      }
-      setEntryDate(selectedValue);
-      if (selectedRate === 'hourly') setExitDate(selectedValue); // hourly exitDate = entryDate
-      break;
-    case 'entryTime':
-      // ถ้า entryDate คือวันปัจจุบัน ก็ไม่ให้เลือกเวลา
-      if (
-        entryDate.getFullYear() === today.getFullYear() &&
-        entryDate.getMonth() === today.getMonth() &&
-        entryDate.getDate() === today.getDate()
-      ) {
-        Alert.alert('Error', "Entry time can't be today.");
-        return;
-      }
-        setEntryTime(selectedValue);
+    switch (pickerMode) {
+      case 'entryDate':
+        setEntryDate(selectedValue);
+        if (selectedRate === 'hourly') setExitDate(selectedValue);
+        if (selectedRate === 'monthly') {
+          const newExit = new Date(selectedValue);
+          newExit.setMonth(newExit.getMonth() + durationMonths);
+          setExitDate(newExit);
+        }
         break;
+
+      case 'entryTime':
+        setEntryTime(selectedValue);
+        if (selectedRate === 'hourly') {
+          const newExit = new Date(selectedValue);
+          newExit.setHours(selectedValue.getHours() + 1);
+          setExitTime(newExit);
+          setExitDate(entryDate);
+        }
+        break;
+
       case 'exitDate':
         setExitDate(selectedValue);
         break;
+
       case 'exitTime':
-        setExitTime(selectedValue);
+        if (selectedRate === 'hourly') {
+          const diffMs = selectedValue - entryTime;
+          const diffMinutes = diffMs / (1000 * 60);
+
+          if (diffMinutes < 60) {
+            const correctedExit = new Date(entryTime);
+            correctedExit.setHours(entryTime.getHours() + 1);
+            correctedExit.setMinutes(entryTime.getMinutes());
+            setExitTime(correctedExit);
+            Alert.alert('Error', 'Minimum booking is 1 hour!');
+          } else {
+            const correctedExit = new Date(selectedValue);
+            const minutes = correctedExit.getMinutes();
+            if (minutes >= 1 && minutes <= 39) {
+              correctedExit.setMinutes(0); // ปัดลง
+            } else if (minutes >= 40 && minutes <= 59) {
+              correctedExit.setHours(correctedExit.getHours() + 1);
+              correctedExit.setMinutes(0); // ปัดขึ้น
+            }
+            setExitTime(correctedExit);
+          }
+        }
         break;
     }
   };
@@ -94,72 +113,74 @@ const BookParkingScreen = ({ navigation, route }) => {
       return;
     }
 
-    // 🔹 ตรวจสอบวัน/เวลา
     const now = new Date();
-const entryDateTime = new Date(
-  entryDate.getFullYear(),
-  entryDate.getMonth(),
-  entryDate.getDate(),
-  entryTime.getHours(),
-  entryTime.getMinutes()
-);
-const exitDateTime = new Date(
-  exitDate.getFullYear(),
-  exitDate.getMonth(),
-  exitDate.getDate(),
-  exitTime.getHours(),
-  exitTime.getMinutes()
-);
+    const entryDateTime = new Date(
+      entryDate.getFullYear(), 
+      entryDate.getMonth(), 
+      entryDate.getDate(), 
+      entryTime.getHours(), 
+      entryTime.getMinutes()
+    );
+    let exitDateTime;
+
+    if (selectedRate === 'hourly') {
+      exitDateTime = new Date(
+        exitDate.getFullYear(), 
+        exitDate.getMonth(), 
+        exitDate.getDate(), 
+        exitTime.getHours(), 
+        exitTime.getMinutes()
+      );
+      const diffMinutes = (exitDateTime - entryDateTime) / (1000 * 60);
+      if (diffMinutes < 60) {
+        const correctedExit = new Date(entryTime);
+        correctedExit.setHours(entryTime.getHours() + 1);
+        correctedExit.setMinutes(entryTime.getMinutes());
+        setExitTime(correctedExit);
+        Alert.alert('Error', 'Minimum booking is 1 hour!');
+        return;
+      }
+    } else if (selectedRate === 'daily') {
+      exitDateTime = new Date(exitDate.getFullYear(), exitDate.getMonth(), exitDate.getDate());
+      if (exitDateTime <= entryDateTime) {
+        Alert.alert('Error', 'Exit date must be after entry date for daily booking.');
+        return;
+      }
+    } else if (selectedRate === 'monthly') {
+      exitDateTime = new Date(entryDate);
+      exitDateTime.setMonth(exitDateTime.getMonth() + durationMonths);
+      setExitDate(exitDateTime);
+    }
 
     if (entryDateTime < now) {
       Alert.alert('Error', 'Entry date/time cannot be in the past.');
       return;
     }
 
-    if (exitDateTime <= entryDateTime && selectedRate === 'hourly') {
-      Alert.alert('Error', 'Exit time must be after entry time.');
-      return;
-    }
-
-    if ((selectedRate === 'daily' || selectedRate === 'monthly') && exitDate <= entryDate) {
-      Alert.alert('Error', 'Exit date must be after entry date.');
-      return;
-    }
-    
-
     try {
       const bookingRef = push(ref(db, 'bookings'));
       const price = calculatePrice();
-      let bookingData = {
+      const bookingData = {
         username,
         bookingType,
         rateType: selectedRate,
         createdAt: new Date().toISOString(),
         price,
+        entryDate: entryDate.toISOString().split('T')[0],
+        exitDate: exitDateTime.toISOString().split('T')[0],
+        bookingDate: new Date().toISOString().split('T')[0],
       };
 
-      const entryDateStr = entryDate.toISOString().split('T')[0];
-      const exitDateStr = exitDate.toISOString().split('T')[0];
-      const bookingDateStr = new Date().toISOString().split('T')[0];
-
       if (selectedRate === 'hourly') {
-        bookingData.entryDate = entryDateStr;
-        bookingData.entryTime = entryTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-        bookingData.exitDate = exitDateStr;
-        bookingData.exitTime = exitTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-      } else if (selectedRate === 'daily') {
-        bookingData.entryDate = entryDateStr;
-        bookingData.exitDate = exitDateStr;
+        bookingData.entryTime = formatTime(entryTime);
+        bookingData.exitTime = formatTime(exitTime);
       } else if (selectedRate === 'monthly') {
-        bookingData.entryDate = entryDateStr;
-        bookingData.exitDate = exitDateStr;
         bookingData.durationMonths = durationMonths;
       }
 
-      bookingData.bookingDate = bookingDateStr;
-
       await set(bookingRef, bookingData);
 
+      // Navigate to ReservationScreen
       navigation.navigate('Reservation', {
         username,
         bookingData: { ...bookingData, id: bookingRef.key },
@@ -220,34 +241,40 @@ const exitDateTime = new Date(
             </View>
 
             {selectedRate === 'hourly' && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Entry Time</Text>
-                <TouchableOpacity
-                  style={styles.dateTimeBox}
-                  onPress={() => { setPickerMode('entryTime'); setShowPicker(true); }}
-                >
-                  <Text style={styles.dateTimeValue}>{formatTime(entryTime)}</Text>
-                  <Ionicons name="time" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
-                </TouchableOpacity>
-              </View>
+              <>
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Entry Time</Text>
+                  <TouchableOpacity
+                    style={styles.dateTimeBox}
+                    onPress={() => { setPickerMode('entryTime'); setShowPicker(true); }}
+                  >
+                    <Text style={styles.dateTimeValue}>{formatTime(entryTime)}</Text>
+                    <Ionicons name="time" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Exit Time</Text>
+                  <TouchableOpacity
+                    style={styles.dateTimeBox}
+                    onPress={() => { setPickerMode('exitTime'); setShowPicker(true); }}
+                  >
+                    <Text style={styles.dateTimeValue}>{formatTime(exitTime)}</Text>
+                    <Ionicons name="time" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
+                  </TouchableOpacity>
+                </View>
+              </>
             )}
 
-            {(selectedRate === 'hourly' || selectedRate === 'daily') && (
+            {selectedRate === 'daily' && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Exit {selectedRate === 'hourly' ? 'Time' : 'Date'}</Text>
+                <Text style={styles.sectionTitle}>Exit Date</Text>
                 <TouchableOpacity
                   style={styles.dateTimeBox}
-                  onPress={() => { setPickerMode(selectedRate === 'hourly' ? 'exitTime' : 'exitDate'); setShowPicker(true); }}
+                  onPress={() => { setPickerMode('exitDate'); setShowPicker(true); }}
                 >
-                  <Text style={styles.dateTimeValue}>
-                    {selectedRate === 'hourly' ? formatTime(exitTime) : formatDate(exitDate)}
-                  </Text>
-                  <Ionicons
-                    name={selectedRate === 'hourly' ? "time" : "calendar"}
-                    size={22}
-                    color="#B19CD8"
-                    style={{ marginLeft: 10 }}
-                  />
+                  <Text style={styles.dateTimeValue}>{formatDate(exitDate)}</Text>
+                  <Ionicons name="calendar" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
                 </TouchableOpacity>
               </View>
             )}
@@ -270,14 +297,12 @@ const exitDateTime = new Date(
             )}
           </View>
         )}
+
         {selectedRate && (
           <View style={styles.priceContainer}>
-            <Text style={styles.priceText}>
-             Price: {calculatePrice()} baht
-            </Text>
+            <Text style={styles.priceText}>Price: {calculatePrice()} baht</Text>
           </View>
         )}
-        
 
         <TouchableOpacity
           style={[styles.searchButton, !selectedRate && styles.disabledButton]}
@@ -289,24 +314,25 @@ const exitDateTime = new Date(
 
         {showPicker && (
           <DateTimePicker
-          value={
-            pickerMode === 'entryDate' ? entryDate
-              : pickerMode === 'entryTime' ? entryTime
-              : pickerMode === 'exitDate' ? exitDate
-              : pickerMode === 'exitTime' ? exitTime
-              : new Date()
-          }
-          mode={pickerMode?.includes('Date') ? 'date' : 'time'}
-          is24Hour={true}
-          display="default"
-          onChange={onChangeDateTime}
-          minimumDate={pickerMode === 'entryDate' || pickerMode === 'entryTime' ? new Date() : undefined}
-        />
+            value={
+              pickerMode === 'entryDate' ? entryDate
+                : pickerMode === 'entryTime' ? entryTime
+                : pickerMode === 'exitDate' ? exitDate
+                : pickerMode === 'exitTime' ? exitTime
+                : new Date()
+            }
+            mode={pickerMode?.includes('Date') ? 'date' : 'time'}
+            is24Hour={true}
+            display="default"
+            onChange={onChangeDateTime}
+            minimumDate={pickerMode === 'entryDate' || pickerMode === 'entryTime' ? new Date() : undefined}
+          />
         )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: { 
