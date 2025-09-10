@@ -114,23 +114,11 @@ const BookParkingScreen = ({ navigation, route }) => {
     }
 
     const now = new Date();
-    const entryDateTime = new Date(
-      entryDate.getFullYear(), 
-      entryDate.getMonth(), 
-      entryDate.getDate(), 
-      entryTime.getHours(), 
-      entryTime.getMinutes()
-    );
+    const entryDateTime = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate(), entryTime.getHours(), entryTime.getMinutes());
     let exitDateTime;
 
     if (selectedRate === 'hourly') {
-      exitDateTime = new Date(
-        exitDate.getFullYear(), 
-        exitDate.getMonth(), 
-        exitDate.getDate(), 
-        exitTime.getHours(), 
-        exitTime.getMinutes()
-      );
+      exitDateTime = new Date(exitDate.getFullYear(), exitDate.getMonth(), exitDate.getDate(), exitTime.getHours(), exitTime.getMinutes());
       const diffMinutes = (exitDateTime - entryDateTime) / (1000 * 60);
       if (diffMinutes < 60) {
         const correctedExit = new Date(entryTime);

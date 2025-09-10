@@ -34,7 +34,18 @@ const PaymentScreen = ({ navigation, route }) => {
       Alert.alert('Success', 'Payment successful and slot reserved!', [
         {
           text: 'OK',
-          onPress: () => navigation.navigate('Home', { username }),
+          onPress: () => navigation.navigate('MyParking', { 
+            username,
+            bookingData: {
+              ...bookingData,
+              status: 'confirmed',
+              slotId: selectedSlot,
+              floor: selectedFloor,
+              bookingDate: formattedDate,
+              paymentStatus: 'paid',
+              paymentDate: formattedDate
+            }
+          }),
         },
       ]);
     } catch (error) {

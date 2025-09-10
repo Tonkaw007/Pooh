@@ -3,8 +3,9 @@ import { View, Text, StyleSheet, Alert, KeyboardAvoidingView, TouchableOpacity }
 import CustomButton from "../component/CustomButton";
 import SearchBox from "../component/SearchBox";
 import { MaterialIcons } from "@expo/vector-icons";
+import Ionicons from "react-native-vector-icons/Ionicons";
 import { db } from "../firebaseConfig";
-import { ref, push, set } from "firebase/database";
+import { ref, push, set, get, child } from "firebase/database";
 
 const VisitorRegisterScreen = ({ navigation, route }) => {
   const username = route.params?.username || "User";
@@ -13,6 +14,32 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
+
+  // ฟังก์ชันเช็ค visitor เดิมจาก License Plate
+  const checkExistingVisitor = async (plate) => {
+    try {
+      if (!plate) return;
+
+      const snapshot = await get(child(ref(db), "visitors"));
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+
+        const existingVisitor = Object.values(data).find(
+          (v) => v.licensePlate === plate
+        );
+
+        if (existingVisitor) {
+          setVisitorUsername(existingVisitor.visitorUsername);
+          setPhoneNumber(existingVisitor.phoneNumber);
+          setEmail(existingVisitor.email);
+
+          Alert.alert("Info", "Visitor found! Data has been auto-filled.");
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   const handleRegisterVisitor = async () => {
     try {
@@ -44,7 +71,7 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
       });
 
       Alert.alert("Success", "Visitor registered successfully!");
-      navigation.navigate("Parking", {
+      navigation.navigate("BookParking", {
         username,
         bookingType: "visitor",
         visitorInfo: {
@@ -60,13 +87,34 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
     }
   };
 
+  // ฟังก์ชัน back button
+  const handleBack = () => {
+    navigation.navigate("BookingType", { username });
+  };
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior="padding">
+
+      {/* Back Arrow */}
+      <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+        <Ionicons name="arrow-back" size={24} color="white" />
+      </TouchableOpacity>
+
       <View style={styles.header}>
         <MaterialIcons name="person-add" size={40} color="white" />
         <Text style={styles.title}>Visitor Information</Text>
       </View>
+
+      <SearchBox
+        placeHolder="License Plate"
+        value={licensePlate}
+        onChangeText={(text) => {
+          setLicensePlate(text);
+          checkExistingVisitor(text);
+        }}
+        icon="directions-car"
+        containerStyle={styles.input}
+      />
 
       <SearchBox
         placeHolder="Username"
@@ -94,14 +142,6 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
         keyboardType="email-address"
       />
 
-      <SearchBox
-        placeHolder="License Plate"
-        value={licensePlate}
-        onChangeText={setLicensePlate}
-        icon="directions-car"
-        containerStyle={styles.input}
-      />
-
       <CustomButton
         title="Submit"
         backgroundColor="#FFFFFF"
@@ -113,14 +153,6 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
         onPress={handleRegisterVisitor}
       />
 
-      <TouchableOpacity
-        style={styles.loginLink}
-        onPress={() => navigation.goBack()}
-      >
-        <Text style={styles.loginText}>
-          Back to <Text style={styles.loginHighlight}>Booking</Text>
-        </Text>
-      </TouchableOpacity>
     </KeyboardAvoidingView>
   );
 };
@@ -131,6 +163,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#B19CD8",
     padding: 25,
+    paddingTop: 60,
+  },
+  backButton: {
+    position: "absolute",
+    top: 40,
+    left: 20,
+    zIndex: 1,
+    padding: 8,
   },
   header: {
     alignItems: "center",

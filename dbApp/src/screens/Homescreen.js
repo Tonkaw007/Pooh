@@ -21,7 +21,7 @@ const Homescreen = ({ navigation }) => {
         <View style={styles.container}>
             <View style={styles.iconContainer}>
                 <Icon name="car-alt" size={80} color="black" />
-                <Text style={styles.pabuText}>POOH</Text>
+                <Text style={styles.pabuText}>Pooh</Text>
             </View>
             <Animated.View style={{ opacity: fadeAnim }}>
             </Animated.View>

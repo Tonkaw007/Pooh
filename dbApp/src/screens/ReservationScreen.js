@@ -60,19 +60,44 @@ const ReservationScreen = ({ navigation, route }) => {
     setSelectedSlot(null);
   };
 
-  const confirmReservation =  () => {
+  const confirmReservation = async () => {
     if (!selectedSlot) {
       Alert.alert('Error', 'Please select an available parking slot');
       return;
     }
-    navigation.navigate('Payment', {
-      username,
-      bookingData,
-      selectedSlot,
-      selectedFloor,
-    });
+
+    const bookingsRef = ref(db, 'bookings');
+
+    onValue(bookingsRef, (snapshot) => {
+      const allBookings = snapshot.val() || {};
+      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      let todayHourlyCount = 0;
+
+      // นับการจองแบบรายชม.ของ user ในวันนี้
+      Object.values(allBookings).forEach((booking) => {
+        if (
+          booking.username === username &&
+          booking.rateType === 'hourly' &&
+          booking.entryDate === today
+        ) {
+          todayHourlyCount++;
+        }
+      });
+
+      if (todayHourlyCount >= 5) {
+        Alert.alert('Error', 'You have made more than 5 reservations for hourly rates today.');
+        return;
+      } else {
+        // ยังไม่เกิน 5 ครั้ง -> ไปหน้าชำระเงิน
+        navigation.navigate('Payment', {
+          username,
+          bookingData,
+          selectedSlot,
+          selectedFloor,
+        });
+      }
+    }, { onlyOnce: true });
   };
-  
 
   const handleBack = () => {
     navigation.goBack();
@@ -208,7 +233,6 @@ const ReservationScreen = ({ navigation, route }) => {
     </View>
   );
 };
-
 
 const styles = StyleSheet.create({
   container: 
