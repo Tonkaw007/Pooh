@@ -1,11 +1,35 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Image } from 'react-native';
 import { db } from '../firebaseConfig';
-import { ref, update } from 'firebase/database';
+import { ref, update, get, push, child } from 'firebase/database';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const PaymentScreen = ({ navigation, route }) => {
   const { username, bookingData, selectedSlot, selectedFloor } = route.params;
+  const [userBookings, setUserBookings] = useState([]);
+
+  // โหลด booking ของผู้ใช้จาก Firebase
+  const fetchUserBookings = async () => {
+    try {
+      const snapshot = await get(child(ref(db), 'bookings'));
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        const bookingsArray = Object.values(data).filter(
+          (b) => b.username === username
+        );
+        setUserBookings(bookingsArray);
+      } else {
+        setUserBookings([]);
+      }
+    } catch (error) {
+      console.error(error);
+      setUserBookings([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchUserBookings();
+  }, []);
 
   const handlePaymentSuccess = async () => {
     try {
@@ -14,37 +38,40 @@ const PaymentScreen = ({ navigation, route }) => {
       // แปลงวันที่เป็น YYYY-MM-DD
       const today = new Date();
       const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, '0'); // เดือน 0-11
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
       const dd = String(today.getDate()).padStart(2, '0');
       const formattedDate = `${yyyy}-${mm}-${dd}`;
 
       // อัพเดตสถานะ slot
       updates[`parkingSlots/${selectedFloor}/${selectedSlot}/status`] = 'unavailable';
 
-      // อัพเดต booking
-      updates[`bookings/${bookingData.id}/status`] = 'confirmed';
-      updates[`bookings/${bookingData.id}/slotId`] = selectedSlot;
-      updates[`bookings/${bookingData.id}/floor`] = selectedFloor;
-      updates[`bookings/${bookingData.id}/bookingDate`] = formattedDate;
-      updates[`bookings/${bookingData.id}/paymentStatus`] = 'paid';
-      updates[`bookings/${bookingData.id}/paymentDate`] = formattedDate;
+      // สร้าง booking ใหม่ ด้วย push() เพื่อให้ id ไม่ซ้ำ
+      const newBookingRef = push(ref(db, 'bookings'));
+      const newBookingId = newBookingRef.key;
+      const newBooking = {
+        ...bookingData,
+        id: newBookingId,
+        username,
+        status: 'confirmed',
+        slotId: selectedSlot,
+        floor: selectedFloor,
+        bookingDate: formattedDate,
+        paymentStatus: 'paid',
+        paymentDate: formattedDate
+      };
+
+      updates[`bookings/${newBookingId}`] = newBooking;
 
       await update(ref(db), updates);
+
+      // โหลด booking ใหม่ทั้งหมดของผู้ใช้
+      await fetchUserBookings();
 
       Alert.alert('Success', 'Payment successful and slot reserved!', [
         {
           text: 'OK',
           onPress: () => navigation.navigate('MyParking', { 
             username,
-            bookingData: {
-              ...bookingData,
-              status: 'confirmed',
-              slotId: selectedSlot,
-              floor: selectedFloor,
-              bookingDate: formattedDate,
-              paymentStatus: 'paid',
-              paymentDate: formattedDate
-            }
           }),
         },
       ]);
@@ -99,7 +126,7 @@ const PaymentScreen = ({ navigation, route }) => {
 
           {renderBookingDetail('Booking ID', bookingData.id)}
           {renderBookingDetail('Booking Type', formatBookingType(bookingData.rateType))}
-          {renderBookingDetail('Booked By', bookingData.username)}
+          {renderBookingDetail('Booked By', username)}
           {renderBookingDetail('Slot', selectedSlot)}
           {renderBookingDetail('Floor', selectedFloor)}
           {bookingData.entryDate && renderBookingDetail('Entry Date', bookingData.entryDate)}

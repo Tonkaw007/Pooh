@@ -47,8 +47,6 @@ const BookParkingScreen = ({ navigation, route }) => {
     setShowPicker(false);
     if (!selectedValue) return;
 
-    const today = new Date();
-
     switch (pickerMode) {
       case 'entryDate':
         setEntryDate(selectedValue);
@@ -65,6 +63,7 @@ const BookParkingScreen = ({ navigation, route }) => {
         if (selectedRate === 'hourly') {
           const newExit = new Date(selectedValue);
           newExit.setHours(selectedValue.getHours() + 1);
+          newExit.setMinutes(selectedValue.getMinutes());
           setExitTime(newExit);
           setExitDate(entryDate);
         }
@@ -85,16 +84,22 @@ const BookParkingScreen = ({ navigation, route }) => {
             correctedExit.setMinutes(entryTime.getMinutes());
             setExitTime(correctedExit);
             Alert.alert('Error', 'Minimum booking is 1 hour!');
-          } else {
+            return;
+          }
+
+          const entryMinutes = entryTime.getMinutes();
+          const exitMinutes = selectedValue.getMinutes();
+
+          if (exitMinutes !== entryMinutes) {
+            Alert.alert(
+              'Error',
+              `The exit time must match the minutes of the entry time (${entryTime.getMinutes()} minutes).`
+            );
             const correctedExit = new Date(selectedValue);
-            const minutes = correctedExit.getMinutes();
-            if (minutes >= 1 && minutes <= 39) {
-              correctedExit.setMinutes(0); // ปัดลง
-            } else if (minutes >= 40 && minutes <= 59) {
-              correctedExit.setHours(correctedExit.getHours() + 1);
-              correctedExit.setMinutes(0); // ปัดขึ้น
-            }
+            correctedExit.setMinutes(entryMinutes);
             setExitTime(correctedExit);
+          } else {
+            setExitTime(selectedValue);
           }
         }
         break;
@@ -128,6 +133,18 @@ const BookParkingScreen = ({ navigation, route }) => {
         Alert.alert('Error', 'Minimum booking is 1 hour!');
         return;
       }
+
+      if (exitTime.getMinutes() !== entryTime.getMinutes()) {
+        Alert.alert(
+          'Error',
+          `The exit time must match the minutes of the entry time (${entryTime.getMinutes()} minutes).`
+        );
+        const correctedExit = new Date(exitTime);
+        correctedExit.setMinutes(entryTime.getMinutes());
+        setExitTime(correctedExit);
+        return;
+      }
+
     } else if (selectedRate === 'daily') {
       exitDateTime = new Date(exitDate.getFullYear(), exitDate.getMonth(), exitDate.getDate());
       if (exitDateTime <= entryDateTime) {
@@ -168,7 +185,6 @@ const BookParkingScreen = ({ navigation, route }) => {
 
       await set(bookingRef, bookingData);
 
-      // Navigate to ReservationScreen
       navigation.navigate('Reservation', {
         username,
         bookingData: { ...bookingData, id: bookingRef.key },
@@ -194,7 +210,6 @@ const BookParkingScreen = ({ navigation, route }) => {
           <Text style={styles.title}>Book Parking</Text>
         </View>
 
-        {/* Rate Selection */}
         <View style={styles.section}>
           <View style={styles.ratesContainer}>
             {rates.map((rate) => (
@@ -214,7 +229,6 @@ const BookParkingScreen = ({ navigation, route }) => {
           </View>
         </View>
 
-        {/* Dynamic Inputs */}
         {(selectedRate === 'hourly' || selectedRate === 'daily' || selectedRate === 'monthly') && (
           <View style={styles.inputGroup}>
             <View style={styles.section}>
@@ -320,7 +334,6 @@ const BookParkingScreen = ({ navigation, route }) => {
     </KeyboardAvoidingView>
   );
 };
-
 
 const styles = StyleSheet.create({
   container: { 
@@ -479,7 +492,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#B19CD8',
   },
-  
 });
 
 export default BookParkingScreen;

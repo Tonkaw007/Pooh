@@ -62,7 +62,10 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         update(bookingRef, { status: 'cancelled' })
             .then(() => {
                 Alert.alert("Success", "Your booking has been cancelled.", [
-                    { text: "OK", onPress: () => navigation.navigate('BookParking', { username }) }
+                    { 
+                        text: "OK", 
+                        onPress: () => navigation.navigate('MyParking', { username }) 
+                    }
                 ]);
             })
             .catch((error) => {

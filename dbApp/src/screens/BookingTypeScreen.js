@@ -7,42 +7,75 @@ const BookingTypeScreen = ({ navigation, route }) => {
   const [selectedType, setSelectedType] = useState(null);
   const username = route.params?.username || 'User';
 
+  // ตรวจสอบจำนวน visitor
   const checkVisitorLimit = async () => {
     try {
       const snapshot = await get(child(ref(db), 'visitors'));
+      let visitorCount = 0;
       if (snapshot.exists()) {
         const data = snapshot.val();
-        const visitorCount = Object.values(data).filter(
+        visitorCount = Object.values(data).filter(
           (item) => item.createdBy === username
         ).length;
-
-        if (visitorCount >= 3) {
-          Alert.alert(
-            'Limit Reached',
-            'You cannot register more than 3 visitors.'
-          );
-          return;
-        }
       }
-      navigation.navigate('VisitorRegister', {
-        username,
-        bookingType: 'visitor',
-      });
+
+      if (visitorCount >= 3) {
+        Alert.alert('Limit Reached', 'You cannot register more than 3 visitors.');
+        return false;
+      }
+      return true;
     } catch (error) {
       console.error(error);
       Alert.alert('Error', 'Unable to check visitor limit.');
+      return false;
     }
   };
 
-  const handleContinue = () => {
-  if (selectedType === 'resident') {
-    navigation.navigate('BookParking', { username, bookingType: selectedType });
-  } else if (selectedType === 'visitor') {
-    navigation.navigate('VisitorRegister', { username, bookingType: selectedType });
-  }
-};
+  // ตรวจสอบจำนวน booking วันนี้
+  const handleContinue = async () => {
+    try {
+      const snapshot = await get(child(ref(db), 'bookings'));
+      let allBookings = [];
+      if (snapshot.exists()) {
+        allBookings = Object.values(snapshot.val()).filter(
+          b => b.status !== 'cancelled' // เอาเฉพาะ booking ที่ยัง active
+        );
+      }
 
+      const todayStr = new Date().toISOString().split('T')[0];
 
+      const todaysBookings = allBookings.filter(b => {
+        try {
+          if (!b.bookingDate) return false;
+          const bookingDateStr = b.bookingDate.substring(0, 10); // YYYY-MM-DD
+          return bookingDateStr === todayStr;
+        } catch {
+          return false;
+        }
+      });
+
+      if (todaysBookings.length >= 5) {
+        Alert.alert('Booking Limit Reached', 'You cannot make more than 5 active bookings today.');
+        return;
+      }
+
+      if (selectedType === 'resident') {
+        navigation.navigate('BookParking', { username, bookingType: selectedType });
+      } else if (selectedType === 'visitor') {
+        const canBookVisitor = await checkVisitorLimit();
+        if (canBookVisitor) {
+          navigation.navigate('VisitorRegister', { username, bookingType: selectedType });
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Unable to check bookings.');
+    }
+  };
+
+  const handleGoMyParking = () => {
+    navigation.navigate('MyParking', { username });
+  };
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior="padding">
@@ -51,10 +84,7 @@ const BookingTypeScreen = ({ navigation, route }) => {
       </View>
 
       <TouchableOpacity
-        style={[
-          styles.optionBox,
-          selectedType === 'resident' && styles.selectedBox,
-        ]}
+        style={[styles.optionBox, selectedType === 'resident' && styles.selectedBox]}
         onPress={() => setSelectedType('resident')}
       >
         <Text style={styles.optionTitle}>Resident</Text>
@@ -62,10 +92,7 @@ const BookingTypeScreen = ({ navigation, route }) => {
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[
-          styles.optionBox,
-          selectedType === 'visitor' && styles.selectedBox,
-        ]}
+        style={[styles.optionBox, selectedType === 'visitor' && styles.selectedBox]}
         onPress={() => setSelectedType('visitor')}
       >
         <Text style={styles.optionTitle}>Visitor</Text>
@@ -78,6 +105,10 @@ const BookingTypeScreen = ({ navigation, route }) => {
         disabled={!selectedType}
       >
         <Text style={styles.continueText}>Continue</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={handleGoMyParking}>
+        <Text style={styles.myParkingText}>MyParking</Text>
       </TouchableOpacity>
     </KeyboardAvoidingView>
   );
@@ -138,6 +169,13 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: '#fff',
+  },
+  myParkingText: {
+    marginTop: 15,
+    fontSize: 16,
+    color: 'white',
+    textDecorationLine: 'underline',
+    textAlign: 'center',
   },
 });
 
