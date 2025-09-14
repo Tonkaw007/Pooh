@@ -124,7 +124,6 @@ const PaymentScreen = ({ navigation, route }) => {
         <View style={styles.paymentCard}>
           <Text style={styles.cardTitle}>Booking Details</Text>
 
-          {renderBookingDetail('Booking ID', bookingData.id)}
           {renderBookingDetail('Booking Type', formatBookingType(bookingData.rateType))}
           {renderBookingDetail('Booked By', username)}
           {renderBookingDetail('Slot', selectedSlot)}

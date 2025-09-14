@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert, KeyboardAvoidingView, TouchableOpacity } from "react-native";
+import { View,Text, StyleSheet,Alert,KeyboardAvoidingView,TouchableOpacity } from "react-native";
 import { db } from '../firebaseConfig';
 import { ref, get, child } from 'firebase/database';
 
@@ -31,14 +31,14 @@ const BookingTypeScreen = ({ navigation, route }) => {
     }
   };
 
-  // ตรวจสอบจำนวน booking วันนี้
+  // ตรวจสอบจำนวน booking วันนี้ของผู้ใช้
   const handleContinue = async () => {
     try {
       const snapshot = await get(child(ref(db), 'bookings'));
       let allBookings = [];
       if (snapshot.exists()) {
         allBookings = Object.values(snapshot.val()).filter(
-          b => b.status !== 'cancelled' // เอาเฉพาะ booking ที่ยัง active
+          b => b.status !== 'cancelled' // เฉพาะ booking ที่ยัง active
         );
       }
 
@@ -46,7 +46,7 @@ const BookingTypeScreen = ({ navigation, route }) => {
 
       const todaysBookings = allBookings.filter(b => {
         try {
-          if (!b.bookingDate) return false;
+          if (!b.bookingDate || b.username !== username) return false;
           const bookingDateStr = b.bookingDate.substring(0, 10); // YYYY-MM-DD
           return bookingDateStr === todayStr;
         } catch {
@@ -113,6 +113,7 @@ const BookingTypeScreen = ({ navigation, route }) => {
     </KeyboardAvoidingView>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {

@@ -8,6 +8,7 @@ const ReservationScreen = ({ navigation, route }) => {
   const { username, bookingData } = route.params;
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [slots, setSlots] = useState({});
+  const [allSlots, setAllSlots] = useState({}); 
   const [selectedFloor, setSelectedFloor] = useState('1st Floor');
   const [showFloorDropdown, setShowFloorDropdown] = useState(false);
 
@@ -30,6 +31,7 @@ const ReservationScreen = ({ navigation, route }) => {
     '4th Floor': createSlotsForFloor(['J','K','L']),
   };
 
+  // โหลดข้อมูลจาก Firebase
   useEffect(() => {
     const slotsRef = ref(db, 'parkingSlots');
 
@@ -38,8 +40,10 @@ const ReservationScreen = ({ navigation, route }) => {
 
       if (!data) {
         await update(ref(db), { parkingSlots: floorSlots });
+        setAllSlots(floorSlots);
         setSlots(floorSlots[selectedFloor]);
       } else {
+        setAllSlots(data);
         setSlots(data[selectedFloor] || {});
       }
     });
@@ -56,7 +60,7 @@ const ReservationScreen = ({ navigation, route }) => {
   const handleFloorSelection = (floor) => {
     setSelectedFloor(floor);
     setShowFloorDropdown(false);
-    setSlots(floorSlots[floor] || {});
+    setSlots(allSlots[floor] || {});  // ดึงข้อมูลจริงจาก Firebase
     setSelectedSlot(null);
   };
 
@@ -68,35 +72,38 @@ const ReservationScreen = ({ navigation, route }) => {
 
     const bookingsRef = ref(db, 'bookings');
 
-    onValue(bookingsRef, (snapshot) => {
-      const allBookings = snapshot.val() || {};
-      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-      let todayHourlyCount = 0;
+    onValue(
+      bookingsRef,
+      (snapshot) => {
+        const allBookings = snapshot.val() || {};
+        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        let todayHourlyCount = 0;
 
-      // นับการจองแบบรายชม.ของ user ในวันนี้
-      Object.values(allBookings).forEach((booking) => {
-        if (
-          booking.username === username &&
-          booking.rateType === 'hourly' &&
-          booking.entryDate === today
-        ) {
-          todayHourlyCount++;
-        }
-      });
-
-      if (todayHourlyCount >= 5) {
-        Alert.alert('Error', 'You have made more than 5 reservations for hourly rates today.');
-        return;
-      } else {
-        // ยังไม่เกิน 5 ครั้ง -> ไปหน้าชำระเงิน
-        navigation.navigate('Payment', {
-          username,
-          bookingData,
-          selectedSlot,
-          selectedFloor,
+        // นับจำนวนการจองรายชั่วโมงวันนี้ของ user ไม่เกิน 5 ครั้ง
+        Object.values(allBookings).forEach((booking) => {
+          if (
+            booking.username === username &&
+            booking.rateType === 'hourly' &&
+            booking.entryDate === today
+          ) {
+            todayHourlyCount++;
+          }
         });
-      }
-    }, { onlyOnce: true });
+
+        if (todayHourlyCount >= 5) {
+          Alert.alert('Error', 'You have made more than 5 reservations for hourly rates today.');
+          return;
+        } else {
+          navigation.navigate('Payment', {
+            username,
+            bookingData,
+            selectedSlot,
+            selectedFloor,
+          });
+        }
+      },
+      { onlyOnce: true }
+    );
   };
 
   const handleBack = () => {
@@ -105,13 +112,13 @@ const ReservationScreen = ({ navigation, route }) => {
 
   const renderSlotRow = (slotIds) => (
     <View style={styles.slotRow}>
-      {slotIds.map(slotId => (
+      {slotIds.map((slotId) => (
         <TouchableOpacity
           key={slotId}
           style={[
             styles.slot,
             slots[slotId]?.status === 'available' ? styles.availableSlot : styles.unavailableSlot,
-            selectedSlot === slotId && styles.selectedSlot
+            selectedSlot === slotId && styles.selectedSlot,
           ]}
           onPress={() => handleSlotSelection(slotId)}
           disabled={slots[slotId]?.status !== 'available'}
@@ -180,16 +187,28 @@ const ReservationScreen = ({ navigation, route }) => {
             animationType="fade"
             onRequestClose={() => setShowFloorDropdown(false)}
           >
-            <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowFloorDropdown(false)}>
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setShowFloorDropdown(false)}
+            >
               <View style={styles.modalContent}>
                 <View style={styles.dropdownContainer}>
                   {floors.map((floor) => (
                     <TouchableOpacity
                       key={floor}
-                      style={[styles.floorItem, selectedFloor === floor && styles.selectedFloorItem]}
+                      style={[
+                        styles.floorItem,
+                        selectedFloor === floor && styles.selectedFloorItem,
+                      ]}
                       onPress={() => handleFloorSelection(floor)}
                     >
-                      <Text style={[styles.floorItemText, selectedFloor === floor && styles.selectedFloorItemText]}>
+                      <Text
+                        style={[
+                          styles.floorItemText,
+                          selectedFloor === floor && styles.selectedFloorItemText,
+                        ]}
+                      >
                         {floor}
                       </Text>
                       {selectedFloor === floor && (

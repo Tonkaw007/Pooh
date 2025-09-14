@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { db } from '../firebaseConfig';
-import { ref, push, set } from 'firebase/database';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const BookParkingScreen = ({ navigation, route }) => {
@@ -16,7 +14,7 @@ const BookParkingScreen = ({ navigation, route }) => {
   const [exitTime, setExitTime] = useState(new Date());
   const [durationMonths, setDurationMonths] = useState(1);
 
-  const [pickerMode, setPickerMode] = useState(null); // "entryDate", "entryTime", "exitDate", "exitTime"
+  const [pickerMode, setPickerMode] = useState(null); 
   const [showPicker, setShowPicker] = useState(false);
 
   const rates = [
@@ -112,39 +110,39 @@ const BookParkingScreen = ({ navigation, route }) => {
   const formatTime = (time) =>
     time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 
-  const handleSearch = async () => {
+  const handleSearch = () => {
     if (!selectedRate) {
       Alert.alert('Error', 'Please select a parking rate');
       return;
     }
 
     const now = new Date();
-    const entryDateTime = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate(), entryTime.getHours(), entryTime.getMinutes());
+    const entryDateTime = new Date(
+      entryDate.getFullYear(),
+      entryDate.getMonth(),
+      entryDate.getDate(),
+      entryTime.getHours(),
+      entryTime.getMinutes()
+    );
     let exitDateTime;
 
     if (selectedRate === 'hourly') {
-      exitDateTime = new Date(exitDate.getFullYear(), exitDate.getMonth(), exitDate.getDate(), exitTime.getHours(), exitTime.getMinutes());
+      exitDateTime = new Date(
+        exitDate.getFullYear(),
+        exitDate.getMonth(),
+        exitDate.getDate(),
+        exitTime.getHours(),
+        exitTime.getMinutes()
+      );
       const diffMinutes = (exitDateTime - entryDateTime) / (1000 * 60);
       if (diffMinutes < 60) {
-        const correctedExit = new Date(entryTime);
-        correctedExit.setHours(entryTime.getHours() + 1);
-        correctedExit.setMinutes(entryTime.getMinutes());
-        setExitTime(correctedExit);
         Alert.alert('Error', 'Minimum booking is 1 hour!');
         return;
       }
-
       if (exitTime.getMinutes() !== entryTime.getMinutes()) {
-        Alert.alert(
-          'Error',
-          `The exit time must match the minutes of the entry time (${entryTime.getMinutes()} minutes).`
-        );
-        const correctedExit = new Date(exitTime);
-        correctedExit.setMinutes(entryTime.getMinutes());
-        setExitTime(correctedExit);
+        Alert.alert('Error', `The exit time must match the minutes of the entry time (${entryTime.getMinutes()} minutes).`);
         return;
       }
-
     } else if (selectedRate === 'daily') {
       exitDateTime = new Date(exitDate.getFullYear(), exitDate.getMonth(), exitDate.getDate());
       if (exitDateTime <= entryDateTime) {
@@ -162,37 +160,30 @@ const BookParkingScreen = ({ navigation, route }) => {
       return;
     }
 
-    try {
-      const bookingRef = push(ref(db, 'bookings'));
-      const price = calculatePrice();
-      const bookingData = {
-        username,
-        bookingType,
-        rateType: selectedRate,
-        createdAt: new Date().toISOString(),
-        price,
-        entryDate: entryDate.toISOString().split('T')[0],
-        exitDate: exitDateTime.toISOString().split('T')[0],
-        bookingDate: new Date().toISOString().split('T')[0],
-      };
+    // ✅ ไม่บันทึก Firebase ที่นี่
+    const price = calculatePrice();
+    const bookingData = {
+      username,
+      bookingType,
+      rateType: selectedRate,
+      createdAt: new Date().toISOString(),
+      price,
+      entryDate: entryDate.toISOString().split('T')[0],
+      exitDate: exitDateTime.toISOString().split('T')[0],
+      bookingDate: new Date().toISOString().split('T')[0],
+    };
 
-      if (selectedRate === 'hourly') {
-        bookingData.entryTime = formatTime(entryTime);
-        bookingData.exitTime = formatTime(exitTime);
-      } else if (selectedRate === 'monthly') {
-        bookingData.durationMonths = durationMonths;
-      }
-
-      await set(bookingRef, bookingData);
-
-      navigation.navigate('Reservation', {
-        username,
-        bookingData: { ...bookingData, id: bookingRef.key },
-      });
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Failed to book parking. Please try again.');
+    if (selectedRate === 'hourly') {
+      bookingData.entryTime = formatTime(entryTime);
+      bookingData.exitTime = formatTime(exitTime);
+    } else if (selectedRate === 'monthly') {
+      bookingData.durationMonths = durationMonths;
     }
+
+    navigation.navigate('Reservation', {
+      username,
+      bookingData,
+    });
   };
 
   const handleBack = () => {
@@ -231,7 +222,7 @@ const BookParkingScreen = ({ navigation, route }) => {
 
         {(selectedRate === 'hourly' || selectedRate === 'daily' || selectedRate === 'monthly') && (
           <View style={styles.inputGroup}>
-            <View style={styles.section}>
+            <View className="section">
               <Text style={styles.sectionTitle}>Entry Date</Text>
               <TouchableOpacity
                 style={styles.dateTimeBox}

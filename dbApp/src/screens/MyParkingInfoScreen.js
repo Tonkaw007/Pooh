@@ -11,19 +11,15 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
     const [showCancelModal, setShowCancelModal] = useState(false);
 
     const handleBack = () => navigation.goBack();
-
     const handleOpenBarrier = () => setShowBarrierModal(true);
-
     const handleCancelBooking = () => setShowCancelModal(true);
 
-    // Control barrier and update Firebase with separate date & time
+    // Control barrier and update Firebase
     const controlBarrier = (action) => {
         setShowBarrierModal(false);
-
         const status = action === 'lift' ? 'lifted' : 'lowered';
         const bookingRef = ref(db, `bookings/${bookingData.id}`);
 
-        // Get current date & time
         const now = new Date();
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -31,8 +27,8 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
 
-        const actionDate = `${year}-${month}-${day}`; // YYYY-MM-DD
-        const actionTime = `${hours}:${minutes}`;      // HH:mm
+        const actionDate = `${year}-${month}-${day}`; 
+        const actionTime = `${hours}:${minutes}`;      
 
         update(bookingRef, { 
             barrierStatus: status,
@@ -43,10 +39,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
             Alert.alert(
                 "Success", 
                 `The parking barrier has been ${status}.`,
-                [{ 
-                    text: "OK", 
-                    onPress: () => console.log(`Barrier ${status} on ${actionDate} at ${actionTime}`) 
-                }]
+                [{ text: "OK", onPress: () => console.log(`Barrier ${status} on ${actionDate} at ${actionTime}`) }]
             );
         })
         .catch((error) => {
@@ -55,11 +48,16 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         });
     };
 
-
+    // ยกเลิก booking และ set slot เป็น available
     const confirmCancelBooking = () => {
         setShowCancelModal(false);
-        const bookingRef = ref(db, `bookings/${bookingData.id}`);
-        update(bookingRef, { status: 'cancelled' })
+
+        // อัปเดตทั้ง booking และ slot
+        const updates = {};
+        updates[`bookings/${bookingData.id}/status`] = 'cancelled';
+        updates[`parkingSlots/${bookingData.floor}/${bookingData.slotId}/status`] = 'available';
+
+        update(ref(db), updates)
             .then(() => {
                 Alert.alert("Success", "Your booking has been cancelled.", [
                     { 
@@ -179,10 +177,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                         <Text style={styles.sectionTitle}>Payment Information</Text>
                         <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>Payment Status:</Text>
-                            <Text style={[
-                                styles.detailValue,
-                                { color: bookingData.paymentStatus === 'paid' ? '#4CAF50' : '#FF9800' }
-                            ]}>
+                            <Text style={[styles.detailValue, { color: bookingData.paymentStatus === 'paid' ? '#4CAF50' : '#FF9800' }]}>
                                 {bookingData.paymentStatus}
                             </Text>
                         </View>
@@ -215,12 +210,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                 </View>
 
                 {/* Barrier Control Modal */}
-                <Modal
-                    visible={showBarrierModal}
-                    transparent={true}
-                    animationType="fade"
-                    onRequestClose={cancelAction}
-                >
+                <Modal visible={showBarrierModal} transparent={true} animationType="fade" onRequestClose={cancelAction}>
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContainer}>
                             <View style={styles.modalHeader}>
@@ -233,38 +223,24 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                             </Text>
 
                             <View style={styles.modalRowButtons}>
-                                <TouchableOpacity
-                                    style={styles.modalConfirmButton}
-                                    onPress={() => controlBarrier('lift')}
-                                >
+                                <TouchableOpacity style={styles.modalConfirmButton} onPress={() => controlBarrier('lift')}>
                                     <Text style={styles.modalConfirmText}>Lift</Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity
-                                    style={[styles.modalConfirmButton, { backgroundColor: '#2196F3' }]}
-                                    onPress={() => controlBarrier('lower')}
-                                >
+                                <TouchableOpacity style={[styles.modalConfirmButton, { backgroundColor: '#2196F3' }]} onPress={() => controlBarrier('lower')}>
                                     <Text style={styles.modalConfirmText}>Lower</Text>
                                 </TouchableOpacity>
                             </View>
 
-                            <TouchableOpacity
-                                style={styles.modalCancelButtonBottom}
-                                onPress={cancelAction}
-                            >
+                            <TouchableOpacity style={styles.modalCancelButtonBottom} onPress={cancelAction}>
                                 <Text style={styles.modalCancelText}>Cancel</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
                 </Modal>
 
-                {/* Cancel Booking Confirmation Modal */}
-                <Modal
-                    visible={showCancelModal}
-                    transparent={true}
-                    animationType="fade"
-                    onRequestClose={cancelAction}
-                >
+                {/* Cancel Booking Modal */}
+                <Modal visible={showCancelModal} transparent={true} animationType="fade" onRequestClose={cancelAction}>
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContainer}>
                             <View style={styles.modalHeader}>
@@ -281,10 +257,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                                     <Text style={styles.modalCancelText}>No, Keep It</Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity
-                                    style={[styles.modalConfirmButton, { backgroundColor: '#FF6B6B' }]}
-                                    onPress={confirmCancelBooking}
-                                >
+                                <TouchableOpacity style={[styles.modalConfirmButton, { backgroundColor: '#FF6B6B' }]} onPress={confirmCancelBooking}>
                                     <Text style={styles.modalConfirmText}>Yes, Cancel</Text>
                                 </TouchableOpacity>
                             </View>
