@@ -7,20 +7,22 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 const PaymentScreen = ({ navigation, route }) => {
   const { username, bookingData, selectedSlot, selectedFloor, bookingType } = route.params;
   const [userBookings, setUserBookings] = useState([]);
+  const [residentLicense, setResidentLicense] = useState(''); // สำหรับเก็บทะเบียน resident
 
+  // ดึงข้อมูล booking ของ user เพื่อหา license plate ของ resident
   const fetchUserBookings = async () => {
     try {
-      const snapshot = await get(child(ref(db), 'bookings'));
+      const snapshot = await get(child(ref(db), 'users'));
       if (snapshot.exists()) {
-        const data = snapshot.val();
-        const bookingsArray = Object.values(data).filter(b => b.username === username);
-        setUserBookings(bookingsArray);
-      } else {
-        setUserBookings([]);
+        const usersData = snapshot.val();
+        const currentUser = Object.values(usersData).find(u => u.username === username);
+        if (currentUser) {
+          setResidentLicense(currentUser.licensePlate || '-');
+        }
       }
     } catch (error) {
       console.error(error);
-      setUserBookings([]);
+      setResidentLicense('-');
     }
   };
 
@@ -58,8 +60,6 @@ const PaymentScreen = ({ navigation, route }) => {
       updates[`bookings/${newBookingId}`] = newBooking;
 
       await update(ref(db), updates);
-      await fetchUserBookings();
-
       Alert.alert('Success', 'Payment successful and slot reserved!', [
         {
           text: 'OK',
@@ -78,7 +78,6 @@ const PaymentScreen = ({ navigation, route }) => {
 
   const handleBack = () => navigation.goBack();
 
-  // ✅ รองรับ React element ได้
   const renderBookingDetail = (label, value) => (
     <View style={styles.detailRow}>
       <Text style={styles.label}>{label}:</Text>
@@ -150,23 +149,20 @@ const PaymentScreen = ({ navigation, route }) => {
           {bookingData.exitDate && renderBookingDetail('Exit Date', bookingData.exitDate)}
           {bookingData.exitTime && renderBookingDetail('Exit Time', bookingData.exitTime)}
 
-          {/* ✅ แสดงทะเบียนรถให้ถูกต้อง */}
-          {renderBookingDetail(
-            'License Plate',
-            bookingType === 'resident'
-              ? bookingData.licensePlate
-              : bookingData.visitorInfo?.licensePlate || '-'
-          )}
+          {/* ✅ ใช้ทะเบียน resident */}
+          {renderBookingDetail('License Plate', residentLicense)}
 
           {bookingData.durationMonths &&
             renderBookingDetail('Duration (Months)', bookingData.durationMonths)}
 
+          {/* Visitor Information */}
           {bookingType === 'visitor' && bookingData.visitorInfo && (
             <View style={styles.visitorSection}>
               <Text style={styles.sectionTitle}>Visitor Information</Text>
               {renderBookingDetail('Visitor Name', bookingData.visitorInfo.visitorUsername)}
               {renderBookingDetail('Phone', bookingData.visitorInfo.phoneNumber)}
               {renderBookingDetail('Email', bookingData.visitorInfo.email)}
+              {renderBookingDetail('License Plate', bookingData.visitorInfo.licensePlate)}
             </View>
           )}
 
