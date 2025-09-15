@@ -5,10 +5,10 @@ import { db } from '../firebaseConfig';
 import { ref, onValue, update } from 'firebase/database';
 
 const ReservationScreen = ({ navigation, route }) => {
-  const { username, bookingData } = route.params;
+  const { username, bookingData, bookingType } = route.params;
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [slots, setSlots] = useState({});
-  const [allSlots, setAllSlots] = useState({}); 
+  const [allSlots, setAllSlots] = useState({});
   const [selectedFloor, setSelectedFloor] = useState('1st Floor');
   const [showFloorDropdown, setShowFloorDropdown] = useState(false);
 
@@ -18,17 +18,17 @@ const ReservationScreen = ({ navigation, route }) => {
     const floorData = {};
     prefixes.forEach((prefix) => {
       for (let i = 1; i <= 6; i++) {
-        floorData[`${prefix}${i < 10 ? '0'+i : i}`] = { status: 'available' };
+        floorData[`${prefix}${i < 10 ? '0' + i : i}`] = { status: 'available' };
       }
     });
     return floorData;
   };
 
   const floorSlots = {
-    '1st Floor': createSlotsForFloor(['A','B','C']),
-    '2nd Floor': createSlotsForFloor(['D','E','F']),
-    '3rd Floor': createSlotsForFloor(['G','H','I']),
-    '4th Floor': createSlotsForFloor(['J','K','L']),
+    '1st Floor': createSlotsForFloor(['A', 'B', 'C']),
+    '2nd Floor': createSlotsForFloor(['D', 'E', 'F']),
+    '3rd Floor': createSlotsForFloor(['G', 'H', 'I']),
+    '4th Floor': createSlotsForFloor(['J', 'K', 'L']),
   };
 
   // โหลดข้อมูลจาก Firebase
@@ -60,7 +60,7 @@ const ReservationScreen = ({ navigation, route }) => {
   const handleFloorSelection = (floor) => {
     setSelectedFloor(floor);
     setShowFloorDropdown(false);
-    setSlots(allSlots[floor] || {});  // ดึงข้อมูลจริงจาก Firebase
+    setSlots(allSlots[floor] || {}); // ดึงข้อมูลจริงจาก Firebase
     setSelectedSlot(null);
   };
 
@@ -94,11 +94,17 @@ const ReservationScreen = ({ navigation, route }) => {
           Alert.alert('Error', 'You have made more than 5 reservations for hourly rates today.');
           return;
         } else {
+          // ส่ง licensePlate ไปด้วย
           navigation.navigate('Payment', {
             username,
-            bookingData,
+            bookingData: {
+              ...bookingData,
+              licensePlate: bookingData.licensePlate,
+              visitorInfo: bookingData.visitorInfo 
+            },
             selectedSlot,
             selectedFloor,
+            bookingType,
           });
         }
       },
@@ -117,7 +123,9 @@ const ReservationScreen = ({ navigation, route }) => {
           key={slotId}
           style={[
             styles.slot,
-            slots[slotId]?.status === 'available' ? styles.availableSlot : styles.unavailableSlot,
+            slots[slotId]?.status === 'available'
+              ? styles.availableSlot
+              : styles.unavailableSlot,
             selectedSlot === slotId && styles.selectedSlot,
           ]}
           onPress={() => handleSlotSelection(slotId)}
@@ -171,6 +179,7 @@ const ReservationScreen = ({ navigation, route }) => {
         </View>
 
         <View style={styles.section}>
+          {/* Floor selector */}
           <View style={styles.floorSelectorContainer}>
             <TouchableOpacity
               style={styles.floorDropdown}
@@ -253,6 +262,7 @@ const ReservationScreen = ({ navigation, route }) => {
   );
 };
 
+
 const styles = StyleSheet.create({
   container: 
   { 
@@ -264,8 +274,7 @@ const styles = StyleSheet.create({
     paddingTop: 60, 
     alignItems: 'center' 
   },
-  backButton: 
-  { 
+  backButton: { 
     position: 'absolute', 
     top: 40, 
     left: 20, 
@@ -374,31 +383,26 @@ const styles = StyleSheet.create({
     fontSize: 16, 
     fontWeight: '700' 
   },
-  availableSlot: 
-  { 
+  availableSlot: { 
     backgroundColor: '#48BB78' 
   },
-  unavailableSlot: 
-  { 
+  unavailableSlot: { 
     backgroundColor: '#F56565', 
     opacity: 0.7 
   },
-  selectedSlot: 
-  {
+  selectedSlot: {
     borderColor: '#F6E05E', 
     borderWidth: 3, 
     transform: [{ scale: 1.05 }] 
   },
-  entranceExitRow: 
-  { 
+  entranceExitRow: { 
     width: '100%', 
     paddingVertical: 8, 
     marginBottom: 10, 
     alignItems: 'center', 
     justifyContent: 'center' 
   },
-  entranceExitText: 
-  { 
+  entranceExitText: { 
     color: '#C9CDCF', 
     fontSize: 16, 
     fontWeight: '700', 
@@ -423,12 +427,10 @@ const styles = StyleSheet.create({
     borderRadius: 4, 
     marginRight: 8 
   },
-  availableLegend: 
-  { 
+  availableLegend: { 
     backgroundColor: '#48BB78' 
   },
-  unavailableLegend: 
-  { 
+  unavailableLegend: { 
     backgroundColor: '#F56565' 
   },
   selectedLegend: { 
@@ -436,8 +438,7 @@ const styles = StyleSheet.create({
     borderWidth: 2, 
     borderColor: '#F6E05E' 
   },
-  legendText: 
-  { 
+  legendText: { 
     color: '#4A5568', 
     fontSize: 14, 
     fontWeight: '500'
@@ -455,10 +456,10 @@ const styles = StyleSheet.create({
     fontSize: 18, 
     fontWeight: '700' 
   },
-  disabledButton: 
-  { 
+  disabledButton: { 
     opacity: 0.5 
   },
+
 });
 
 export default ReservationScreen;

@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { db } from '../firebaseConfig';
+import { ref, get, child } from 'firebase/database';
 
 const BookParkingScreen = ({ navigation, route }) => {
-  const { username, bookingType } = route.params;
+  const { username, bookingType, visitorInfo } = route.params;
   const [selectedRate, setSelectedRate] = useState(null);
 
   // Common states
@@ -12,8 +14,8 @@ const BookParkingScreen = ({ navigation, route }) => {
   const [entryTime, setEntryTime] = useState(new Date());
   const [exitDate, setExitDate] = useState(new Date());
   const [exitTime, setExitTime] = useState(new Date());
+  const [residentLicensePlate, setResidentLicensePlate] = useState('');
   const [durationMonths, setDurationMonths] = useState(1);
-
   const [pickerMode, setPickerMode] = useState(null); 
   const [showPicker, setShowPicker] = useState(false);
 
@@ -22,6 +24,24 @@ const BookParkingScreen = ({ navigation, route }) => {
     { id: 'daily', label: 'Daily', price: '250 baht/day' },
     { id: 'monthly', label: 'Monthly', price: '3,000 baht/month' }
   ];
+
+  // ดึงทะเบียนรถของ resident จาก Firebase
+  useEffect(() => {
+    const fetchLicensePlate = async () => {
+      if (bookingType === 'resident') {
+        try {
+          const snapshot = await get(child(ref(db), `users/${username}`));
+          if (snapshot.exists()) {
+            const userData = snapshot.val();
+            setResidentLicensePlate(userData.licensePlate || '');
+          }
+        } catch (error) {
+          console.error('Error fetching license plate:', error);
+        }
+      }
+    };
+    fetchLicensePlate();
+  }, []);
 
   const calculatePrice = () => {
     if (!selectedRate) return 0;
@@ -55,7 +75,6 @@ const BookParkingScreen = ({ navigation, route }) => {
           setExitDate(newExit);
         }
         break;
-
       case 'entryTime':
         setEntryTime(selectedValue);
         if (selectedRate === 'hourly') {
@@ -66,11 +85,9 @@ const BookParkingScreen = ({ navigation, route }) => {
           setExitDate(entryDate);
         }
         break;
-
       case 'exitDate':
         setExitDate(selectedValue);
         break;
-
       case 'exitTime':
         if (selectedRate === 'hourly') {
           const diffMs = selectedValue - entryTime;
@@ -160,7 +177,6 @@ const BookParkingScreen = ({ navigation, route }) => {
       return;
     }
 
-    // ✅ ไม่บันทึก Firebase ที่นี่
     const price = calculatePrice();
     const bookingData = {
       username,
@@ -171,6 +187,7 @@ const BookParkingScreen = ({ navigation, route }) => {
       entryDate: entryDate.toISOString().split('T')[0],
       exitDate: exitDateTime.toISOString().split('T')[0],
       bookingDate: new Date().toISOString().split('T')[0],
+      licensePlate: bookingType === 'resident' ? residentLicensePlate : undefined // ✅ สำหรับ resident
     };
 
     if (selectedRate === 'hourly') {
@@ -182,7 +199,11 @@ const BookParkingScreen = ({ navigation, route }) => {
 
     navigation.navigate('Reservation', {
       username,
-      bookingData,
+      bookingData: {
+        ...bookingData,
+        visitorInfo // visitorInfo ส่งต่อเหมือนเดิม
+      },
+      bookingType
     });
   };
 
@@ -325,7 +346,6 @@ const BookParkingScreen = ({ navigation, route }) => {
     </KeyboardAvoidingView>
   );
 };
-
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 

@@ -5,7 +5,7 @@ import { db } from '../firebaseConfig';
 import { ref, update } from 'firebase/database';
 
 const MyParkingInfoScreen = ({ route, navigation }) => {
-    const { username, bookingData } = route.params;
+    const { username, bookingData, userType } = route.params;
 
     const [showBarrierModal, setShowBarrierModal] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
@@ -95,6 +95,14 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         return timeString.includes(':') ? timeString : timeString;
     };
 
+    const getUserTypeColor = (type) => {
+        switch (type) {
+            case 'resident': return '#4CAF50';
+            case 'visitor': return '#FF9800';
+            default: return '#B19CD8';
+        }
+    };
+
     return (
         <View style={styles.container}>
             <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -111,14 +119,49 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                 {/* Info Card */}
                 <View style={styles.infoCard}>
                     <Text style={styles.cardTitle}>Slot {bookingData.slotId} - Floor {bookingData.floor}</Text>
+                    
+                    {/* Visitor Information Section */}
+                    {bookingData.visitorInfo && (
+                        <View style={styles.detailSection}>
+                            <Text style={styles.sectionTitle}>Visitor Information</Text>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Visitor Name:</Text>
+                                <Text style={styles.detailValue}>{bookingData.visitorInfo.visitorUsername}</Text>
+                            </View>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Phone Number:</Text>
+                                <Text style={styles.detailValue}>{bookingData.visitorInfo.phoneNumber}</Text>
+                            </View>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Email:</Text>
+                                <Text style={styles.detailValue}>{bookingData.visitorInfo.email}</Text>
+                            </View>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>License Plate:</Text>
+                                <Text style={styles.detailValue}>{bookingData.visitorInfo.licensePlate}</Text>
+                            </View>
+                        </View>
+                    )}
 
-                    {/* Booking Information */}
                     <View style={styles.detailSection}>
                         <Text style={styles.sectionTitle}>Booking Information</Text>
+                        
+                        {/* User Type - แยกบรรทัด */}
+                        <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>User Type:</Text>
+                            <View style={[styles.userTypeBadge, {backgroundColor: getUserTypeColor(userType)}]}>
+                                <Text style={styles.userTypeText}>
+                                    {userType === 'resident' ? 'Resident' : 'Visitor'}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Booking ID - แยกบรรทัด */}
                         <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>Booking ID:</Text>
                             <Text style={styles.detailValue}>{bookingData.id}</Text>
                         </View>
+
                         <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>Username:</Text>
                             <Text style={styles.detailValue}>{username}</Text>
@@ -362,6 +405,18 @@ const styles = StyleSheet.create({
         textAlign: 'right',
     },
 
+    // สไตล์สำหรับ User Type Badge
+    userTypeBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    userTypeText: {
+        color: 'white',
+        fontWeight: '600',
+        fontSize: 11,
+    },
+
     actionButtonsContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -497,6 +552,13 @@ const styles = StyleSheet.create({
     borderColor: '#A0AEC0', 
     alignSelf: 'center',
     },
+    visitorInfo: {
+        marginTop: 5,
+      },
+      visitorText: {
+        fontSize: 12,
+        color: '#666',
+      },
 });
 
 export default MyParkingInfoScreen;

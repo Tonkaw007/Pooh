@@ -5,7 +5,7 @@ import { db } from '../firebaseConfig';
 import { ref, get, child } from 'firebase/database';
 
 const MyParkingScreen = ({ route, navigation }) => {
-    const { username } = route.params; 
+    const { username, userType } = route.params; 
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -43,8 +43,14 @@ const MyParkingScreen = ({ route, navigation }) => {
     const handleCardPress = (bookingData) => {
         navigation.navigate('MyParkingInfo', {
             username,
-            bookingData
+            bookingData,  // แก้ไข: เพิ่ม comma ตรงนี้
+            userType: userType
         });
+    };
+
+    const handleNotificationPress = () => {
+        // ไปยังหน้าการแจ้งเตือน
+        navigation.navigate('Notifications', { username });
     };
 
     const formatBookingType = (type) => {
@@ -63,6 +69,14 @@ const MyParkingScreen = ({ route, navigation }) => {
         }
     };
 
+    const getUserTypeColor = (type) => {
+        switch (type) {
+            case 'resident': return '#4CAF50'; // สีเขียวสำหรับ Resident
+            case 'visitor': return '#FF9800';  // สีส้มสำหรับ Visitor
+            default: return '#B19CD8';
+        }
+    };
+
     if (loading) return (
         <View style={[styles.container, {justifyContent:'center', alignItems:'center'}]}>
             <ActivityIndicator size="large" color="#fff" />
@@ -72,9 +86,28 @@ const MyParkingScreen = ({ route, navigation }) => {
     return (
         <View style={styles.container}>
             <ScrollView contentContainerStyle={styles.scrollContainer}>
-                <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-                    <Ionicons name="arrow-back" size={24} color="white" />
-                </TouchableOpacity>
+                {/* Header Section */}
+                <View style={styles.topHeader}>
+                    <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+                        <Ionicons name="arrow-back" size={24} color="white" />
+                    </TouchableOpacity>
+                    
+                    <View style={styles.userInfo}>
+                        <View style={styles.userIcon}>
+                            <Ionicons name="person" size={24} color="#B19CD8" />
+                        </View>
+                        <View style={styles.userTextContainer}>
+                            <Text style={styles.userName}>{username}</Text>
+                        </View>
+                    </View>
+                    
+                    <TouchableOpacity 
+                        style={styles.notificationButton}
+                        onPress={handleNotificationPress}
+                    >
+                        <Ionicons name="notifications" size={24} color="white" />
+                    </TouchableOpacity>
+                </View>
 
                 <View style={styles.header}>
                     <Text style={styles.title}>My Parking</Text>
@@ -93,10 +126,28 @@ const MyParkingScreen = ({ route, navigation }) => {
                             onPress={() => handleCardPress(bookingData)}
                             activeOpacity={0.7}
                         >
+                            
                             <View style={styles.cardHeader}>
+                                
                                 <View>
+                                    
                                     <Text style={styles.slotText}>Slot {bookingData.slotId}</Text>
                                     <Text style={styles.floorText}>Floor {bookingData.floor}</Text>
+                                    {bookingData.visitorInfo && (
+          <View style={styles.visitorInfo}>
+            <Text style={styles.visitorText}>For: {bookingData.visitorInfo.visitorUsername}</Text>
+            <Text style={styles.visitorText}>Plate: {bookingData.visitorInfo.licensePlate}</Text>
+          </View>
+        )}
+                                    {/* เพิ่ม Badge สำหรับแสดงประเภทผู้ใช้ */}
+                                
+                                    {bookingData.bookingType && (
+                                        <View style={[styles.userTypeBadge, {backgroundColor: getUserTypeColor(bookingData.bookingType)}]}>
+                                            <Text style={styles.userTypeText}>
+                                                {bookingData.bookingType === 'resident' ? 'Resident' : 'Visitor'}
+                                            </Text>
+                                        </View>
+                                    )}
                                 </View>
                                 <View style={styles.headerRight}>
                                     <View style={[styles.bookingTypeBadge, {backgroundColor: getBookingTypeColor(bookingData.rateType)}]}>
@@ -137,20 +188,56 @@ const styles = StyleSheet.create({
     },
     scrollContainer: { 
         padding: 20, 
-        paddingTop: 60,
+        paddingTop: 20,
         alignItems: 'center'
     },
+    topHeader: {
+        flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  width: '100%',
+  marginBottom: 25,
+  paddingHorizontal: 10,
+  marginTop: 40,  // เพิ่ม marginTop
+    },
     backButton: { 
-        position: 'absolute', 
-        top: 40, 
-        left: 20, 
-        zIndex: 1, 
         padding: 8 
+    },
+    userInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        justifyContent: 'center',
+    },
+    userIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'white',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    userTextContainer: {
+        alignItems: 'center',
+    },
+    userName: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: 'white',
+    },
+    userStatus: {
+        fontSize: 12,
+        color: 'rgba(255, 255, 255, 0.8)',
+        marginTop: 2,
+    },
+    notificationButton: {
+        padding: 8,
     },
     header: { 
         alignItems: 'center', 
-        marginBottom: 25, 
-        marginTop: 10 
+        marginBottom: 25,
+        width: '100%',
     },
     title: { 
         fontSize: 32, 
@@ -179,7 +266,7 @@ const styles = StyleSheet.create({
     cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
     },
     headerRight: {
         flexDirection: 'row',
@@ -195,7 +282,22 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#718096',
         marginTop: 2,
+        marginBottom: 8,
     },
+    // สไตล์สำหรับ User Type Badge (ใหม่)
+    userTypeBadge: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        marginTop: 5,
+    },
+    userTypeText: {
+        color: 'white',
+        fontWeight: '600',
+        fontSize: 11,
+    },
+    // สไตล์สำหรับ Booking Type Badge (เดิม)
     bookingTypeBadge: {
         paddingHorizontal: 12,
         paddingVertical: 6,
@@ -226,6 +328,13 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         fontSize: 16,
     },
+    visitorInfo: {
+        marginTop: 5,
+      },
+      visitorText: {
+        fontSize: 12,
+        color: '#666',
+      },
 });
 
 export default MyParkingScreen;

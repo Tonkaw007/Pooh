@@ -5,18 +5,15 @@ import { ref, update, get, push, child } from 'firebase/database';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const PaymentScreen = ({ navigation, route }) => {
-  const { username, bookingData, selectedSlot, selectedFloor } = route.params;
+  const { username, bookingData, selectedSlot, selectedFloor, bookingType } = route.params;
   const [userBookings, setUserBookings] = useState([]);
 
-  // โหลด booking ของผู้ใช้จาก Firebase
   const fetchUserBookings = async () => {
     try {
       const snapshot = await get(child(ref(db), 'bookings'));
       if (snapshot.exists()) {
         const data = snapshot.val();
-        const bookingsArray = Object.values(data).filter(
-          (b) => b.username === username
-        );
+        const bookingsArray = Object.values(data).filter(b => b.username === username);
         setUserBookings(bookingsArray);
       } else {
         setUserBookings([]);
@@ -34,45 +31,43 @@ const PaymentScreen = ({ navigation, route }) => {
   const handlePaymentSuccess = async () => {
     try {
       const updates = {};
-
-      // แปลงวันที่เป็น YYYY-MM-DD
       const today = new Date();
       const yyyy = today.getFullYear();
       const mm = String(today.getMonth() + 1).padStart(2, '0');
       const dd = String(today.getDate()).padStart(2, '0');
       const formattedDate = `${yyyy}-${mm}-${dd}`;
 
-      // อัพเดตสถานะ slot
       updates[`parkingSlots/${selectedFloor}/${selectedSlot}/status`] = 'unavailable';
 
-      // สร้าง booking ใหม่ ด้วย push() เพื่อให้ id ไม่ซ้ำ
       const newBookingRef = push(ref(db, 'bookings'));
       const newBookingId = newBookingRef.key;
       const newBooking = {
         ...bookingData,
         id: newBookingId,
         username,
+        bookingType,
         status: 'confirmed',
         slotId: selectedSlot,
         floor: selectedFloor,
         bookingDate: formattedDate,
         paymentStatus: 'paid',
-        paymentDate: formattedDate
+        paymentDate: formattedDate,
+        visitorInfo: bookingData.visitorInfo || null,
       };
 
       updates[`bookings/${newBookingId}`] = newBooking;
 
       await update(ref(db), updates);
-
-      // โหลด booking ใหม่ทั้งหมดของผู้ใช้
       await fetchUserBookings();
 
       Alert.alert('Success', 'Payment successful and slot reserved!', [
         {
           text: 'OK',
-          onPress: () => navigation.navigate('MyParking', { 
-            username,
-          }),
+          onPress: () =>
+            navigation.navigate('MyParking', {
+              username,
+              userType: bookingType,
+            }),
         },
       ]);
     } catch (error) {
@@ -83,18 +78,23 @@ const PaymentScreen = ({ navigation, route }) => {
 
   const handleBack = () => navigation.goBack();
 
+  // ✅ รองรับ React element ได้
   const renderBookingDetail = (label, value) => (
     <View style={styles.detailRow}>
       <Text style={styles.label}>{label}:</Text>
-      <Text style={styles.value}>{value}</Text>
+      {typeof value === 'string' || typeof value === 'number' ? (
+        <Text style={styles.value}>{value}</Text>
+      ) : (
+        value
+      )}
     </View>
   );
 
-  const formatBookingType = (type) => {
+  const formatBookingType = type => {
     if (type === 'hourly') return 'Hourly';
     if (type === 'daily') return 'Daily';
     if (type === 'monthly') return 'Monthly';
-    return type;
+    return String(type);
   };
 
   const formatPrice = () => {
@@ -108,6 +108,22 @@ const PaymentScreen = ({ navigation, route }) => {
       default:
         return '-';
     }
+  };
+
+  const renderBookedBy = () => {
+    if (bookingType === 'resident') {
+      return <Text style={styles.value}>{username}</Text>;
+    } else if (bookingType === 'visitor' && bookingData.visitorInfo) {
+      return (
+        <View style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
+          <Text style={styles.value}>{username}</Text>
+          <Text style={[styles.value, { fontSize: 13, color: '#718096' }]}>
+            (for {bookingData.visitorInfo.visitorUsername})
+          </Text>
+        </View>
+      );
+    }
+    return <Text style={styles.value}>{username}</Text>;
   };
 
   return (
@@ -124,15 +140,35 @@ const PaymentScreen = ({ navigation, route }) => {
         <View style={styles.paymentCard}>
           <Text style={styles.cardTitle}>Booking Details</Text>
 
+          {renderBookingDetail('User Type', bookingType === 'resident' ? 'Resident' : 'Visitor')}
           {renderBookingDetail('Booking Type', formatBookingType(bookingData.rateType))}
-          {renderBookingDetail('Booked By', username)}
+          {renderBookingDetail('Booked By', renderBookedBy())}
           {renderBookingDetail('Slot', selectedSlot)}
           {renderBookingDetail('Floor', selectedFloor)}
           {bookingData.entryDate && renderBookingDetail('Entry Date', bookingData.entryDate)}
           {bookingData.entryTime && renderBookingDetail('Entry Time', bookingData.entryTime)}
           {bookingData.exitDate && renderBookingDetail('Exit Date', bookingData.exitDate)}
           {bookingData.exitTime && renderBookingDetail('Exit Time', bookingData.exitTime)}
-          {bookingData.durationMonths && renderBookingDetail('Duration (Months)', bookingData.durationMonths)}
+
+          {/* ✅ แสดงทะเบียนรถให้ถูกต้อง */}
+          {renderBookingDetail(
+            'License Plate',
+            bookingType === 'resident'
+              ? bookingData.licensePlate
+              : bookingData.visitorInfo?.licensePlate || '-'
+          )}
+
+          {bookingData.durationMonths &&
+            renderBookingDetail('Duration (Months)', bookingData.durationMonths)}
+
+          {bookingType === 'visitor' && bookingData.visitorInfo && (
+            <View style={styles.visitorSection}>
+              <Text style={styles.sectionTitle}>Visitor Information</Text>
+              {renderBookingDetail('Visitor Name', bookingData.visitorInfo.visitorUsername)}
+              {renderBookingDetail('Phone', bookingData.visitorInfo.phoneNumber)}
+              {renderBookingDetail('Email', bookingData.visitorInfo.email)}
+            </View>
+          )}
 
           <View style={styles.qrContainer}>
             <Image
@@ -225,6 +261,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'right',
   },
+  visitorSection: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2D3748',
+    marginBottom: 15,
+  },
   qrContainer: {
     alignItems: 'center',
     marginVertical: 20,
@@ -238,7 +286,7 @@ const styles = StyleSheet.create({
     paddingTop: 15,
     borderTopWidth: 2,
     borderTopColor: '#E2E8F0',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   totalLabel: {
     fontSize: 18,
