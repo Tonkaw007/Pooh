@@ -136,7 +136,7 @@ const MyParkingScreen = ({ route, navigation }) => {
                                     {bookingData.visitorInfo && (
           <View style={styles.visitorInfo}>
             <Text style={styles.visitorText}>For: {bookingData.visitorInfo.visitorUsername}</Text>
-            <Text style={styles.visitorText}>Plate: {bookingData.visitorInfo.licensePlate}</Text>
+            <Text style={styles.visitorText}>licensePlate: {bookingData.visitorInfo.licensePlate}</Text>
           </View>
         )}
                                     {/* เพิ่ม Badge สำหรับแสดงประเภทผู้ใช้ */}
@@ -333,6 +333,7 @@ const styles = StyleSheet.create({
       },
       visitorText: {
         fontSize: 12,
+        fontWeight: 'bold',
         color: '#666',
       },
 });

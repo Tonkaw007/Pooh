@@ -5,7 +5,7 @@ import { db } from '../firebaseConfig';
 import { ref, update } from 'firebase/database';
 
 const MyParkingInfoScreen = ({ route, navigation }) => {
-    const { username, bookingData } = route.params; // ลบ userType ออก
+    const { username, bookingData } = route.params;
 
     const [showBarrierModal, setShowBarrierModal] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
@@ -14,7 +14,6 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
     const handleOpenBarrier = () => setShowBarrierModal(true);
     const handleCancelBooking = () => setShowCancelModal(true);
 
-    // Control barrier and update Firebase
     const controlBarrier = (action) => {
         setShowBarrierModal(false);
         const status = action === 'lift' ? 'lifted' : 'lowered';
@@ -48,11 +47,9 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         });
     };
 
-    // ยกเลิก booking และ set slot เป็น available
     const confirmCancelBooking = () => {
         setShowCancelModal(false);
 
-        // อัปเดตทั้ง booking และ slot
         const updates = {};
         updates[`bookings/${bookingData.id}/status`] = 'cancelled';
         updates[`parkingSlots/${bookingData.floor}/${bookingData.slotId}/status`] = 'available';
@@ -60,10 +57,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         update(ref(db), updates)
             .then(() => {
                 Alert.alert("Success", "Your booking has been cancelled.", [
-                    { 
-                        text: "OK", 
-                        onPress: () => navigation.navigate('MyParking', { username }) 
-                    }
+                    { text: "OK", onPress: () => navigation.navigate('MyParking', { username }) }
                 ]);
             })
             .catch((error) => {
@@ -98,21 +92,18 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
     return (
         <View style={styles.container}>
             <ScrollView contentContainerStyle={styles.scrollContainer}>
-                {/* Back Button */}
                 <TouchableOpacity style={styles.backButton} onPress={handleBack}>
                     <Ionicons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
 
-                {/* Header */}
                 <View style={styles.header}>
                     <Text style={styles.title}>Parking Details</Text>
                 </View>
 
-                {/* Info Card */}
                 <View style={styles.infoCard}>
                     <Text style={styles.cardTitle}>Slot {bookingData.slotId} - Floor {bookingData.floor}</Text>
                     
-                    {/* Visitor Information Section */}
+                    {/* Visitor Information */}
                     {bookingData.visitorInfo && (
                         <View style={styles.detailSection}>
                             <Text style={styles.sectionTitle}>Visitor Information</Text>
@@ -135,36 +126,40 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                         </View>
                     )}
 
-                    {/* Booking Information Section */}
-                    <View style={styles.detailSection}>
-                        <Text style={styles.sectionTitle}>Booking Information</Text>
+                    {/* Booking Information (License Plate เฉพาะ Resident) */}
+<View style={styles.detailSection}>
+    <Text style={styles.sectionTitle}>Booking Information</Text>
 
-                        {/* Booking ID */}
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Booking ID:</Text>
-                            <Text style={styles.detailValue}>{bookingData.id}</Text>
-                        </View>
+    <View style={styles.detailRow}>
+        <Text style={styles.detailLabel}>Booking ID:</Text>
+        <Text style={styles.detailValue}>{bookingData.id}</Text>
+    </View>
+    <View style={styles.detailRow}>
+        <Text style={styles.detailLabel}>Username:</Text>
+        <Text style={styles.detailValue}>{username}</Text>
+    </View>
+    <View style={styles.detailRow}>
+        <Text style={styles.detailLabel}>Booking Type:</Text>
+        <Text style={styles.detailValue}>{formatBookingType(bookingData.rateType)}</Text>
+    </View>
+    <View style={styles.detailRow}>
+        <Text style={styles.detailLabel}>Booking Date:</Text>
+        <Text style={styles.detailValue}>{formatDate(bookingData.bookingDate)}</Text>
+    </View>
+    <View style={styles.detailRow}>
+        <Text style={styles.detailLabel}>Status:</Text>
+        <Text style={styles.detailValue}>{bookingData.status}</Text>
+    </View>
 
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Username:</Text>
-                            <Text style={styles.detailValue}>{username}</Text>
-                        </View>
+    {/* License Plate เฉพาะ Resident */}
+    {!bookingData.visitorInfo && (
+        <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>License Plate:</Text>
+            <Text style={styles.detailValue}>{bookingData.licensePlate}</Text>
+        </View>
+    )}
+</View>
 
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Booking Type:</Text>
-                            <Text style={styles.detailValue}>{formatBookingType(bookingData.rateType)}</Text>
-                        </View>
-
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Booking Date:</Text>
-                            <Text style={styles.detailValue}>{formatDate(bookingData.bookingDate)}</Text>
-                        </View>
-
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Status:</Text>
-                            <Text style={styles.detailValue}>{bookingData.status}</Text>
-                        </View>
-                    </View>
 
                     {/* Time Information */}
                     <View style={styles.detailSection}>
@@ -230,7 +225,6 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                             <Ionicons name="lock-open" size={20} color="white" />
                             <Text style={styles.barrierButtonText}>Control Barrier</Text>
                         </TouchableOpacity>
-
                         <TouchableOpacity style={styles.cancelButton} onPress={handleCancelBooking}>
                             <Ionicons name="close-circle" size={20} color="white" />
                             <Text style={styles.cancelButtonText}>Cancel Booking</Text>
@@ -238,7 +232,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                     </View>
                 </View>
 
-                {/* Barrier Control Modal */}
+                {/* Modals */}
                 <Modal visible={showBarrierModal} transparent={true} animationType="fade" onRequestClose={cancelAction}>
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContainer}>
@@ -246,21 +240,17 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                                 <Ionicons name="car-sport" size={40} color="#FFA000" />
                                 <Text style={styles.modalTitle}>Control Parking Barrier</Text>
                             </View>
-
                             <Text style={styles.modalMessage}>
                                 Choose an action for Slot {bookingData.slotId}, Floor {bookingData.floor}:
                             </Text>
-
                             <View style={styles.modalRowButtons}>
                                 <TouchableOpacity style={styles.modalConfirmButton} onPress={() => controlBarrier('lift')}>
                                     <Text style={styles.modalConfirmText}>Lift</Text>
                                 </TouchableOpacity>
-
                                 <TouchableOpacity style={[styles.modalConfirmButton, { backgroundColor: '#2196F3' }]} onPress={() => controlBarrier('lower')}>
                                     <Text style={styles.modalConfirmText}>Lower</Text>
                                 </TouchableOpacity>
                             </View>
-
                             <TouchableOpacity style={styles.modalCancelButtonBottom} onPress={cancelAction}>
                                 <Text style={styles.modalCancelText}>Cancel</Text>
                             </TouchableOpacity>
@@ -268,7 +258,6 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                     </View>
                 </Modal>
 
-                {/* Cancel Booking Modal */}
                 <Modal visible={showCancelModal} transparent={true} animationType="fade" onRequestClose={cancelAction}>
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContainer}>
@@ -276,16 +265,13 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                                 <Ionicons name="warning" size={40} color="#FF6B6B" />
                                 <Text style={styles.modalTitle}>Cancel Booking</Text>
                             </View>
-
                             <Text style={styles.modalMessage}>
                                 Are you sure you want to cancel this booking for Slot {bookingData.slotId}, Floor {bookingData.floor}?
                             </Text>
-
                             <View style={styles.modalButtons}>
                                 <TouchableOpacity style={styles.modalCancelButton} onPress={cancelAction}>
                                     <Text style={styles.modalCancelText}>No, Keep It</Text>
                                 </TouchableOpacity>
-
                                 <TouchableOpacity style={[styles.modalConfirmButton, { backgroundColor: '#FF6B6B' }]} onPress={confirmCancelBooking}>
                                     <Text style={styles.modalConfirmText}>Yes, Cancel</Text>
                                 </TouchableOpacity>

@@ -32,8 +32,7 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
           setVisitorUsername(existingVisitor.visitorUsername);
           setPhoneNumber(existingVisitor.phoneNumber);
           setEmail(existingVisitor.email);
-
-          Alert.alert("Info", "Visitor found! Data has been auto-filled.");
+          // Auto-fill ข้อมูลเดิม
         }
       }
     } catch (error) {
@@ -60,17 +59,32 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
         return;
       }
 
-      const newVisitorRef = push(ref(db, "visitors"));
-      await set(newVisitorRef, {
-        visitorUsername,
-        phoneNumber,
-        email,
-        licensePlate,
-        createdAt: new Date().toISOString(),
-        createdBy: username,
-      });
+      // ตรวจสอบว่า visitor มีอยู่แล้วใน Firebase หรือยัง
+      const snapshot = await get(child(ref(db), "visitors"));
+      let visitorExists = false;
 
-      Alert.alert("Success", "Visitor registered successfully!");
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        visitorExists = Object.values(data).some(
+          (v) => v.licensePlate === licensePlate
+        );
+      }
+
+      // ถ้ายังไม่มีใน Firebase ให้บันทึกใหม่ และแสดง alert success
+      if (!visitorExists) {
+        const newVisitorRef = push(ref(db, "visitors"));
+        await set(newVisitorRef, {
+          visitorUsername,
+          phoneNumber,
+          email,
+          licensePlate,
+          createdAt: new Date().toISOString(),
+          createdBy: username,
+        });
+        Alert.alert("Success", "Visitor registered successfully!");
+      }
+
+      // ไปหน้าต่อไปได้เลย ไม่ว่าจะมีอยู่แล้วหรือไม่
       navigation.navigate("BookParking", {
         username,
         bookingType: "visitor",
@@ -81,6 +95,7 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
           licensePlate,
         },
       });
+
     } catch (error) {
       console.error(error);
       Alert.alert("Register Failed", error.message);
@@ -188,18 +203,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     width: "100%",
   },
-  loginLink: {
-    marginTop: 25,
-    alignItems: "center",
-  },
-  loginText: {
-    color: "white",
-    fontSize: 16,
-  },
-  loginHighlight: {
-    fontWeight: "bold",
-    textDecorationLine: "underline",
-  },
 });
 
 export default VisitorRegisterScreen;
+
+
