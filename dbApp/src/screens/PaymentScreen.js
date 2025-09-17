@@ -6,10 +6,9 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const PaymentScreen = ({ navigation, route }) => {
   const { username, bookingData, selectedSlot, selectedFloor, bookingType } = route.params;
-  const [userBookings, setUserBookings] = useState([]);
   const [residentLicense, setResidentLicense] = useState(''); // สำหรับเก็บทะเบียน resident
 
-  // ดึงข้อมูล booking ของ user เพื่อหา license plate ของ resident
+  // ดึงข้อมูล resident เพื่อแสดงใน Booking Details
   const fetchUserBookings = async () => {
     try {
       const snapshot = await get(child(ref(db), 'users'));
@@ -43,6 +42,13 @@ const PaymentScreen = ({ navigation, route }) => {
 
       const newBookingRef = push(ref(db, 'bookings'));
       const newBookingId = newBookingRef.key;
+
+      // ✅ กำหนด licensePlate ให้ชัดเจนก่อนบันทึก
+      const licensePlateToSave =
+        bookingType === 'resident'
+          ? residentLicense || '-' // ใช้ทะเบียน resident
+          : bookingData.visitorInfo?.licensePlate || '-'; // ใช้ทะเบียน visitor
+
       const newBooking = {
         ...bookingData,
         id: newBookingId,
@@ -55,6 +61,7 @@ const PaymentScreen = ({ navigation, route }) => {
         paymentStatus: 'paid',
         paymentDate: formattedDate,
         visitorInfo: bookingData.visitorInfo || null,
+        licensePlate: licensePlateToSave, // ✅ เพิ่มตรงนี้
       };
 
       updates[`bookings/${newBookingId}`] = newBooking;
@@ -149,7 +156,7 @@ const PaymentScreen = ({ navigation, route }) => {
           {bookingData.exitDate && renderBookingDetail('Exit Date', bookingData.exitDate)}
           {bookingData.exitTime && renderBookingDetail('Exit Time', bookingData.exitTime)}
 
-          {/* ✅ ใช้ทะเบียน resident */}
+          {/* ✅ แสดง License Plate ของ resident */}
           {renderBookingDetail('License Plate', residentLicense)}
 
           {bookingData.durationMonths &&
@@ -187,6 +194,7 @@ const PaymentScreen = ({ navigation, route }) => {
     </View>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {

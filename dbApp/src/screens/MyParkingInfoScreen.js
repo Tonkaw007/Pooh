@@ -5,7 +5,7 @@ import { db } from '../firebaseConfig';
 import { ref, update } from 'firebase/database';
 
 const MyParkingInfoScreen = ({ route, navigation }) => {
-    const { username, bookingData, userType } = route.params;
+    const { username, bookingData } = route.params; // ลบ userType ออก
 
     const [showBarrierModal, setShowBarrierModal] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
@@ -95,14 +95,6 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         return timeString.includes(':') ? timeString : timeString;
     };
 
-    const getUserTypeColor = (type) => {
-        switch (type) {
-            case 'resident': return '#4CAF50';
-            case 'visitor': return '#FF9800';
-            default: return '#B19CD8';
-        }
-    };
-
     return (
         <View style={styles.container}>
             <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -143,20 +135,11 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                         </View>
                     )}
 
+                    {/* Booking Information Section */}
                     <View style={styles.detailSection}>
                         <Text style={styles.sectionTitle}>Booking Information</Text>
-                        
-                        {/* User Type - แยกบรรทัด */}
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>User Type:</Text>
-                            <View style={[styles.userTypeBadge, {backgroundColor: getUserTypeColor(userType)}]}>
-                                <Text style={styles.userTypeText}>
-                                    {userType === 'resident' ? 'Resident' : 'Visitor'}
-                                </Text>
-                            </View>
-                        </View>
 
-                        {/* Booking ID - แยกบรรทัด */}
+                        {/* Booking ID */}
                         <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>Booking ID:</Text>
                             <Text style={styles.detailValue}>{bookingData.id}</Text>
@@ -166,14 +149,17 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                             <Text style={styles.detailLabel}>Username:</Text>
                             <Text style={styles.detailValue}>{username}</Text>
                         </View>
+
                         <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>Booking Type:</Text>
                             <Text style={styles.detailValue}>{formatBookingType(bookingData.rateType)}</Text>
                         </View>
+
                         <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>Booking Date:</Text>
                             <Text style={styles.detailValue}>{formatDate(bookingData.bookingDate)}</Text>
                         </View>
+
                         <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>Status:</Text>
                             <Text style={styles.detailValue}>{bookingData.status}</Text>
@@ -405,18 +391,6 @@ const styles = StyleSheet.create({
         textAlign: 'right',
     },
 
-    // สไตล์สำหรับ User Type Badge
-    userTypeBadge: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    userTypeText: {
-        color: 'white',
-        fontWeight: '600',
-        fontSize: 11,
-    },
-
     actionButtonsContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -543,22 +517,24 @@ const styles = StyleSheet.create({
     },
 
     modalCancelButtonBottom: {
-    backgroundColor: '#E2E8F0',
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    width: '50%',
-    borderWidth: 1,
-    borderColor: '#A0AEC0', 
-    alignSelf: 'center',
+        backgroundColor: '#E2E8F0',
+        padding: 15,
+        borderRadius: 10,
+        alignItems: 'center',
+        width: '50%',
+        borderWidth: 1,
+        borderColor: '#A0AEC0', 
+        alignSelf: 'center',
     },
+
     visitorInfo: {
         marginTop: 5,
-      },
-      visitorText: {
+    },
+
+    visitorText: {
         fontSize: 12,
         color: '#666',
-      },
+    },
 });
 
 export default MyParkingInfoScreen;
