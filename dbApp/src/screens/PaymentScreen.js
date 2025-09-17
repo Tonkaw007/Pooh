@@ -57,6 +57,12 @@ const PaymentScreen = ({ navigation, route }) => {
         visitorInfo: bookingData.visitorInfo || null,
       };
 
+      Object.keys(newBooking).forEach(key => {
+        if (newBooking[key] === undefined) {
+          delete newBooking[key];
+        }
+      });
+
       updates[`bookings/${newBookingId}`] = newBooking;
 
       await update(ref(db), updates);
@@ -71,7 +77,7 @@ const PaymentScreen = ({ navigation, route }) => {
         },
       ]);
     } catch (error) {
-      console.error(error);
+      console.error('Payment error details:', error);
       Alert.alert('Error', 'Payment failed. Please try again.');
     }
   };

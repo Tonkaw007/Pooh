@@ -170,7 +170,7 @@ const BookParkingScreen = ({ navigation, route }) => {
       entryDate: entryDate.toISOString().split('T')[0],
       exitDate: exitDateTime.toISOString().split('T')[0],
       bookingDate: new Date().toISOString().split('T')[0],
-      licensePlate: bookingType === 'resident' ? residentLicensePlate : undefined, // ✅ ใช้ state
+      licensePlate: bookingType === 'resident' ? residentLicensePlate : undefined, 
     };
 
     if (selectedRate === 'hourly') {

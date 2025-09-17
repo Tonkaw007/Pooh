@@ -149,7 +149,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                         {/* User Type - แยกบรรทัด */}
                         <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>User Type:</Text>
-                            <View style={[styles.userTypeBadge, {backgroundColor: getUserTypeColor(userType)}]}>
+                            <View style={[styles.userTypeBadge, {backgroundColor: getUserTypeColor(bookingData.bookingType)}]}>
                                 <Text style={styles.userTypeText}>
                                     {userType === 'resident' ? 'Resident' : 'Visitor'}
                                 </Text>
