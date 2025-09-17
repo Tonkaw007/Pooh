@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert, KeyboardAvoidingView, TouchableOpacity } from "react-native";
-import { db } from '../firebaseConfig';
-import { ref, get, child } from 'firebase/database';
+import { db } from "../firebaseConfig";
+import { ref, get, child } from "firebase/database";
 
 const BookingTypeScreen = ({ navigation, route }) => {
   const [selectedType, setSelectedType] = useState(null);
   const [residentLicensePlate, setResidentLicensePlate] = useState('');
   const username = route.params?.username || 'User';
 
-  // ดึงข้อมูลทะเบียนรถของผู้ใช้จาก Firebase
+  // ดึงข้อมูลทะเบียนรถของ resident
   useEffect(() => {
     const fetchLicensePlate = async () => {
       try {
@@ -34,31 +34,7 @@ const BookingTypeScreen = ({ navigation, route }) => {
     if (username) fetchLicensePlate();
   }, [username]);
 
-  // ตรวจสอบจำนวน visitor ที่ลงทะเบียนไว้
-  const checkVisitorLimit = async () => {
-    try {
-      const snapshot = await get(child(ref(db), 'visitors'));
-      let visitorCount = 0;
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        visitorCount = Object.values(data).filter(
-          (item) => item.createdBy === username
-        ).length;
-      }
-
-      if (visitorCount >= 3) {
-        Alert.alert('Limit Reached', 'You cannot register more than 3 visitors.');
-        return false;
-      }
-      return true;
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Unable to check visitor limit.');
-      return false;
-    }
-  };
-
-  // ตรวจสอบจำนวน booking ต่อวัน ตามประเภทและผู้ใช้
+  // ตรวจสอบจำนวน booking ต่อวัน สำหรับ resident
   const handleContinue = async () => {
     try {
       const snapshot = await get(child(ref(db), 'bookings'));
@@ -67,7 +43,7 @@ const BookingTypeScreen = ({ navigation, route }) => {
         allBookings = Object.values(snapshot.val()).filter(b => b.status !== 'cancelled');
       }
 
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = new Date().toISOString().substring(0, 10);
 
       if (selectedType === 'resident') {
         const todaysResidentBookings = allBookings.filter(b =>
@@ -77,7 +53,7 @@ const BookingTypeScreen = ({ navigation, route }) => {
         );
 
         if (todaysResidentBookings.length >= 5) {
-          Alert.alert('Booking Limit Reached', 'You cannot make more than 5 resident bookings today.');
+          Alert.alert('Booking Limit Reached', 'You cannot make more than 5 bookings today.');
           return;
         }
 
@@ -88,20 +64,6 @@ const BookingTypeScreen = ({ navigation, route }) => {
         });
 
       } else if (selectedType === 'visitor') {
-        const canBookVisitor = await checkVisitorLimit();
-        if (!canBookVisitor) return;
-
-        const todaysVisitorBookings = allBookings.filter(b =>
-          b.bookingDate?.substring(0, 10) === todayStr &&
-          b.username === username &&
-          b.bookingType === 'visitor'
-        );
-
-        if (todaysVisitorBookings.length >= 5) {
-          Alert.alert('Booking Limit Reached', 'You cannot make more than 5 visitor bookings today.');
-          return;
-        }
-
         navigation.navigate('VisitorRegister', { username, bookingType: 'visitor' });
       }
 

@@ -6,7 +6,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const PaymentScreen = ({ navigation, route }) => {
   const { username, bookingData, selectedSlot, selectedFloor, bookingType } = route.params;
-  const [residentLicense, setResidentLicense] = useState(''); // สำหรับเก็บทะเบียน resident
+  const [residentLicense, setResidentLicense] = useState(''); 
 
   // ดึงข้อมูล resident เพื่อแสดงใน Booking Details
   const fetchUserBookings = async () => {
@@ -43,7 +43,7 @@ const PaymentScreen = ({ navigation, route }) => {
       const newBookingRef = push(ref(db, 'bookings'));
       const newBookingId = newBookingRef.key;
 
-      // ✅ กำหนด licensePlate ให้ชัดเจนก่อนบันทึก
+      // กำหนด licensePlate ให้ชัดเจนก่อนบันทึก
       const licensePlateToSave =
         bookingType === 'resident'
           ? residentLicense || '-' // ใช้ทะเบียน resident
@@ -61,7 +61,7 @@ const PaymentScreen = ({ navigation, route }) => {
         paymentStatus: 'paid',
         paymentDate: formattedDate,
         visitorInfo: bookingData.visitorInfo || null,
-        licensePlate: licensePlateToSave, // ✅ เพิ่มตรงนี้
+        licensePlate: licensePlateToSave,
       };
 
       updates[`bookings/${newBookingId}`] = newBooking;
@@ -156,7 +156,7 @@ const PaymentScreen = ({ navigation, route }) => {
           {bookingData.exitDate && renderBookingDetail('Exit Date', bookingData.exitDate)}
           {bookingData.exitTime && renderBookingDetail('Exit Time', bookingData.exitTime)}
 
-          {/* ✅ แสดง License Plate ของ resident */}
+          {/* แสดง License Plate ของ resident */}
           {renderBookingDetail('License Plate', residentLicense)}
 
           {bookingData.durationMonths &&

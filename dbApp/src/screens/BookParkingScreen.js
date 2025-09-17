@@ -5,9 +5,6 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const BookParkingScreen = ({ navigation, route }) => {
   const { username, bookingType, visitorInfo, licensePlate } = route.params;
-  console.log('Received params in BookParking:', route.params); // ✅ เพิ่ม log นี้
-  console.log('Received license plate:', licensePlate); // ✅ เพิ่ม log นี้
-  
   const [selectedRate, setSelectedRate] = useState(null);
   const [entryDate, setEntryDate] = useState(new Date());
   const [entryTime, setEntryTime] = useState(new Date());
@@ -170,7 +167,7 @@ const BookParkingScreen = ({ navigation, route }) => {
       entryDate: entryDate.toISOString().split('T')[0],
       exitDate: exitDateTime.toISOString().split('T')[0],
       bookingDate: new Date().toISOString().split('T')[0],
-      licensePlate: bookingType === 'resident' ? residentLicensePlate : undefined, // ✅ ใช้ state
+      licensePlate: bookingType === 'resident' ? residentLicensePlate : undefined,
     };
 
     if (selectedRate === 'hourly') {
@@ -333,8 +330,6 @@ const BookParkingScreen = ({ navigation, route }) => {
     </KeyboardAvoidingView>
   );
 };
-
-
 
 const styles = StyleSheet.create({
   container: { 

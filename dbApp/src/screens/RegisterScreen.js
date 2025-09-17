@@ -32,11 +32,11 @@ const RegisterScreen = ({ navigation }) => {
       const userId = userCredential.user.uid;
 
       // บันทึกเพิ่มใน Realtime Database
-      await set(ref(db, "users/" + userId), {
-        username,       // เก็บชื่อ-นามสกุล (username)
-        phoneNumber,    // เก็บเบอร์โทร
-        email,          // เก็บอีเมล
-        licensePlate,   // เก็บทะเบียนรถ
+      await set(ref(db, "users/" + userId), {   //เก็บข้อมูลต่างๆ
+        username,     
+        phoneNumber,    
+        email,          
+        licensePlate,   
         createdAt: new Date().toISOString(),
       });
 

@@ -5,180 +5,203 @@ import { db } from '../firebaseConfig';
 import { ref, get, child } from 'firebase/database';
 
 const MyParkingScreen = ({ route, navigation }) => {
-    const { username, userType } = route.params; 
-    const [bookings, setBookings] = useState([]);
-    const [loading, setLoading] = useState(true);
+  const { username, userType } = route.params;
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-    // ฟังก์ชันโหลด bookings ล่าสุดจาก Firebase
-    const fetchBookings = async () => {
-        try {
-            const snapshot = await get(child(ref(db), 'bookings'));
-            const data = snapshot.val() || {};
-            // กรองเฉพาะ booking ของผู้ใช้และยังไม่ถูกยกเลิก
-            const activeBookings = Object.values(data).filter(
-                b => b.username === username && b.slotId && b.status !== 'cancelled'
-            );
-            setBookings(activeBookings);
-            setLoading(false);
-        } catch (error) {
-            console.error(error);
-            Alert.alert('Error', 'Unable to fetch bookings.');
-            setLoading(false);
-        }
-    };
+  const fetchBookings = async () => {
+    try {
+      const snapshot = await get(child(ref(db), "bookings"));
+      const data = snapshot.val() || {};
 
-    useEffect(() => {
-        fetchBookings();
+      // กรองเฉพาะ booking ของผู้ใช้และยังไม่ถูกยกเลิก
+      const activeBookings = Object.values(data).filter(
+        (b) => b.username === username && b.slotId && b.status !== "cancelled"
+      );
 
-        // รีเฟรชทุกครั้งเมื่อกลับมาที่หน้านี้
-        const unsubscribe = navigation.addListener('focus', () => {
-            fetchBookings();
-        });
+      setBookings(activeBookings);
+      setLoading(false);
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "Unable to fetch bookings.");
+      setLoading(false);
+    }
+  };
 
-        return unsubscribe;
-    }, [navigation, username]);
+  useEffect(() => {
+    fetchBookings();
 
-    const handleBack = () => navigation.goBack();
+    const unsubscribe = navigation.addListener("focus", () => {
+      fetchBookings();
+    });
 
-    const handleCardPress = (bookingData) => {
-        navigation.navigate('MyParkingInfo', {
-            username,
-            bookingData,  // แก้ไข: เพิ่ม comma ตรงนี้
-            userType: userType
-        });
-    };
+    return unsubscribe;
+  }, [navigation, username]);
 
-    const handleNotificationPress = () => {
-        // ไปยังหน้าการแจ้งเตือน
-        navigation.navigate('Notifications', { username });
-    };
+  const handleBack = () => navigation.goBack();
 
-    const formatBookingType = (type) => {
-        if (type === 'hourly') return 'Hourly';
-        if (type === 'daily') return 'Daily';
-        if (type === 'monthly') return 'Monthly';
-        return type;
-    };
+  const handleCardPress = (bookingData) => {
+    navigation.navigate("MyParkingInfo", {
+      username,
+      bookingData,
+      userType: userType,
+    });
+  };
 
-    const getBookingTypeColor = (type) => {
-        switch (type) {
-            case 'hourly': return '#bb489cff';
-            case 'daily': return '#4e67cdff';
-            case 'monthly': return '#45B7D1';
-            default: return '#B19CD8';
-        }
-    };
+  const handleNotificationPress = () => {
+    navigation.navigate("Notifications", { username });
+  };
 
-    const getUserTypeColor = (type) => {
-        switch (type) {
-            case 'resident': return '#4CAF50'; // สีเขียวสำหรับ Resident
-            case 'visitor': return '#FF9800';  // สีส้มสำหรับ Visitor
-            default: return '#B19CD8';
-        }
-    };
+  const formatBookingType = (type) => {
+    if (type === "hourly") return "Hourly";
+    if (type === "daily") return "Daily";
+    if (type === "monthly") return "Monthly";
+    return type;
+  };
 
-    if (loading) return (
-        <View style={[styles.container, {justifyContent:'center', alignItems:'center'}]}>
-            <ActivityIndicator size="large" color="#fff" />
-        </View>
-    );
+  const getBookingTypeColor = (type) => {
+    switch (type) {
+      case "hourly":
+        return "#bb489cff";
+      case "daily":
+        return "#4e67cdff";
+      case "monthly":
+        return "#45B7D1";
+      default:
+        return "#B19CD8";
+    }
+  };
 
+  const getUserTypeColor = (type) => {
+    switch (type) {
+      case "resident":
+        return "#4CAF50";
+      case "visitor":
+        return "#FF9800";
+      default:
+        return "#B19CD8";
+    }
+  };
+
+  if (loading) {
     return (
-        <View style={styles.container}>
-            <ScrollView contentContainerStyle={styles.scrollContainer}>
-                {/* Header Section */}
-                <View style={styles.topHeader}>
-                    <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-                        <Ionicons name="arrow-back" size={24} color="white" />
-                    </TouchableOpacity>
-                    
-                    <View style={styles.userInfo}>
-                        <View style={styles.userIcon}>
-                            <Ionicons name="person" size={24} color="#B19CD8" />
-                        </View>
-                        <View style={styles.userTextContainer}>
-                            <Text style={styles.userName}>{username}</Text>
-                        </View>
-                    </View>
-                    
-                    <TouchableOpacity 
-                        style={styles.notificationButton}
-                        onPress={handleNotificationPress}
-                    >
-                        <Ionicons name="notifications" size={24} color="white" />
-                    </TouchableOpacity>
-                </View>
-
-                <View style={styles.header}>
-                    <Text style={styles.title}>My Parking</Text>
-                    {bookings.length > 0 && (
-                        <Text style={styles.subtitle}>
-                            Tap on a reservation to view details
-                        </Text>
-                    )}
-                </View>
-
-                {bookings.length > 0 ? (
-                    bookings.map((bookingData, index) => (
-                        <TouchableOpacity
-                            key={index}
-                            style={styles.parkingCard}
-                            onPress={() => handleCardPress(bookingData)}
-                            activeOpacity={0.7}
-                        >
-                            
-                            <View style={styles.cardHeader}>
-                                
-                                <View>
-                                    
-                                    <Text style={styles.slotText}>Slot {bookingData.slotId}</Text>
-                                    <Text style={styles.floorText}>Floor {bookingData.floor}</Text>
-                                    {bookingData.visitorInfo && (
-          <View style={styles.visitorInfo}>
-            <Text style={styles.visitorText}>For: {bookingData.visitorInfo.visitorUsername}</Text>
-            <Text style={styles.visitorText}>licensePlate: {bookingData.visitorInfo.licensePlate}</Text>
-          </View>
-        )}
-                                    {/* เพิ่ม Badge สำหรับแสดงประเภทผู้ใช้ */}
-                                
-                                    {bookingData.bookingType && (
-                                        <View style={[styles.userTypeBadge, {backgroundColor: getUserTypeColor(bookingData.bookingType)}]}>
-                                            <Text style={styles.userTypeText}>
-                                                {bookingData.bookingType === 'resident' ? 'Resident' : 'Visitor'}
-                                            </Text>
-                                        </View>
-                                    )}
-                                </View>
-                                <View style={styles.headerRight}>
-                                    <View style={[styles.bookingTypeBadge, {backgroundColor: getBookingTypeColor(bookingData.rateType)}]}>
-                                        <Text style={styles.bookingTypeText}>
-                                            {formatBookingType(bookingData.rateType)}
-                                        </Text>
-                                    </View>
-                                    <Ionicons name="chevron-forward" size={24} color="#B19CD8" />
-                                </View>
-                            </View>
-                        </TouchableOpacity>
-                    ))
-                ) : (
-                    <Text style={styles.noBookingText}>No reservations yet</Text>
-                )}
-
-                {/* ปุ่ม Book Again */}
-                <TouchableOpacity
-                    style={styles.bookAgainButton}
-                    onPress={async () => {
-                        // โหลด bookings ล่าสุดก่อน navigate ไป BookingTypeScreen
-                        await fetchBookings();
-                        navigation.navigate('BookingType', { username });
-                    }}
-                >
-                    <Text style={styles.bookAgainText}>Book Again</Text>
-                </TouchableOpacity>
-
-            </ScrollView>
-        </View>
+      <View
+        style={[styles.container, { justifyContent: "center", alignItems: "center" }]}
+      >
+        <ActivityIndicator size="large" color="#fff" />
+      </View>
     );
+  }
+
+  return (
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        {/* Header Section */}
+        <View style={styles.topHeader}>
+          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+
+          <View style={styles.userInfo}>
+            <View style={styles.userIcon}>
+              <Ionicons name="person" size={24} color="#B19CD8" />
+            </View>
+            <View style={styles.userTextContainer}>
+              <Text style={styles.userName}>{username}</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.notificationButton}
+            onPress={handleNotificationPress}
+          >
+            <Ionicons name="notifications" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.header}>
+          <Text style={styles.title}>My Parking</Text>
+          {bookings.length > 0 && (
+            <Text style={styles.subtitle}>
+              Tap on a reservation to view details
+            </Text>
+          )}
+        </View>
+
+        {bookings.length > 0 ? (
+          bookings.map((bookingData, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.parkingCard}
+              onPress={() => handleCardPress(bookingData)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.cardHeader}>
+                <View>
+                  <Text style={styles.slotText}>Slot {bookingData.slotId}</Text>
+                  <Text style={styles.floorText}>Floor {bookingData.floor}</Text>
+
+                  {bookingData.visitorInfo && (
+                    <View style={styles.visitorInfo}>
+                      <Text style={styles.visitorText}>
+                        For: {bookingData.visitorInfo.visitorUsername}
+                      </Text>
+                      <Text style={styles.visitorText}>
+                        licensePlate: {bookingData.visitorInfo.licensePlate}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Badge ประเภทผู้ใช้ */}
+                  {bookingData.bookingType && (
+                    <View
+                      style={[
+                        styles.userTypeBadge,
+                        { backgroundColor: getUserTypeColor(bookingData.bookingType) },
+                      ]}
+                    >
+                      <Text style={styles.userTypeText}>
+                        {bookingData.bookingType === "resident"
+                          ? "Resident"
+                          : "Visitor"}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.headerRight}>
+                  <View
+                    style={[
+                      styles.bookingTypeBadge,
+                      { backgroundColor: getBookingTypeColor(bookingData.rateType) },
+                    ]}
+                  >
+                    <Text style={styles.bookingTypeText}>
+                      {formatBookingType(bookingData.rateType)}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={24} color="#B19CD8" />
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))
+        ) : (
+          <Text style={styles.noBookingText}>No reservations yet</Text>
+        )}
+
+        {/* ปุ่ม Book Again */}
+        <TouchableOpacity
+          style={styles.bookAgainButton}
+          onPress={async () => {
+            await fetchBookings();
+            navigation.navigate("BookingType", { username });
+          }}
+        >
+          <Text style={styles.bookAgainText}>Book Again</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
@@ -284,7 +307,6 @@ const styles = StyleSheet.create({
         marginTop: 2,
         marginBottom: 8,
     },
-    // สไตล์สำหรับ User Type Badge (ใหม่)
     userTypeBadge: {
         alignSelf: 'flex-start',
         paddingHorizontal: 10,
@@ -297,7 +319,6 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         fontSize: 11,
     },
-    // สไตล์สำหรับ Booking Type Badge (เดิม)
     bookingTypeBadge: {
         paddingHorizontal: 12,
         paddingVertical: 6,

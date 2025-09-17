@@ -15,7 +15,6 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
   const [email, setEmail] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
 
-  // ฟังก์ชันเช็ค visitor เดิมจาก License Plate
   const checkExistingVisitor = async (plate) => {
     try {
       if (!plate) return;
@@ -23,7 +22,6 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
       const snapshot = await get(child(ref(db), "visitors"));
       if (snapshot.exists()) {
         const data = snapshot.val();
-
         const existingVisitor = Object.values(data).find(
           (v) => v.licensePlate === plate
         );
@@ -32,7 +30,6 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
           setVisitorUsername(existingVisitor.visitorUsername);
           setPhoneNumber(existingVisitor.phoneNumber);
           setEmail(existingVisitor.email);
-          // Auto-fill ข้อมูลเดิม
         }
       }
     } catch (error) {
@@ -59,19 +56,40 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
         return;
       }
 
-      // ตรวจสอบว่า visitor มีอยู่แล้วใน Firebase หรือยัง
-      const snapshot = await get(child(ref(db), "visitors"));
-      let visitorExists = false;
+      // โหลด visitor ทั้งหมด
+      const visitorsSnapshot = await get(child(ref(db), "visitors"));
+      const allVisitors = visitorsSnapshot.exists() ? Object.values(visitorsSnapshot.val()) : [];
 
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        visitorExists = Object.values(data).some(
-          (v) => v.licensePlate === licensePlate
-        );
+      // ตรวจสอบว่า visitor นี้มีอยู่แล้ว
+      const existingVisitor = allVisitors.find(v => v.licensePlate === licensePlate);
+
+      // ถ้า visitor ใหม่ ต้องตรวจสอบ 3 คนต่อ resident
+      if (!existingVisitor) {
+        const visitorCount = allVisitors.filter(v => v.createdBy === username).length;
+        if (visitorCount >= 3) {
+          Alert.alert("Limit Reached", "You cannot register more than 3 visitors.");
+          return;
+        }
       }
 
-      // ถ้ายังไม่มีใน Firebase ให้บันทึกใหม่ และแสดง alert success
-      if (!visitorExists) {
+      // ตรวจสอบจำนวน booking ของ visitor ต่อวัน
+      const bookingsSnapshot = await get(child(ref(db), "bookings"));
+      const allBookings = bookingsSnapshot.exists() ? Object.values(bookingsSnapshot.val()) : [];
+      const todayStr = new Date().toISOString().substring(0, 10);
+
+      const todaysBookingsCount = allBookings.filter(b => 
+        b.visitorInfo?.licensePlate === licensePlate &&
+        b.bookingDate?.substring(0,10) === todayStr &&
+        b.status !== "cancelled"
+      ).length;
+
+      if (todaysBookingsCount >= 5) {
+        Alert.alert("Booking Limit Reached", "This visitor has reached booking limit.");
+        return;
+      }
+
+      // ถ้า visitor ใหม่ ให้บันทึกลง Firebase
+      if (!existingVisitor) {
         const newVisitorRef = push(ref(db, "visitors"));
         await set(newVisitorRef, {
           visitorUsername,
@@ -84,7 +102,6 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
         Alert.alert("Success", "Visitor registered successfully!");
       }
 
-      // ไปหน้าต่อไปได้เลย ไม่ว่าจะมีอยู่แล้วหรือไม่
       navigation.navigate("BookParking", {
         username,
         bookingType: "visitor",
@@ -102,15 +119,12 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
     }
   };
 
-  // ฟังก์ชัน back button
   const handleBack = () => {
     navigation.navigate("BookingType", { username });
   };
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior="padding">
-
-      {/* Back Arrow */}
       <TouchableOpacity style={styles.backButton} onPress={handleBack}>
         <Ionicons name="arrow-back" size={24} color="white" />
       </TouchableOpacity>
@@ -167,7 +181,6 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
         marginTop={20}
         onPress={handleRegisterVisitor}
       />
-
     </KeyboardAvoidingView>
   );
 };
@@ -206,5 +219,3 @@ const styles = StyleSheet.create({
 });
 
 export default VisitorRegisterScreen;
-
-

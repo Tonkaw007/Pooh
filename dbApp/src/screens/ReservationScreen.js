@@ -251,7 +251,7 @@ const ReservationScreen = ({ navigation, route }) => {
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, styles.unavailableLegend]} />
-            <Text style={styles.legendText}>Occupied</Text>
+            <Text style={styles.legendText}>Unavailable</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, styles.selectedLegend]} />
