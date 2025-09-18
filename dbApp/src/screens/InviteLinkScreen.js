@@ -11,7 +11,6 @@ import {
     Share,
     Platform
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const InviteLinkScreen = ({ route, navigation }) => {
@@ -35,31 +34,17 @@ const InviteLinkScreen = ({ route, navigation }) => {
         navigation.goBack();
     };
 
-    const copyToClipboard = async () => {
-        try {
-            await Clipboard.setString(inviteLink);
-            Alert.alert("Success", "Invite link copied to clipboard!");
-        } catch (error) {
-            Alert.alert("Error", "Failed to copy link to clipboard.");
-        }
-    };
+    
 
     const shareLink = async () => {
-        try {
-            const shareMessage = `Hi ${bookingData.visitorInfo?.visitorUsername || 'there'}!\n\nYou have been invited to use parking slot ${bookingData.slotId} on Floor ${bookingData.floor}.\n\nBooking Details:\n- Date: ${formatDate(bookingData.bookingDate)}\n- Slot: ${bookingData.slotId}\n- Floor: ${bookingData.floor}\n\nAccess Link: ${inviteLink}`;
-            
-            const result = await Share.share({
-                message: shareMessage,
-                url: Platform.OS === 'ios' ? inviteLink : undefined,
-                title: 'Parking Invitation'
-            });
-
-            if (result.action === Share.sharedAction) {
-                Alert.alert("Success", "Invite link shared successfully!");
-            }
-        } catch (error) {
-            Alert.alert("Error", "Failed to share invite link.");
-        }
+        const visitorEmail = bookingData.visitorInfo?.email || 'Unknown email';
+        const visitorName = bookingData.visitorInfo?.visitorUsername || 'Unknown visitor';
+        
+        Alert.alert(
+            "Email Sent Successfully",
+            `The invite link has been sent to:\n\n${visitorName}\nEmail: ${visitorEmail}`,
+            [{ text: "OK" }]
+        );
     };
 
     const regenerateLink = () => {
@@ -115,148 +100,7 @@ const InviteLinkScreen = ({ route, navigation }) => {
                     <Text style={styles.subtitle}>Share parking access with your visitor</Text>
                 </View>
 
-                {/* Visitor Information Card */}
-                <View style={styles.infoCard}>
-                    <View style={styles.cardHeader}>
-                        <Ionicons name="person" size={24} color="#2196F3" />
-                        <Text style={styles.cardTitle}>Visitor Information</Text>
-                    </View>
-                    
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Visitor Name:</Text>
-                        <Text style={styles.detailValue}>
-                            {bookingData.visitorInfo?.visitorUsername || 'N/A'}
-                        </Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Phone Number:</Text>
-                        <Text style={styles.detailValue}>
-                            {bookingData.visitorInfo?.phoneNumber || 'N/A'}
-                        </Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Email:</Text>
-                        <Text style={styles.detailValue}>
-                            {bookingData.visitorInfo?.email || 'N/A'}
-                        </Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>License Plate:</Text>
-                        <Text style={styles.detailValue}>
-                            {bookingData.visitorInfo?.licensePlate || 'N/A'}
-                        </Text>
-                    </View>
-                </View>
 
-                {/* Booking Details Card */}
-                <View style={styles.infoCard}>
-                    <View style={styles.cardHeader}>
-                        <Ionicons name="car" size={24} color="#4CAF50" />
-                        <Text style={styles.cardTitle}>Parking Details</Text>
-                    </View>
-                    
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Parking Slot:</Text>
-                        <Text style={styles.detailValue}>
-                            Slot {bookingData.slotId} - Floor {bookingData.floor}
-                        </Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Booking ID:</Text>
-                        <Text style={styles.detailValue}>{bookingData.id}</Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Booking Type:</Text>
-                        <Text style={styles.detailValue}>
-                            {formatBookingType(bookingData.rateType)}
-                        </Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Booking Date:</Text>
-                        <Text style={styles.detailValue}>
-                            {formatDate(bookingData.bookingDate)}
-                        </Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Status:</Text>
-                        <Text style={[styles.detailValue, { color: bookingData.status === 'active' ? '#4CAF50' : '#FF9800' }]}>
-                            {bookingData.status}
-                        </Text>
-                    </View>
-
-                    {/* Time Information */}
-                    {(bookingData.entryDate || bookingData.entryTime || bookingData.exitDate || bookingData.exitTime) && (
-                        <>
-                            <View style={styles.divider} />
-                            <Text style={styles.sectionTitle}>Time Information</Text>
-                            
-                            {bookingData.entryDate && (
-                                <View style={styles.detailRow}>
-                                    <Text style={styles.detailLabel}>Entry Date:</Text>
-                                    <Text style={styles.detailValue}>
-                                        {formatDate(bookingData.entryDate)}
-                                    </Text>
-                                </View>
-                            )}
-                            {bookingData.entryTime && (
-                                <View style={styles.detailRow}>
-                                    <Text style={styles.detailLabel}>Entry Time:</Text>
-                                    <Text style={styles.detailValue}>
-                                        {formatTime(bookingData.entryTime)}
-                                    </Text>
-                                </View>
-                            )}
-                            {bookingData.exitDate && (
-                                <View style={styles.detailRow}>
-                                    <Text style={styles.detailLabel}>Exit Date:</Text>
-                                    <Text style={styles.detailValue}>
-                                        {formatDate(bookingData.exitDate)}
-                                    </Text>
-                                </View>
-                            )}
-                            {bookingData.exitTime && (
-                                <View style={styles.detailRow}>
-                                    <Text style={styles.detailLabel}>Exit Time:</Text>
-                                    <Text style={styles.detailValue}>
-                                        {formatTime(bookingData.exitTime)}
-                                    </Text>
-                                </View>
-                            )}
-                        </>
-                    )}
-
-                    {/* Payment Information */}
-                    {bookingData.paymentStatus && (
-                        <>
-                            <View style={styles.divider} />
-                            <Text style={styles.sectionTitle}>Payment Information</Text>
-                            
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Payment Status:</Text>
-                                <Text 
-                                    style={[
-                                        styles.detailValue, 
-                                        { 
-                                            color: bookingData.paymentStatus === 'paid' 
-                                                ? '#4CAF50' 
-                                                : '#FF9800' 
-                                        }
-                                    ]}
-                                >
-                                    {bookingData.paymentStatus}
-                                </Text>
-                            </View>
-                            {bookingData.price && (
-                                <View style={styles.detailRow}>
-                                    <Text style={styles.detailLabel}>Total Price:</Text>
-                                    <Text style={styles.detailValue}>
-                                        {bookingData.price} baht
-                                    </Text>
-                                </View>
-                            )}
-                        </>
-                    )}
-                </View>
 
                 {/* Invite Link Card */}
                 <View style={styles.infoCard}>
@@ -276,6 +120,7 @@ const InviteLinkScreen = ({ route, navigation }) => {
                     </View>
 
                     <View style={styles.linkActions}>
+
                         <TouchableOpacity style={styles.shareButton} onPress={shareLink}>
                             <Ionicons name="share" size={20} color="white" />
                             <Text style={styles.shareButtonText}>Share Link</Text>
