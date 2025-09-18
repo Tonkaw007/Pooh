@@ -276,11 +276,6 @@ const InviteLinkScreen = ({ route, navigation }) => {
                     </View>
 
                     <View style={styles.linkActions}>
-                        <TouchableOpacity style={styles.copyButton} onPress={copyToClipboard}>
-                            <Ionicons name="copy" size={20} color="white" />
-                            <Text style={styles.copyButtonText}>Copy Link</Text>
-                        </TouchableOpacity>
-
                         <TouchableOpacity style={styles.shareButton} onPress={shareLink}>
                             <Ionicons name="share" size={20} color="white" />
                             <Text style={styles.shareButtonText}>Share Link</Text>
@@ -455,22 +450,6 @@ const styles = StyleSheet.create({
         marginBottom: 15,
     },
 
-    copyButton: {
-        backgroundColor: '#4CAF50',
-        padding: 12,
-        borderRadius: 10,
-        alignItems: 'center',
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 8,
-        flex: 1,
-    },
-
-    copyButtonText: {
-        color: 'white',
-        fontWeight: '600',
-        fontSize: 14,
-    },
 
     shareButton: {
         backgroundColor: '#2196F3',
