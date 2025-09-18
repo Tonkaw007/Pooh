@@ -11,7 +11,16 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
 
     // Navigation handlers
     const handleBack = () => navigation.goBack();
-    const handleOpenBarrier = () => setShowBarrierModal(true);
+    const handleControlBarrier = () => {
+        setShowBarrierModal(true);
+    };
+    const handleSendInviteLink = () => {
+        // Navigate to InviteLink screen for visitor bookings
+        navigation.navigate('InviteLink', {
+            username: username,
+            bookingData: bookingData
+        });
+    };
     const handleCancelBooking = () => setShowCancelModal(true);
 
     // Control barrier
@@ -280,13 +289,24 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
 
                     {/* Action Buttons */}
                     <View style={styles.actionButtonsContainer}>
-                        <TouchableOpacity 
-                            style={styles.barrierButton} 
-                            onPress={handleOpenBarrier}
-                        >
-                            <Ionicons name="lock-open" size={20} color="white" />
-                            <Text style={styles.barrierButtonText}>Control Barrier</Text>
-                        </TouchableOpacity>
+                        {/* Conditional button based on booking type */}
+                        {bookingData.bookingType === 'visitor' ? (
+                            <TouchableOpacity 
+                                style={styles.inviteButton} 
+                                onPress={handleSendInviteLink}
+                            >
+                                <Ionicons name="share" size={20} color="white" />
+                                <Text style={styles.inviteButtonText}>Send Invite Link</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity 
+                                style={styles.barrierButton} 
+                                onPress={handleControlBarrier}
+                            >
+                                <Ionicons name="lock-open" size={20} color="white" />
+                                <Text style={styles.barrierButtonText}>Control Barrier</Text>
+                            </TouchableOpacity>
+                        )}
 
                         <TouchableOpacity 
                             style={styles.cancelButton} 
@@ -490,6 +510,23 @@ const styles = StyleSheet.create({
     },
 
     barrierButtonText: {
+        color: 'white',
+        fontWeight: '600',
+        fontSize: 14,
+    },
+
+    inviteButton: {
+        backgroundColor: '#2196F3',
+        padding: 15,
+        borderRadius: 10,
+        alignItems: 'center',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 10,
+        flex: 1,
+    },
+
+    inviteButtonText: {
         color: 'white',
         fontWeight: '600',
         fontSize: 14,
