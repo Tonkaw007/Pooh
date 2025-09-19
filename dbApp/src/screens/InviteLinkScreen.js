@@ -7,10 +7,11 @@ import {
     ScrollView, 
     Alert, 
     KeyboardAvoidingView,
-    Clipboard,
-    Share,
-    Platform
+    Platform,
+    Share
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import * as Linking from 'expo-linking';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const InviteLinkScreen = ({ route, navigation }) => {
@@ -18,31 +19,54 @@ const InviteLinkScreen = ({ route, navigation }) => {
     const [inviteLink, setInviteLink] = useState('');
 
     useEffect(() => {
-        // Generate invite link when component mounts
         generateInviteLink();
     }, []);
 
     const generateInviteLink = () => {
         const sessionId = `${bookingData.id}-${Date.now()}`;
-        const generatedLink = `yourapp://visitor/${sessionId}`; // deep link
-        setInviteLink(generatedLink);
-      };
+        
+        // ใช้ Linking.createURL เพื่อสร้าง deep link ที่ถูกต้อง
+        const link = Linking.createURL(`visitor/${sessionId}`);
+        setInviteLink(link);
+    };
 
     const handleBack = () => {
         navigation.goBack();
     };
 
-    
-
+    // แก้ไขฟังก์ชัน shareLink ให้ใช้ Share API แทน
     const shareLink = async () => {
-        const visitorEmail = bookingData.visitorInfo?.email || 'Unknown email';
-        const visitorName = bookingData.visitorInfo?.visitorUsername || 'Unknown visitor';
-        
-        Alert.alert(
-            "Email Sent Successfully",
-            `The invite link has been sent to:\n\n${visitorName}\nEmail: ${visitorEmail}`,
-            [{ text: "OK" }]
-        );
+        if (!inviteLink) return;
+        try {
+            await Share.share({
+                message: `คุณได้รับลิงก์สำหรับเข้าใช้บริการที่จอดรถ: ${inviteLink}`,
+                url: inviteLink, // สำหรับ iOS
+                title: 'Parking Access Link'
+            });
+        } catch (error) {
+            Alert.alert('Error', 'Cannot share the link.');
+        }
+    };
+
+    // เพิ่มฟังก์ชันสำหรับทดสอบ Deep Link
+    const testLink = async () => {
+        if (!inviteLink) return;
+        try {
+            const canOpen = await Linking.canOpenURL(inviteLink);
+            if (canOpen) {
+                await Linking.openURL(inviteLink);
+            } else {
+                Alert.alert('Error', 'Cannot open this URL scheme');
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Cannot open the link: ' + error.message);
+        }
+    };
+
+    const copyLink = async () => {
+        if (!inviteLink) return;
+        await Clipboard.setStringAsync(inviteLink);
+        Alert.alert('Copied!', 'The invite link has been copied to clipboard.');
     };
 
     const regenerateLink = () => {
@@ -62,27 +86,6 @@ const InviteLinkScreen = ({ route, navigation }) => {
         );
     };
 
-    const formatDate = (dateString) => {
-        if (!dateString) return '-';
-        const date = new Date(dateString);
-        return date.toLocaleDateString(
-            'en-US', 
-            { year: 'numeric', month: 'short', day: 'numeric' }
-        );
-    };
-
-    const formatTime = (timeString) => {
-        if (!timeString) return '-';
-        return timeString.includes(':') ? timeString : timeString;
-    };
-
-    const formatBookingType = (type) => {
-        if (type === 'hourly') return 'Hourly';
-        if (type === 'daily') return 'Daily';
-        if (type === 'monthly') return 'Monthly';
-        return type;
-    };
-
     return (
         <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -98,8 +101,6 @@ const InviteLinkScreen = ({ route, navigation }) => {
                     <Text style={styles.subtitle}>Share parking access with your visitor</Text>
                 </View>
 
-
-
                 {/* Invite Link Card */}
                 <View style={styles.infoCard}>
                     <View style={styles.cardHeader}>
@@ -107,23 +108,29 @@ const InviteLinkScreen = ({ route, navigation }) => {
                         <Text style={styles.cardTitle}>Invite Link</Text>
                     </View>
                     
-                    <Text style={styles.linkDescription}>
-                        Share this link with your visitor to grant them access to the parking slot.
-                    </Text>
-
                     <View style={styles.linkContainer}>
-                        <Text style={styles.linkText} numberOfLines={2}>
+                        <Text style={styles.linkText} numberOfLines={3}>
                             {inviteLink}
                         </Text>
                     </View>
 
                     <View style={styles.linkActions}>
-
                         <TouchableOpacity style={styles.shareButton} onPress={shareLink}>
                             <Ionicons name="share" size={20} color="white" />
                             <Text style={styles.shareButtonText}>Share Link</Text>
                         </TouchableOpacity>
+
+                        <TouchableOpacity style={[styles.shareButton, {backgroundColor: '#6C757D'}]} onPress={copyLink}>
+                            <Ionicons name="copy" size={20} color="white" />
+                            <Text style={styles.shareButtonText}>Copy Link</Text>
+                        </TouchableOpacity>
                     </View>
+
+                    {/* เพิ่มปุ่มทดสอบ Deep Link */}
+                    <TouchableOpacity style={[styles.shareButton, {backgroundColor: '#FF9800', marginBottom: 10}]} onPress={testLink}>
+                        <Ionicons name="open" size={20} color="white" />
+                        <Text style={styles.shareButtonText}>Test Link</Text>
+                    </TouchableOpacity>
 
                     <TouchableOpacity style={styles.regenerateButton} onPress={regenerateLink}>
                         <Ionicons name="refresh" size={18} color="#666" />
@@ -131,27 +138,14 @@ const InviteLinkScreen = ({ route, navigation }) => {
                     </TouchableOpacity>
                 </View>
 
-                {/* Instructions */}
+                {/* เพิ่มคำแนะนำการใช้งาน */}
                 <View style={styles.instructionsCard}>
-                    <View style={styles.cardHeader}>
-                        <Ionicons name="information-circle" size={24} color="#2196F3" />
-                        <Text style={styles.cardTitle}>Instructions</Text>
-                    </View>
-                    
-                    <Text style={styles.instructionText}>
-                        • Share the invite link with your visitor via message, email, or any messaging app
-                    </Text>
-                    <Text style={styles.instructionText}>
-                        • The visitor can use this link to access the parking barrier
-                    </Text>
-                    <Text style={styles.instructionText}>
-                        • Make sure to provide the correct parking slot and floor information
-                    </Text>
-                    <Text style={styles.instructionText}>
-                        • The link will remain valid until the booking is cancelled or expires
-                    </Text>
+                    <Text style={styles.instructionTitle}>How to use:</Text>
+                    <Text style={styles.instructionText}>1. Tap "Share Link" to send via messaging apps</Text>
+                    <Text style={styles.instructionText}>2. Tap "Copy Link" to copy and paste anywhere</Text>
+                    <Text style={styles.instructionText}>3. Tap "Test Link" to test the deep link</Text>
+                    <Text style={styles.instructionText}>4. Visitor clicks the link to access parking control</Text>
                 </View>
-
             </ScrollView>
         </KeyboardAvoidingView>
     );
@@ -223,53 +217,6 @@ const styles = StyleSheet.create({
         marginLeft: 10,
     },
 
-    detailRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
-        paddingVertical: 8,
-        paddingHorizontal: 10,
-        backgroundColor: '#F8F9FA',
-        borderRadius: 8,
-    },
-
-    detailLabel: {
-        fontWeight: '600',
-        color: '#4A5568',
-        fontSize: 14,
-        flex: 1,
-    },
-
-    detailValue: {
-        fontWeight: '700',
-        color: '#2D3748',
-        fontSize: 14,
-        textAlign: 'right',
-        flex: 1,
-    },
-
-    divider: {
-        height: 1,
-        backgroundColor: '#E2E8F0',
-        marginVertical: 15,
-    },
-
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#2D3748',
-        marginBottom: 10,
-    },
-
-    linkDescription: {
-        fontSize: 14,
-        color: '#718096',
-        marginBottom: 15,
-        textAlign: 'center',
-        lineHeight: 20,
-    },
-
     linkContainer: {
         backgroundColor: '#F7FAFC',
         borderRadius: 10,
@@ -292,7 +239,6 @@ const styles = StyleSheet.create({
         gap: 10,
         marginBottom: 15,
     },
-
 
     shareButton: {
         backgroundColor: '#2196F3',
@@ -335,6 +281,13 @@ const styles = StyleSheet.create({
         padding: 20,
         marginBottom: 20,
         width: '100%',
+    },
+
+    instructionTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#2D3748',
+        marginBottom: 10,
     },
 
     instructionText: {
