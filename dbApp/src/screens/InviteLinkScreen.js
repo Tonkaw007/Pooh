@@ -23,12 +23,10 @@ const InviteLinkScreen = ({ route, navigation }) => {
     }, []);
 
     const generateInviteLink = () => {
-        // Generate a unique invite link based on booking data
-        const baseUrl = 'https://yourapp.com/parking-invite';
-        const linkId = `${bookingData.id}-${Date.now()}`;
-        const generatedLink = `${baseUrl}?booking=${linkId}&slot=${bookingData.slotId}&floor=${bookingData.floor}`;
+        const sessionId = `${bookingData.id}-${Date.now()}`;
+        const generatedLink = `yourapp://visitor/${sessionId}`; // deep link
         setInviteLink(generatedLink);
-    };
+      };
 
     const handleBack = () => {
         navigation.goBack();

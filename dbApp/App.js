@@ -12,12 +12,24 @@ import PaymentScreen from "./src/screens/PaymentScreen";
 import MyParkingScreen from "./src/screens/MyParkingScreen";
 import MyParkingInfoScreen from "./src/screens/MyParkingInfoScreen";
 import InviteLinkScreen from "./src/screens/InviteLinkScreen";
+import VisitorControlScreen from "./src/screens/VisitorControlScreen";
+import * as Linking from 'expo-linking';
 const Stack = createStackNavigator();
+const linking = {
+  prefixes: ['https://yourapp.com', 'yourapp://'],
+  config: {
+    screens: {
+      InviteLink: 'invite-link',
+      VisitorControl: 'visitor/:sessionId', // ใช้ sessionId เป็น param
+    },
+  },
+};
+
 
 const App = () => {
 
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
       <Stack.Navigator initialRouteName="Home"> 
         <Stack.Screen 
         name="Home" 
@@ -74,7 +86,13 @@ const App = () => {
         component={InviteLinkScreen}
         options={{ headerShown: false }}
         />
-      </Stack.Navigator>
+        <Stack.Screen
+        name="VisitorControl"
+        component={VisitorControlScreen}
+        options={{ headerShown: false }}
+      />  
+      </Stack.Navigator>  
+      
     </NavigationContainer>
   );
 };
