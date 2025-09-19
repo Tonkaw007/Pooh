@@ -46,161 +46,150 @@ const BookParkingScreen = ({ navigation, route }) => {
     time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 
   const onChangeDateTime = (event, selectedValue) => {
-  setShowPicker(false);
-  if (!selectedValue) return;
+    setShowPicker(false);
+    if (!selectedValue) return;
 
-  switch (pickerMode) {
-    case 'entryDate':
-      setEntryDate(selectedValue);
-      if (selectedRate === 'hourly') setExitDate(selectedValue);
-      if (selectedRate === 'monthly') {
-        const newExit = new Date(selectedValue);
-        newExit.setMonth(newExit.getMonth() + durationMonths);
-        setExitDate(newExit);
-      }
-      break;
-    case 'exitDate':
-      if (selectedRate === 'daily') {
-        // แก้ไขตรงนี้ให้บันทึกตามที่ user เลือกจริง
-        if (selectedValue <= entryDate) {
-          Alert.alert('Error', 'Exit date must be after entry date for daily booking.');
-          return;
+    switch (pickerMode) {
+      case 'entryDate':
+        setEntryDate(selectedValue);
+        if (selectedRate === 'hourly') setExitDate(selectedValue);
+        if (selectedRate === 'monthly') {
+          const newExit = new Date(selectedValue);
+          newExit.setMonth(newExit.getMonth() + durationMonths);
+          setExitDate(newExit);
         }
-        setExitDate(selectedValue);
-      }
-      break;
-    case 'entryTime':
-      setEntryTime(selectedValue);
-      if (selectedRate === 'hourly') {
-        const newExit = new Date(selectedValue);
-        newExit.setHours(selectedValue.getHours() + 1);
-        newExit.setMinutes(selectedValue.getMinutes());
-        setExitTime(newExit);
-        setExitDate(entryDate);
-      }
-      break;
-    case 'exitTime':
-      if (selectedRate === 'hourly') {
-        const diffMs = selectedValue - entryTime;
-        const diffMinutes = diffMs / (1000 * 60);
-
-        if (diffMinutes < 60) {
-          const correctedExit = new Date(entryTime);
-          correctedExit.setHours(entryTime.getHours() + 1);
-          correctedExit.setMinutes(entryTime.getMinutes());
-          setExitTime(correctedExit);
-          Alert.alert('Error', 'Minimum booking is 1 hour!');
-          return;
+        break;
+      case 'exitDate':
+        if (selectedRate === 'daily') {
+          setExitDate(selectedValue); // อัพเดตตามที่ user เลือกจริง
         }
-
-        const entryMinutes = entryTime.getMinutes();
-        const exitMinutes = selectedValue.getMinutes();
-
-        if (exitMinutes !== entryMinutes) {
-          Alert.alert(
-            'Error',
-            `The exit time must match the minutes of the entry time (${entryTime.getMinutes()} minutes).`
-          );
-          const correctedExit = new Date(selectedValue);
-          correctedExit.setMinutes(entryMinutes);
-          setExitTime(correctedExit);
-        } else {
-          setExitTime(selectedValue);
+        break;
+      case 'entryTime':
+        setEntryTime(selectedValue);
+        if (selectedRate === 'hourly') {
+          const newExit = new Date(selectedValue);
+          newExit.setHours(selectedValue.getHours() + 1);
+          newExit.setMinutes(selectedValue.getMinutes());
+          setExitTime(newExit);
+          setExitDate(entryDate);
         }
-      }
-      break;
-  }
-};
+        break;
+      case 'exitTime':
+        if (selectedRate === 'hourly') {
+          const diffMs = selectedValue - entryTime;
+          const diffMinutes = diffMs / (1000 * 60);
 
-const handleSearch = () => {
-  if (!selectedRate) {
-    Alert.alert('Error', 'Please select a parking rate');
-    return;
-  }
+          if (diffMinutes < 60) {
+            const correctedExit = new Date(entryTime);
+            correctedExit.setHours(entryTime.getHours() + 1);
+            correctedExit.setMinutes(entryTime.getMinutes());
+            setExitTime(correctedExit);
+            Alert.alert('Error', 'Minimum booking is 1 hour!');
+            return;
+          }
 
-  const now = new Date();
-  const entryDateTime = new Date(
-    entryDate.getFullYear(),
-    entryDate.getMonth(),
-    entryDate.getDate(),
-    entryTime.getHours(),
-    entryTime.getMinutes()
-  );
+          const entryMinutes = entryTime.getMinutes();
+          const exitMinutes = selectedValue.getMinutes();
 
-  let exitDateTime;
-
-  if (selectedRate === 'hourly') {
-    exitDateTime = new Date(
-      exitDate.getFullYear(),
-      exitDate.getMonth(),
-      exitDate.getDate(),
-      exitTime.getHours(),
-      exitTime.getMinutes()
-    );
-    const diffMinutes = (exitDateTime - entryDateTime) / (1000 * 60);
-    if (diffMinutes < 60) {
-      Alert.alert('Error', 'Minimum booking is 1 hour!');
-      return;
+          if (exitMinutes !== entryMinutes) {
+            Alert.alert(
+              'Error',
+              `The exit time must match the minutes of the entry time (${entryTime.getMinutes()} minutes).`
+            );
+            const correctedExit = new Date(selectedValue);
+            correctedExit.setMinutes(entryMinutes);
+            setExitTime(correctedExit);
+          } else {
+            setExitTime(selectedValue);
+          }
+        }
+        break;
     }
-    if (exitTime.getMinutes() !== entryTime.getMinutes()) {
-      Alert.alert('Error', `The exit time must match the minutes of the entry time (${entryTime.getMinutes()} minutes).`);
-      return;
-    }
-  } else if (selectedRate === 'daily') {
-    // บันทึก exitDate ตามที่ user เลือกจริง
-    exitDateTime = new Date(
-      exitDate.getFullYear(),
-      exitDate.getMonth(),
-      exitDate.getDate()
-    );
-    if (exitDateTime <= entryDateTime) {
-      Alert.alert('Error', 'Exit date must be after entry date for daily booking.');
-      return;
-    }
-  } else if (selectedRate === 'monthly') {
-    exitDateTime = new Date(entryDate);
-    exitDateTime.setMonth(exitDateTime.getMonth() + durationMonths);
-    setExitDate(exitDateTime);
-  }
-
-  if (entryDateTime < now) {
-    Alert.alert('Error', 'Entry date/time cannot be in the past.');
-    return;
-  }
-
-  const price = calculatePrice();
-
-  const bookingData = {
-    username,
-    bookingType,
-    rateType: selectedRate,
-    createdAt: new Date().toISOString(),
-    price,
-    entryDate: entryDate.toISOString().split('T')[0],
-    exitDate: exitDateTime.toISOString().split('T')[0], // daily exitDate ตรงตาม user เลือก
-    bookingDate: new Date().toISOString().split('T')[0],
-    licensePlate: bookingType === 'resident' ? residentLicensePlate : undefined,
   };
 
-  if (selectedRate === 'hourly') {
-    bookingData.entryTime = formatTime(entryTime);
-    bookingData.exitTime = formatTime(exitTime);
-  } else if (selectedRate === 'monthly') {
-    bookingData.durationMonths = durationMonths;
-  }
+  const handleSearch = () => {
+    if (!selectedRate) {
+      Alert.alert('Error', 'Please select a parking rate');
+      return;
+    }
 
-  console.log('Navigating to Reservation with bookingData:', JSON.stringify(bookingData, null, 2));
+    const now = new Date();
+    const entryDateTime = new Date(
+      entryDate.getFullYear(),
+      entryDate.getMonth(),
+      entryDate.getDate(),
+      entryTime.getHours(),
+      entryTime.getMinutes()
+    );
 
-  navigation.navigate('Reservation', {
-    username,
-    bookingData: {
-      ...bookingData,
-      visitorInfo
-    },
-    bookingType
-  });
-};
+    let exitDateTime;
 
+    if (selectedRate === 'hourly') {
+      exitDateTime = new Date(
+        exitDate.getFullYear(),
+        exitDate.getMonth(),
+        exitDate.getDate(),
+        exitTime.getHours(),
+        exitTime.getMinutes()
+      );
+      const diffMinutes = (exitDateTime - entryDateTime) / (1000 * 60);
+      if (diffMinutes < 60) {
+        Alert.alert('Error', 'Minimum booking is 1 hour!');
+        return;
+      }
+      if (exitTime.getMinutes() !== entryTime.getMinutes()) {
+        Alert.alert('Error', `The exit time must match the minutes of the entry time (${entryTime.getMinutes()} minutes).`);
+        return;
+      }
+    } else if (selectedRate === 'daily') {
+      exitDateTime = new Date(exitDate); // ใช้ exitDate ล่าสุดที่ user เลือก
+      if (exitDateTime <= entryDateTime) {
+        Alert.alert('Error', 'Exit date must be after entry date for daily booking.');
+        return;
+      }
+    } else if (selectedRate === 'monthly') {
+      exitDateTime = new Date(entryDate);
+      exitDateTime.setMonth(exitDateTime.getMonth() + durationMonths);
+      setExitDate(exitDateTime);
+    }
+
+    if (entryDateTime < now) {
+      Alert.alert('Error', 'Entry date/time cannot be in the past.');
+      return;
+    }
+
+    const price = calculatePrice();
+
+    const bookingData = {
+      username,
+      bookingType,
+      rateType: selectedRate,
+      createdAt: new Date().toISOString(),
+      price,
+      entryDate: entryDate.toISOString().split('T')[0],
+      exitDate: exitDateTime.toISOString().split('T')[0], // daily exitDate ตรงตาม user เลือก
+      bookingDate: new Date().toISOString().split('T')[0],
+      licensePlate: bookingType === 'resident' ? residentLicensePlate : undefined,
+    };
+
+    if (selectedRate === 'hourly') {
+      bookingData.entryTime = formatTime(entryTime);
+      bookingData.exitTime = formatTime(exitTime);
+    } else if (selectedRate === 'monthly') {
+      bookingData.durationMonths = durationMonths;
+    }
+
+    console.log('Navigating to Reservation with bookingData:', JSON.stringify(bookingData, null, 2));
+
+    navigation.navigate('Reservation', {
+      username,
+      bookingData: {
+        ...bookingData,
+        visitorInfo
+      },
+      bookingType
+    });
+  };
 
   const handleBack = () => {
     navigation.navigate('BookingType', { username, residentLicensePlate });
