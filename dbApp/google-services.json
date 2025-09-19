@@ -1,13 +1,14 @@
 {
   "project_info": {
-    "project_number": "567197240732",
-    "project_id": "test-f7d64",
-    "storage_bucket": "test-f7d64.firebasestorage.app"
+    "project_number": "426715857438",
+    "firebase_url": "https://mobile-app-e38c2-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "mobile-app-e38c2",
+    "storage_bucket": "mobile-app-e38c2.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:567197240732:android:598db0a2de311089028c59",
+        "mobilesdk_app_id": "1:426715857438:android:4389f321cbebc7e638e40f",
         "android_client_info": {
           "package_name": "com.company.appname"
         }
@@ -15,7 +16,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBb5FRZl8b560LY-kJdcnYYdQiD1eApldI"
+          "current_key": "AIzaSyA5ud_WFr6idlr2jkHWCPl0ZCQ1gLVcIeQ"
         }
       ],
       "services": {

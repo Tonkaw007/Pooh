@@ -6,7 +6,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const PaymentScreen = ({ navigation, route }) => {
   const { username, bookingData, selectedSlot, selectedFloor, bookingType } = route.params;
-  const [residentLicense, setResidentLicense] = useState(''); 
+  const [residentLicense, setResidentLicense] = useState('');
 
   // ดึง license plate ของ resident
   const fetchUserBookings = async () => {
@@ -32,9 +32,23 @@ const PaymentScreen = ({ navigation, route }) => {
   const handlePaymentSuccess = async () => {
     try {
       const updates = {};
+      const now = new Date();
+      const bookingDate = now.toISOString().slice(0, 10); // วันที่กดจองจริง
 
-      const bookingDate = bookingData.entryDate; // string YYYY-MM-DD
-      const paymentDate = new Date().toISOString().slice(0, 10);
+      // กำหนด entry/exit ตามเงื่อนไข
+      let entryDate = bookingData.entryDate; // user เลือกเอง
+      let exitDate = bookingData.exitDate;
+
+      if (bookingData.rateType === 'hourly') {
+        // รายชั่วโมง exitDate = entryDate
+        exitDate = entryDate;
+      } else if (bookingData.rateType === 'monthly') {
+        // รายเดือน exitDate = entryDate + จำนวนเดือน
+        const entry = new Date(entryDate);
+        entry.setMonth(entry.getMonth() + (bookingData.durationMonths || 1));
+        exitDate = entry.toISOString().slice(0, 10);
+      } 
+      // daily booking ใช้ตามที่ user เลือก entry/exit
 
       updates[`parkingSlots/${selectedFloor}/${selectedSlot}/status`] = 'unavailable';
 
@@ -54,11 +68,11 @@ const PaymentScreen = ({ navigation, route }) => {
         status: 'confirmed',
         slotId: selectedSlot,
         floor: selectedFloor,
-        entryDate: bookingData.entryDate,
-        exitDate: bookingData.exitDate,
+        entryDate,
+        exitDate,
         bookingDate,
         paymentStatus: 'paid',
-        paymentDate,
+        paymentDate: bookingDate,
         visitorInfo: bookingData.visitorInfo || null,
         licensePlate: licensePlateToSave,
       };
@@ -152,7 +166,12 @@ const PaymentScreen = ({ navigation, route }) => {
           {renderBookingDetail('Floor', selectedFloor)}
           {bookingData.entryDate && renderBookingDetail('Entry Date', bookingData.entryDate)}
           {bookingData.entryTime && renderBookingDetail('Entry Time', bookingData.entryTime)}
-          {bookingData.exitDate && renderBookingDetail('Exit Date', bookingData.exitDate)}
+          {bookingData.exitDate && renderBookingDetail(
+            'Exit Date', 
+            bookingData.rateType === 'daily' ? bookingData.exitDate :
+            bookingData.rateType === 'monthly' ? new Date(new Date(bookingData.entryDate).setMonth(new Date(bookingData.entryDate).getMonth() + (bookingData.durationMonths || 1))).toISOString().slice(0,10) :
+            bookingData.entryDate
+          )}
           {bookingData.exitTime && renderBookingDetail('Exit Time', bookingData.exitTime)}
 
           {renderBookingDetail('License Plate', residentLicense)}
@@ -191,6 +210,7 @@ const PaymentScreen = ({ navigation, route }) => {
     </View>
   );
 };
+
 
 
 const styles = StyleSheet.create({

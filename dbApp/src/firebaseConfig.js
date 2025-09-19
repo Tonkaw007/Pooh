@@ -3,13 +3,14 @@ import { getAuth } from "firebase/auth";
 import { getDatabase } from "firebase/database";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDNekD1A3vaOenJzjUfhnQesoztGdr4w2o",
-  authDomain: "test-f7d64.firebaseapp.com",
-  databaseURL: "https://test-f7d64-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "test-f7d64",
-  storageBucket: "test-f7d64.appspot.com",
-  messagingSenderId: "567197240732",
-  appId: "1:567197240732:web:8230878e596cdb1e028c59",
+  apiKey: "AIzaSyA37emH1PSZcLW8ezfq44siXV6N9twKHws",
+  authDomain: "mobile-app-e38c2.firebaseapp.com",
+  databaseURL: "https://mobile-app-e38c2-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "mobile-app-e38c2",
+  storageBucket: "mobile-app-e38c2.firebasestorage.app",
+  messagingSenderId: "426715857438",
+  appId: "1:426715857438:web:f968dfb184879a7438e40f",
+  measurementId: "G-NYQQV5JM7Z"
 };
 
 // Initialize Firebase
