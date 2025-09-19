@@ -8,7 +8,7 @@ const PaymentScreen = ({ navigation, route }) => {
   const { username, bookingData, selectedSlot, selectedFloor, bookingType } = route.params;
   const [residentLicense, setResidentLicense] = useState(''); 
 
-  // ดึงข้อมูล resident เพื่อแสดงใน Booking Details
+  // ดึง license plate ของ resident
   const fetchUserBookings = async () => {
     try {
       const snapshot = await get(child(ref(db), 'users'));
@@ -32,22 +32,19 @@ const PaymentScreen = ({ navigation, route }) => {
   const handlePaymentSuccess = async () => {
     try {
       const updates = {};
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const dd = String(today.getDate()).padStart(2, '0');
-      const formattedDate = `${yyyy}-${mm}-${dd}`;
+
+      const bookingDate = bookingData.entryDate; // string YYYY-MM-DD
+      const paymentDate = new Date().toISOString().slice(0, 10);
 
       updates[`parkingSlots/${selectedFloor}/${selectedSlot}/status`] = 'unavailable';
 
       const newBookingRef = push(ref(db, 'bookings'));
       const newBookingId = newBookingRef.key;
 
-      // กำหนด licensePlate ให้ชัดเจนก่อนบันทึก
       const licensePlateToSave =
         bookingType === 'resident'
-          ? residentLicense || '-' // ใช้ทะเบียน resident
-          : bookingData.visitorInfo?.licensePlate || '-'; // ใช้ทะเบียน visitor
+          ? residentLicense || '-'
+          : bookingData.visitorInfo?.licensePlate || '-';
 
       const newBooking = {
         ...bookingData,
@@ -57,16 +54,18 @@ const PaymentScreen = ({ navigation, route }) => {
         status: 'confirmed',
         slotId: selectedSlot,
         floor: selectedFloor,
-        bookingDate: formattedDate,
+        entryDate: bookingData.entryDate,
+        exitDate: bookingData.exitDate,
+        bookingDate,
         paymentStatus: 'paid',
-        paymentDate: formattedDate,
+        paymentDate,
         visitorInfo: bookingData.visitorInfo || null,
         licensePlate: licensePlateToSave,
       };
 
       updates[`bookings/${newBookingId}`] = newBooking;
-
       await update(ref(db), updates);
+
       Alert.alert('Success', 'Payment successful and slot reserved!', [
         {
           text: 'OK',
@@ -156,13 +155,11 @@ const PaymentScreen = ({ navigation, route }) => {
           {bookingData.exitDate && renderBookingDetail('Exit Date', bookingData.exitDate)}
           {bookingData.exitTime && renderBookingDetail('Exit Time', bookingData.exitTime)}
 
-          {/* แสดง License Plate ของ resident */}
           {renderBookingDetail('License Plate', residentLicense)}
 
           {bookingData.durationMonths &&
             renderBookingDetail('Duration (Months)', bookingData.durationMonths)}
 
-          {/* Visitor Information */}
           {bookingType === 'visitor' && bookingData.visitorInfo && (
             <View style={styles.visitorSection}>
               <Text style={styles.sectionTitle}>Visitor Information</Text>

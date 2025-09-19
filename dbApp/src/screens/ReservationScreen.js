@@ -12,6 +12,13 @@ const ReservationScreen = ({ navigation, route }) => {
   const [selectedFloor, setSelectedFloor] = useState('1st Floor');
   const [showFloorDropdown, setShowFloorDropdown] = useState(false);
 
+  const [selectedEntryDate, setSelectedEntryDate] = useState(
+  bookingData.entryDate.slice(0, 10)
+);
+const [selectedExitDate, setSelectedExitDate] = useState(
+  bookingData.rateType === 'hourly' ? bookingData.entryDate.slice(0, 10) : bookingData.exitDate.slice(0, 10)
+);
+
   const floors = ['1st Floor', '2nd Floor', '3rd Floor', '4th Floor'];
 
   const createSlotsForFloor = (prefixes) => {
@@ -31,25 +38,57 @@ const ReservationScreen = ({ navigation, route }) => {
     '4th Floor': createSlotsForFloor(['J', 'K', 'L']),
   };
 
-  // โหลดข้อมูลจาก Firebase
+  // สำหรับ hourly booking ให้ exitDate = entryDate
+  useEffect(() => {
+    if (bookingData.rateType === 'hourly') {
+      setSelectedExitDate(selectedEntryDate);
+    }
+  }, [selectedEntryDate, bookingData.rateType]);
+
+  // โหลดข้อมูล slots และเช็คซ้อนทับ
   useEffect(() => {
     const slotsRef = ref(db, 'parkingSlots');
+    const bookingsRef = ref(db, 'bookings');
 
-    const unsubscribe = onValue(slotsRef, async (snapshot) => {
-      const data = snapshot.val();
-
-      if (!data) {
+    const unsubscribeSlots = onValue(slotsRef, async (snapshot) => {
+      let slotData = snapshot.val();
+      if (!slotData) {
         await update(ref(db), { parkingSlots: floorSlots });
-        setAllSlots(floorSlots);
-        setSlots(floorSlots[selectedFloor]);
-      } else {
-        setAllSlots(data);
-        setSlots(data[selectedFloor] || {});
+        slotData = floorSlots;
       }
+
+      const bookingSnapshot = await new Promise((resolve) => {
+        onValue(bookingsRef, resolve, { onlyOnce: true });
+      });
+      const allBookings = bookingSnapshot.val() || {};
+
+      const updatedSlots = { ...slotData };
+
+      Object.keys(updatedSlots).forEach((floor) => {
+        Object.keys(updatedSlots[floor]).forEach((slotId) => {
+          updatedSlots[floor][slotId].status = 'available';
+          Object.values(allBookings).forEach((booking) => {
+            if (booking.slotId === slotId) {
+              const newEntry = selectedEntryDate;
+const newExit = selectedExitDate;
+const existEntry = booking.entryDate.slice(0, 10);
+const existExit = booking.exitDate.slice(0, 10);
+
+if (newEntry <= existExit && newExit >= existEntry) {
+  updatedSlots[floor][slotId].status = 'unavailable';
+}
+
+            }
+          });
+        });
+      });
+
+      setAllSlots(updatedSlots);
+      setSlots(updatedSlots[selectedFloor] || {});
     });
 
-    return () => unsubscribe();
-  }, []);
+    return () => unsubscribeSlots();
+  }, [selectedEntryDate, selectedExitDate, selectedFloor]);
 
   const handleSlotSelection = (slotId) => {
     if (slots[slotId]?.status === 'available') {
@@ -60,7 +99,7 @@ const ReservationScreen = ({ navigation, route }) => {
   const handleFloorSelection = (floor) => {
     setSelectedFloor(floor);
     setShowFloorDropdown(false);
-    setSlots(allSlots[floor] || {}); // ดึงข้อมูลจริงจาก Firebase
+    setSlots(allSlots[floor] || {});
     setSelectedSlot(null);
   };
 
@@ -69,63 +108,46 @@ const ReservationScreen = ({ navigation, route }) => {
       Alert.alert('Error', 'Please select an available parking slot');
       return;
     }
-  
+
     const bookingsRef = ref(db, 'bookings');
-  
-    onValue(
-      bookingsRef,
-      (snapshot) => {
-        const allBookings = snapshot.val() || {};
-        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-        let todayHourlyCount = 0;
-  
-        Object.values(allBookings).forEach((booking) => {
-          if (
-            booking.username === username &&
-            booking.rateType === 'hourly' &&
-            booking.entryDate === today
-          ) {
-            todayHourlyCount++;
-          }
-        });
-  
-        if (todayHourlyCount >= 5) {
-          Alert.alert('Error', 'You have made more than 5 reservations for hourly rates today.');
-          return;
-        } else {
-          // เพิ่ม log ตรวจสอบข้อมูลที่ส่ง
-          console.log('Navigating to Payment with: ', {
-            username,
-            bookingData: {
-              ...bookingData,
-              licensePlate: bookingData.licensePlate,
-              visitorInfo: bookingData.visitorInfo
-            },
-            selectedSlot,
-            selectedFloor,
-            bookingType,
-          });
-  
-          navigation.navigate('Payment', {
-            username,
-            bookingData: {
-              ...bookingData,
-              licensePlate: bookingData.licensePlate,
-              visitorInfo: bookingData.visitorInfo
-            },
-            selectedSlot,
-            selectedFloor,
-            bookingType,
-          });
+    onValue(bookingsRef, (snapshot) => {
+      const allBookings = snapshot.val() || {};
+      let todayHourlyCount = 0;
+      const today = selectedEntryDate;
+
+      Object.values(allBookings).forEach((booking) => {
+        if (
+          booking.username === username &&
+          booking.rateType === 'hourly' &&
+          booking.entryDate === today
+        ) {
+          todayHourlyCount++;
         }
-      },
-      { onlyOnce: true }
-    );
+      });
+
+      if (todayHourlyCount >= 5) {
+        Alert.alert('Error', 'You have made more than 5 hourly reservations today.');
+        return;
+      } else {
+        navigation.navigate('Payment', {
+  username,
+  bookingData: {
+    ...bookingData,
+    entryDate: selectedEntryDate,   // YYYY-MM-DD
+    exitDate: selectedExitDate,     // YYYY-MM-DD
+    licensePlate: bookingData.licensePlate,
+    visitorInfo: bookingData.visitorInfo,
+  },
+  selectedSlot,
+  selectedFloor,
+  bookingType,
+});
+
+      }
+    }, { onlyOnce: true });
   };
 
-  const handleBack = () => {
-    navigation.goBack();
-  };
+  const handleBack = () => navigation.goBack();
 
   const renderSlotRow = (slotIds) => (
     <View style={styles.slotRow}>
@@ -151,17 +173,14 @@ const ReservationScreen = ({ navigation, route }) => {
   const renderParkingLayout = () => {
     const slotKeys = Object.keys(slots);
     const rows = [];
-
     for (let i = 0; i < slotKeys.length; i += 3) {
       rows.push(slotKeys.slice(i, i + 3));
     }
-
     return (
       <View style={styles.parkingLayout}>
         {rows.map((rowSlots, rowIndex) => (
           <React.Fragment key={rowIndex}>
             {renderSlotRow(rowSlots)}
-
             {rowIndex === 1 && (
               <View style={styles.entranceExitRow}>
                 <Text style={styles.entranceExitText}> ENTRANCE &gt;&gt;&gt; </Text>
@@ -190,7 +209,6 @@ const ReservationScreen = ({ navigation, route }) => {
         </View>
 
         <View style={styles.section}>
-          {/* Floor selector */}
           <View style={styles.floorSelectorContainer}>
             <TouchableOpacity
               style={styles.floorDropdown}
@@ -470,7 +488,6 @@ const styles = StyleSheet.create({
   disabledButton: { 
     opacity: 0.5 
   },
-
 });
 
 export default ReservationScreen;
