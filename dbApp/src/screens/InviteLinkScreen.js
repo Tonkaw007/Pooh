@@ -1,16 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    View, 
-    Text, 
-    StyleSheet, 
-    TouchableOpacity, 
-    ScrollView, 
-    Alert, 
-    KeyboardAvoidingView,
-    Clipboard,
-    Share,
-    Platform
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Share, Platform } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const InviteLinkScreen = ({ route, navigation }) => {
@@ -33,8 +22,6 @@ const InviteLinkScreen = ({ route, navigation }) => {
     const handleBack = () => {
         navigation.goBack();
     };
-
-    
 
     const shareLink = async () => {
         const visitorEmail = bookingData.visitorInfo?.email || 'Unknown email';
@@ -99,8 +86,6 @@ const InviteLinkScreen = ({ route, navigation }) => {
                     <Text style={styles.title}>Visitor Invite Link</Text>
                     <Text style={styles.subtitle}>Share parking access with your visitor</Text>
                 </View>
-
-
 
                 {/* Invite Link Card */}
                 <View style={styles.infoCard}>

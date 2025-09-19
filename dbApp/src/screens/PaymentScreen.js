@@ -33,25 +33,69 @@ const PaymentScreen = ({ navigation, route }) => {
     try {
       const updates = {};
       const now = new Date();
-      const bookingDate = now.toISOString().slice(0, 10); // วันที่กดจองจริง
+      const bookingDate = now.toISOString().slice(0, 10);
 
       // กำหนด entry/exit ตามเงื่อนไข
-      let entryDate = bookingData.entryDate; // user เลือกเอง
+      let entryDate = bookingData.entryDate;
       let exitDate = bookingData.exitDate;
 
       if (bookingData.rateType === 'hourly') {
-        // รายชั่วโมง exitDate = entryDate
-        exitDate = entryDate;
+        exitDate = entryDate; // รายชั่วโมง exitDate = entryDate
       } else if (bookingData.rateType === 'monthly') {
-        // รายเดือน exitDate = entryDate + จำนวนเดือน
         const entry = new Date(entryDate);
         entry.setMonth(entry.getMonth() + (bookingData.durationMonths || 1));
-        exitDate = entry.toISOString().slice(0, 10);
-      } 
-      // daily booking ใช้ตามที่ user เลือก entry/exit
+        exitDate = entry.toISOString().slice(0, 10); // รายเดือน
+      }
+      // daily ใช้ exitDate ตามที่ user เลือก
 
-      updates[`parkingSlots/${selectedFloor}/${selectedSlot}/status`] = 'unavailable';
+      // ==============================
+      // กำหนด date และ timeRange สำหรับ slot
+      // ==============================
+      let slotDate;
+      let slotTimeRange = '00:00-23:59'; // default สำหรับ daily/monthly
 
+      if (bookingData.rateType === 'hourly') {
+        slotDate = entryDate;
+        // ใช้เวลาที่ user เลือกแทน 00:00-23:59
+        const startTime = bookingData.entryTime || '00:00';
+        const endTime = bookingData.exitTime || '23:59';
+        slotTimeRange = `${startTime}-${endTime}`;
+      } else {
+        // daily/monthly
+        slotDate = `${entryDate} - ${exitDate}`;
+      }
+
+      const newSlotBooking = {
+        date: slotDate,
+        timeRange: slotTimeRange,
+        available: false,
+      };
+
+      // ดึงข้อมูล slot ปัจจุบัน
+      const slotRef = ref(db, `parkingSlots/${selectedFloor}/${selectedSlot}`);
+      const slotSnap = await get(slotRef);
+
+      let updatedSlotData = [];
+
+      if (!slotSnap.exists() || slotSnap.val().status === 'available') {
+        // slot ว่าง → สร้าง array ใหม่
+        updatedSlotData = [newSlotBooking];
+      } else if (Array.isArray(slotSnap.val())) {
+        // slot มี booking อยู่แล้ว → append ถ้าไม่ซ้ำ
+        const existingBookings = slotSnap.val();
+        const isDuplicate = existingBookings.some(
+          (b) => b.date === newSlotBooking.date && b.timeRange === newSlotBooking.timeRange
+        );
+        updatedSlotData = isDuplicate ? existingBookings : [...existingBookings, newSlotBooking];
+      } else {
+        // fallback
+        updatedSlotData = [newSlotBooking];
+      }
+
+      // อัปเดต slot
+      updates[`parkingSlots/${selectedFloor}/${selectedSlot}`] = updatedSlotData;
+
+      // สร้าง booking ใหม่
       const newBookingRef = push(ref(db, 'bookings'));
       const newBookingId = newBookingRef.key;
 
@@ -78,6 +122,7 @@ const PaymentScreen = ({ navigation, route }) => {
       };
 
       updates[`bookings/${newBookingId}`] = newBooking;
+
       await update(ref(db), updates);
 
       Alert.alert('Success', 'Payment successful and slot reserved!', [
@@ -166,12 +211,7 @@ const PaymentScreen = ({ navigation, route }) => {
           {renderBookingDetail('Floor', selectedFloor)}
           {bookingData.entryDate && renderBookingDetail('Entry Date', bookingData.entryDate)}
           {bookingData.entryTime && renderBookingDetail('Entry Time', bookingData.entryTime)}
-          {bookingData.exitDate && renderBookingDetail(
-            'Exit Date', 
-            bookingData.rateType === 'daily' ? bookingData.exitDate :
-            bookingData.rateType === 'monthly' ? new Date(new Date(bookingData.entryDate).setMonth(new Date(bookingData.entryDate).getMonth() + (bookingData.durationMonths || 1))).toISOString().slice(0,10) :
-            bookingData.entryDate
-          )}
+          {bookingData.exitDate && renderBookingDetail('Exit Date', bookingData.exitDate)}
           {bookingData.exitTime && renderBookingDetail('Exit Time', bookingData.exitTime)}
 
           {renderBookingDetail('License Plate', residentLicense)}
@@ -210,8 +250,6 @@ const PaymentScreen = ({ navigation, route }) => {
     </View>
   );
 };
-
-
 
 const styles = StyleSheet.create({
   container: {
