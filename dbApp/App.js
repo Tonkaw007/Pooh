@@ -11,6 +11,7 @@ import ReservationScreen from "./src/screens/ReservationScreen";
 import PaymentScreen from "./src/screens/PaymentScreen";
 import MyParkingScreen from "./src/screens/MyParkingScreen";
 import MyParkingInfoScreen from "./src/screens/MyParkingInfoScreen";
+import InviteLinkScreen from "./src/screens/InviteLinkScreen";
 const Stack = createStackNavigator();
 
 const App = () => {
@@ -66,6 +67,11 @@ const App = () => {
         <Stack.Screen
         name="MyParkingInfo"
         component={MyParkingInfoScreen}
+        options={{ headerShown: false }}
+        />
+        <Stack.Screen
+        name="InviteLink"
+        component={InviteLinkScreen}
         options={{ headerShown: false }}
         />
       </Stack.Navigator>
