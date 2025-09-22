@@ -9,19 +9,36 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
     const [showBarrierModal, setShowBarrierModal] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
 
+    // ตรวจสอบว่าผู้จองจอดเกินเวลา
+    const now = new Date();
+    let isOverdue = false;
+    if (bookingData.exitDate && bookingData.exitTime) {
+        const exitDateTime = new Date(`${bookingData.exitDate}T${bookingData.exitTime}`);
+        isOverdue = now > exitDateTime;
+    }
+
     // Navigation handlers
     const handleBack = () => navigation.goBack();
     const handleControlBarrier = () => {
-        setShowBarrierModal(true);
+        if (!isOverdue) setShowBarrierModal(true);
     };
     const handleSendInviteLink = () => {
-        // Navigate to InviteLink screen for visitor bookings
         navigation.navigate('InviteLink', {
             username: username,
             bookingData: bookingData
         });
     };
     const handleCancelBooking = () => setShowCancelModal(true);
+
+    const handlePayFine = () => {
+        Alert.alert(
+            "Payment",
+            "Proceed to pay the overdue fine.",
+            [
+                { text: "OK", onPress: () => console.log("Fine paid") }
+            ]
+        );
+    };
 
     // Control barrier
     const controlBarrier = (action) => {
@@ -300,11 +317,25 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                             </TouchableOpacity>
                         ) : (
                             <TouchableOpacity 
-                                style={styles.barrierButton} 
+                                style={[
+                                    styles.barrierButton, 
+                                    isOverdue ? { backgroundColor: '#B0BEC5' } : {}
+                                ]} 
                                 onPress={handleControlBarrier}
+                                disabled={isOverdue}
                             >
                                 <Ionicons name="lock-open" size={20} color="white" />
                                 <Text style={styles.barrierButtonText}>Control Barrier</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {isOverdue && (
+                            <TouchableOpacity 
+                                style={styles.inviteButton} 
+                                onPress={handlePayFine}
+                            >
+                                <Ionicons name="cash" size={20} color="white" />
+                                <Text style={styles.inviteButtonText}>Pay Fine</Text>
                             </TouchableOpacity>
                         )}
 
@@ -343,7 +374,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                                     <Text style={styles.modalConfirmText}>Lift</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity 
-                                    style={[styles.modalConfirmButton, { backgroundColor: '#2196F3' }]} 
+                                    style={[styles.modalConfirmButton, { backgroundColor: '#F44336' }]} 
                                     onPress={() => controlBarrier('lower')}
                                 >
                                     <Text style={styles.modalConfirmText}>Lower</Text>
@@ -404,13 +435,11 @@ const styles = StyleSheet.create({
         flex: 1, 
         backgroundColor: '#B19CD8' 
     },
-
     scrollContainer: { 
         padding: 20, 
         paddingTop: 60, 
         alignItems: 'center' 
     },
-
     backButton: { 
         position: 'absolute', 
         top: 40, 
@@ -418,20 +447,17 @@ const styles = StyleSheet.create({
         zIndex: 1, 
         padding: 8 
     },
-
     header: { 
         alignItems: 'center', 
         marginBottom: 25, 
         marginTop: 10 
     },
-
     title: { 
         fontSize: 32, 
         fontWeight: 'bold', 
         color: 'white', 
         textAlign: 'center' 
     },
-
     infoCard: {
         backgroundColor: 'white',
         borderRadius: 15,
@@ -444,7 +470,6 @@ const styles = StyleSheet.create({
         shadowRadius: 3.84,
         elevation: 5,
     },
-
     cardTitle: {
         fontSize: 20,
         fontWeight: 'bold',
@@ -452,21 +477,18 @@ const styles = StyleSheet.create({
         marginBottom: 20,
         textAlign: 'center',
     },
-
     detailSection: {
         marginBottom: 20,
         paddingBottom: 15,
         borderBottomWidth: 1,
         borderBottomColor: '#E2E8F0',
     },
-
     sectionTitle: {
         fontSize: 18,
         fontWeight: '600',
         color: '#2D3748',
         marginBottom: 15,
     },
-
     detailRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -477,27 +499,23 @@ const styles = StyleSheet.create({
         backgroundColor: '#F8F9FA',
         borderRadius: 8,
     },
-
     detailLabel: {
         fontWeight: '600',
         color: '#4A5568',
         fontSize: 14,
     },
-
     detailValue: {
         fontWeight: '700',
         color: '#2D3748',
         fontSize: 14,
         textAlign: 'right',
     },
-
     actionButtonsContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         gap: 10,
         marginTop: 10,
     },
-
     barrierButton: {
         backgroundColor: '#4CAF50',
         padding: 15,
@@ -508,13 +526,11 @@ const styles = StyleSheet.create({
         gap: 10,
         flex: 1,
     },
-
     barrierButtonText: {
         color: 'white',
         fontWeight: '600',
         fontSize: 14,
     },
-
     inviteButton: {
         backgroundColor: '#2196F3',
         padding: 15,
@@ -525,13 +541,11 @@ const styles = StyleSheet.create({
         gap: 10,
         flex: 1,
     },
-
     inviteButtonText: {
         color: 'white',
         fontWeight: '600',
         fontSize: 14,
     },
-
     cancelButton: {
         backgroundColor: '#FF6B6B',
         padding: 15,
@@ -542,14 +556,11 @@ const styles = StyleSheet.create({
         gap: 10,
         flex: 1,
     },
-
     cancelButtonText: {
         color: 'white',
         fontWeight: '600',
         fontSize: 14,
     },
-
-    // Modal Styles
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -557,7 +568,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 20,
     },
-
     modalContainer: {
         backgroundColor: 'white',
         borderRadius: 15,
@@ -566,12 +576,10 @@ const styles = StyleSheet.create({
         maxWidth: 350,
         alignItems: 'center',
     },
-
     modalHeader: {
         alignItems: 'center',
         marginBottom: 15,
     },
-
     modalTitle: {
         fontSize: 20,
         fontWeight: 'bold',
@@ -579,7 +587,6 @@ const styles = StyleSheet.create({
         marginTop: 10,
         textAlign: 'center',
     },
-
     modalMessage: {
         fontSize: 16,
         color: '#718096',
@@ -587,14 +594,12 @@ const styles = StyleSheet.create({
         marginBottom: 25,
         lineHeight: 22,
     },
-
     modalButtons: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         width: '100%',
         gap: 10,
     },
-
     modalCancelButton: {
         backgroundColor: '#F8F9FA',
         padding: 15,
@@ -604,13 +609,11 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E2E8F0',
     },
-
     modalCancelText: {
         color: '#718096',
         fontWeight: '600',
         fontSize: 16,
     },
-
     modalConfirmButton: {
         backgroundColor: '#4CAF50',
         padding: 15,
@@ -618,13 +621,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         flex: 1,
     },
-
     modalConfirmText: {
         color: 'white',
         fontWeight: '600',
         fontSize: 16,
     },
-
     modalRowButtons: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -632,7 +633,6 @@ const styles = StyleSheet.create({
         gap: 10,
         marginBottom: 15,
     },
-
     modalCancelButtonBottom: {
         backgroundColor: '#E2E8F0',
         padding: 15,
@@ -643,11 +643,9 @@ const styles = StyleSheet.create({
         borderColor: '#A0AEC0', 
         alignSelf: 'center',
     },
-
     visitorInfo: {
         marginTop: 5,
     },
-
     visitorText: {
         fontSize: 12,
         color: '#666',

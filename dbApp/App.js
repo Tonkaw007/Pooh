@@ -14,6 +14,7 @@ import MyParkingScreen from "./src/screens/MyParkingScreen";
 import MyParkingInfoScreen from "./src/screens/MyParkingInfoScreen";
 import InviteLinkScreen from "./src/screens/InviteLinkScreen";
 import VisitorControlScreen from "./src/screens/VisitorControlScreen";
+import NotificationsScreen from "./src/screens/NotificationsScreen";
 import {Text} from "react-native";
 
 
@@ -130,6 +131,11 @@ const App = () => {
             // ป้องกันการย้อนกลับ (optional)
             gestureEnabled: false,
           }}
+        />
+        <Stack.Screen
+          name="Notifications"
+          component={NotificationsScreen}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>
