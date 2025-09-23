@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '../firebaseConfig';
-import { ref, update } from 'firebase/database';
+import { ref, update, push } from 'firebase/database';
 
 const MyParkingInfoScreen = ({ route, navigation }) => {
     const { username, bookingData } = route.params;
@@ -41,45 +41,44 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
     };
 
     // Control barrier
-    const controlBarrier = (action) => {
-        setShowBarrierModal(false);
-        const status = action === 'lift' ? 'lifted' : 'lowered';
-        const bookingRef = ref(db, `bookings/${bookingData.id}`);
+const controlBarrier = (action) => {
+    setShowBarrierModal(false);
+    const status = action === 'lift' ? 'lifted' : 'lowered';
 
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
 
-        const actionDate = `${year}-${month}-${day}`; 
-        const actionTime = `${hours}:${minutes}`;      
+    const actionDate = `${year}-${month}-${day}`; 
+    const actionTime = `${hours}:${minutes}`;      
 
-        update(bookingRef, { 
-            barrierStatus: status,
-            barrierActionDate: actionDate,
-            barrierActionTime: actionTime
-        })
+    // สร้าง reference ไปที่ log ของ booking
+    const logRef = ref(db, `bookings/${bookingData.id}/barrierLogs`);
+
+    // push ข้อมูลใหม่
+    const newLog = {
+        status: status,
+        date: actionDate,
+        time: actionTime
+    };
+
+    push(logRef, newLog)
         .then(() => {
             Alert.alert(
                 "Success", 
                 `The parking barrier has been ${status}.`,
-                [
-                    { 
-                        text: "OK", 
-                        onPress: () => console.log(
-                            `Barrier ${status} on ${actionDate} at ${actionTime}`
-                        ) 
-                    }
-                ]
+                [{ text: "OK" }]
             );
         })
         .catch((error) => {
-            Alert.alert("Error", "Failed to update barrier status.");
+            Alert.alert("Error", "Failed to log barrier action.");
             console.error(error);
         });
-    };
+};
+
 
     // Cancel booking
     const confirmCancelBooking = () => {

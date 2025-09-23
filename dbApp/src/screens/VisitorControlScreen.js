@@ -2,71 +2,65 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { db } from '../firebaseConfig';
-import { ref, update, get } from 'firebase/database';
+import { ref, update, get, push } from 'firebase/database';
 
 const VisitorControlScreen = ({ route, navigation }) => {
     const { sessionId } = route.params || {}; // ใช้ sessionId จาก params
 
     const handleControl = async (action) => {
-        console.log("🔍 handleControl called with:", action);
-        console.log("original sessionId:", sessionId);
+    console.log("🔍 handleControl called with:", action);
+    console.log("original sessionId:", sessionId);
 
-        if (!sessionId) {
-            Alert.alert("Error", "Session ID is missing.");
+    if (!sessionId) {
+        Alert.alert("Error", "Session ID is missing.");
+        return;
+    }
+
+    const sessionKey = sessionId.includes('-') 
+        ? sessionId.substring(0, sessionId.lastIndexOf('-')) 
+        : sessionId;
+    console.log("🔑 sessionKey used for DB lookup:", sessionKey);
+
+    const status = action === 'Open Barrier' ? 'lifted' : 'lowered';
+    const now = new Date();
+    const actionDate = now.toISOString().slice(0, 10); 
+    const actionTime = now.toTimeString().slice(0, 5); 
+
+    try {
+        const bookingsSnap = await get(ref(db, 'bookings'));
+        if (!bookingsSnap.exists()) {
+            Alert.alert("Error", "No bookings found.");
             return;
         }
 
-        const sessionKey = sessionId.includes('-') 
-            ? sessionId.substring(0, sessionId.lastIndexOf('-')) 
-            : sessionId;
-        console.log("🔑 sessionKey used for DB lookup:", sessionKey);
+        const bookings = bookingsSnap.val();
+        console.log("📂 bookings from DB:", bookings);
 
-        const status = action === 'Open Barrier' ? 'lifted' : 'lowered';
-        const now = new Date();
-        const actionDate = now.toISOString().slice(0, 10); 
-        const actionTime = now.toTimeString().slice(0, 5); 
+        const existingKey = Object.keys(bookings).find(
+            key => key === sessionKey
+        );
 
-        try {
-            const bookingsSnap = await get(ref(db, 'bookings'));
-            if (!bookingsSnap.exists()) {
-                Alert.alert("Error", "No bookings found.");
-                return;
-            }
-
-            const bookings = bookingsSnap.val();
-            console.log("📂 bookings from DB:", bookings);
-
-            // หา node ของ booking จาก sessionKey
-            const existingKey = Object.keys(bookings).find(
-                key => key === sessionKey
-            );
-
-            if (!existingKey) {
-                Alert.alert("Error", "Booking not found for this session.");
-                return;
-            }
-
-            const bookingRef = ref(db, `bookings/${existingKey}`);
-
-            // อัปเดต 3 field ของ barrier
-            await update(bookingRef, {
-                barrierActionDate: actionDate,
-                barrierActionTime: actionTime,
-                barrierStatus: status
-            });
-
-            console.log("✅ Updated barrier info for existing booking:", {
-                barrierActionDate: actionDate,
-                barrierActionTime: actionTime,
-                barrierStatus: status
-            });
-
-            Alert.alert("Success", `Barrier has been ${status}.`);
-        } catch (error) {
-            console.error("❌ Update failed:", error);
-            Alert.alert("Error", "Failed to update barrier status.");
+        if (!existingKey) {
+            Alert.alert("Error", "Booking not found for this session.");
+            return;
         }
-    };
+
+        // บันทึก log ของ barrier
+        const logRef = ref(db, `bookings/${existingKey}/barrierLogs`);
+        await push(logRef, {
+            status: status,
+            date: actionDate,
+            time: actionTime
+        });
+
+        console.log("✅ Pushed barrier log:", { status, actionDate, actionTime });
+
+        Alert.alert("Success", `Barrier action '${status}' has been logged.`);
+    } catch (error) {
+        console.error("❌ Failed to log barrier action:", error);
+        Alert.alert("Error", "Failed to log barrier action.");
+    }
+};
 
     const handleBack = () => navigation.goBack();
 

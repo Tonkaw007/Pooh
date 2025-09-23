@@ -9,29 +9,53 @@ const MyParkingScreen = ({ route, navigation }) => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // ----------------------
   // Notification state
-  // ----------------------
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [currentReminder, setCurrentReminder] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // ----------------------
-  // Demo popup state
-  // ----------------------
-  const [showDemoPopup, setShowDemoPopup] = useState(false);
+  // handleDemoPopup: ดึง Resident/Visitor จริงจาก Firebase
+  const handleDemoPopup = async (type = "resident") => {
+    try {
+      const snapshot = await get(child(ref(db), "bookings"));
+      const data = snapshot.val() || {};
 
-  const handleDemoPopup = () => {
-    setCurrentReminder({
-      slotId: "A01",
-      endTime: "17:30"
-    });
-    setShowReminderModal(true);
+      let demoBooking;
+      if (type === "resident") {
+        demoBooking = Object.values(data).find(
+          (b) => b.username === username && b.bookingType === "resident" && b.slotId === "B01"
+        );
+      } else if (type === "visitor") {
+        demoBooking = Object.values(data).find(
+          (b) => b.bookingType === "visitor" && b.slotId === "B06"
+        );
+      }
+
+      if (!demoBooking) {
+        Alert.alert("No booking found", `No ${type} booking found for demo slot.`);
+        return;
+      }
+
+      setCurrentReminder({
+        username: demoBooking.bookingType === "visitor" 
+                  ? demoBooking.visitorInfo?.visitorUsername || "N/A" 
+                  : demoBooking.username || "N/A",
+        slotId: demoBooking.slotId,
+        floor: demoBooking.floor || "N/A",
+        licensePlate: demoBooking.bookingType === "visitor"
+                      ? demoBooking.visitorInfo?.licensePlate || "N/A"
+                      : demoBooking.licensePlate || "N/A",
+        endTime: demoBooking.exitTime || "N/A",
+      });
+
+      setShowReminderModal(true);
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "Unable to fetch booking.");
+    }
   };
 
-  // ----------------------
   // Fetch bookings
-  // ----------------------
   const fetchBookings = async () => {
     try {
       const snapshot = await get(child(ref(db), "bookings"));
@@ -60,43 +84,63 @@ const MyParkingScreen = ({ route, navigation }) => {
     }
   };
 
-  // ----------------------
-  // Check reminders (10 mins before hourly booking ends)
-  // ----------------------
-  const checkBookingReminders = (activeBookings) => {
+
+  // การแจ้งเตือนอัตโนมัติ
+  const showBookingReminder = async (booking) => {
+    const isVisitor = booking.visitorInfo !== undefined;
+
+    setCurrentReminder({
+      username: booking.bookingType === "visitor" 
+                ? booking.visitorInfo?.visitorUsername || "N/A" 
+                : booking.username || "N/A",
+      slotId: booking.slotId || 'N/A',
+      floor: booking.floor || 'N/A',
+      licensePlate: isVisitor 
+                    ? booking.visitorInfo?.licensePlate || 'N/A' 
+                    : booking.licensePlate || 'N/A',
+      endTime: booking.exitTime,
+    });
+    setShowReminderModal(true);
+
+    const notifRef = ref(db, `notifications/${username}`);
+    await push(notifRef, {
+      message: `Reminder: Parking Slot ${booking.slotId} ends at ${booking.exitTime}`,
+      timestamp: serverTimestamp(),
+      read: false
+    });
+
+    setUnreadCount(prev => prev + 1);
+  };
+
+  const checkBookingReminders = async (activeBookings) => {
     const now = new Date();
 
-    activeBookings.forEach(async (booking) => {
-      if (booking.rateType === 'hourly' && !booking.notifiedHour) {
-        const [endHour, endMinute] = booking.exitTime.split(':').map(Number);
-        const endDate = new Date(`${booking.entryDate}T${booking.exitTime}:00`);
+    for (const booking of activeBookings) {
+      if (!booking.rateType) continue;
+
+      // คำนวณเวลาสิ้นสุด
+      let endDate = new Date(`${booking.entryDate}T${booking.exitTime}:00`);
+
+      if (booking.rateType === 'hourly') {
+        // ทั้ง Resident และ Visitor แบบ hourly
         const diffMinutes = (endDate - now) / 60000;
-
-        if (diffMinutes <= 10 && diffMinutes > 0) {
-          // Show modal
-          setCurrentReminder({
-            slotId: booking.slotId,
-            endTime: booking.exitTime
-          });
-          setShowReminderModal(true);
-
-          // Save notification in Firebase
-          const notifRef = ref(db, `notifications/${username}`);
-          await push(notifRef, {
-            message: `Your parking for Slot ${booking.slotId} ends at ${booking.exitTime}`,
-            timestamp: serverTimestamp(),
-            read: false
-          });
-
-          // Mark booking as notified
+        if (diffMinutes <= 10 && diffMinutes > 0 && !booking.notifiedHour) {
+          await showBookingReminder(booking);
           const bookingRef = ref(db, `bookings/${booking.id}`);
           await update(bookingRef, { notifiedHour: true });
-
-          // Update badge count
-          setUnreadCount(prev => prev + 1);
+        }
+      } else {
+        // daily / monthly
+        const reminderDate = new Date();
+        reminderDate.setHours(23, 50, 0, 0);
+        const diffMinutes = (reminderDate - now) / 60000;
+        if (diffMinutes <= 1 && diffMinutes > 0 && !booking.notifiedDaily) {
+          await showBookingReminder(booking);
+          const bookingRef = ref(db, `bookings/${booking.id}`);
+          await update(bookingRef, { notifiedDaily: true });
         }
       }
-    });
+    }
   };
 
   useEffect(() => {
@@ -106,15 +150,22 @@ const MyParkingScreen = ({ route, navigation }) => {
       fetchBookings();
     });
 
-    return unsubscribe;
-  }, [navigation, username]);
+    const reminderInterval = setInterval(() => {
+      checkBookingReminders(bookings);
+    }, 60000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(reminderInterval);
+    };
+  }, [navigation, username, bookings]);
 
   const handleBack = () => navigation.navigate("BookingType", { username });
   const handleCardPress = (bookingData) => {
     navigation.navigate("MyParkingInfo", { username, bookingData, userType });
   };
   const handleNotificationPress = () => {
-    setShowReminderModal(false); // Close modal if open
+    setShowReminderModal(false);
     navigation.navigate("Notifications", { username });
   };
 
@@ -198,13 +249,14 @@ const MyParkingScreen = ({ route, navigation }) => {
                   <Text style={styles.slotText}>Slot {bookingData.slotId}</Text>
                   <Text style={styles.floorText}>Floor {bookingData.floor}</Text>
 
-                  {bookingData.visitorInfo && (
+                  {/* Visitor Info */}
+                  {bookingData.bookingType === 'visitor' && bookingData.visitorInfo && (
                     <View style={styles.visitorInfo}>
                       <Text style={styles.visitorText}>
-                        For: {bookingData.visitorInfo.visitorUsername}
+                        For: {bookingData.visitorInfo.visitorUsername || "N/A"}
                       </Text>
                       <Text style={styles.visitorText}>
-                        licensePlate: {bookingData.visitorInfo.licensePlate}
+                        License Plate: {bookingData.visitorInfo.licensePlate || "N/A"}
                       </Text>
                     </View>
                   )}
@@ -235,55 +287,58 @@ const MyParkingScreen = ({ route, navigation }) => {
           <Text style={styles.bookAgainText}>Book Again</Text>
         </TouchableOpacity>
 
-        {/* Demo popup button */}
+        {/* Demo popup buttons */}
         <TouchableOpacity
           style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]}
-          onPress={handleDemoPopup}
+          onPress={() => handleDemoPopup("resident")}
         >
-          <Text style={styles.bookAgainText}>Show Demo Reminder</Text>
+          <Text style={styles.bookAgainText}>Show Resident Slot B01 Demo</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]}
+          onPress={() => handleDemoPopup("visitor")}
+        >
+          <Text style={styles.bookAgainText}>Show Visitor Slot 06 Demo</Text>
         </TouchableOpacity>
 
       </ScrollView>
 
-      {/* ----------------------
-          Modal แจ้งเตือน
-      ---------------------- */}
+      {/* Modal แจ้งเตือน */}
       <Modal
-  visible={showReminderModal}
-  transparent
-  animationType="fade"
-  onRequestClose={() => setShowReminderModal(false)}
->
-  <View style={styles.modalOverlay}>
-    <View style={styles.modalContainer}>
-      {currentReminder && (
-        <>
-          <Text style={styles.modalTitle}>⚠️ Parking Time Alert</Text>
-          <Text style={styles.modalMessage}>
-            10 minutes left, please move your car immediately.
-          </Text>
-          <Text style={styles.modalMessage}>
-            Slot {currentReminder.slotId}, Floor {currentReminder.floor || '2'}, License: {currentReminder.licensePlate || 'KK11'}
-          </Text>
-        </>
-      )}
-      <TouchableOpacity
-        style={[styles.modalButton, { backgroundColor: '#B19CD8' }]} // ปุ่มสีม่วง
-        onPress={() => setShowReminderModal(false)}
+        visible={showReminderModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReminderModal(false)}
       >
-        <Text style={styles.modalButtonText}>OK</Text>
-      </TouchableOpacity>
-    </View>
-  </View>
-</Modal>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {currentReminder && (
+              <>
+                <Text style={styles.modalTitle}>⚠️ Parking Time Alert</Text>
+                <Text style={styles.modalMessage}>
+                  10 minutes left, please move your car immediately.
+                </Text>
+                <Text style={styles.modalMessage}>
+                  Username: {currentReminder.username}{"\n"}
+                  Slot {currentReminder.slotId}, Floor {currentReminder.floor || '2'}, License: {currentReminder.licensePlate || 'KK11'}
+                </Text>
+              </>
+            )}
+            <TouchableOpacity
+              style={[styles.modalButton, { backgroundColor: '#B19CD8' }]} 
+              onPress={() => setShowReminderModal(false)}
+            >
+              <Text style={styles.modalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
     </View>
   );
 };
 
-// ----------------------
-// Styles (เหมือนเดิมทั้งหมด)
-// ----------------------
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
@@ -328,11 +383,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: 'white',
-  },
-  userStatus: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 2,
   },
   notificationButton: {
     padding: 8,
