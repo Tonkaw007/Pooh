@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
     },
 
     closeButton: {
-        backgroundColor: '#F44336',
+        backgroundColor: '#ff4d00ff',
     },
 
     buttonContent: {
