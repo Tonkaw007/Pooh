@@ -119,8 +119,6 @@ const MyParkingScreen = ({ route, navigation }) => {
       timestamp: serverTimestamp(),
       type: "Time reminder (10 minutes before end)"
     });
-
-    setUnreadCount(prev => prev + 1);
   };
 
   const checkBookingReminders = async () => {
@@ -334,7 +332,7 @@ const MyParkingScreen = ({ route, navigation }) => {
                 </Text>
                 <Text style={styles.modalMessage}>
                   Username: {currentReminder.username}{"\n"}
-                  Slot {currentReminder.slotId}, Floor {currentReminder.floor || '2'}, License: {currentReminder.licensePlate || 'KK11'}
+                  Slot {currentReminder.slotId}, Floor: {currentReminder.floor || '2'}, License: {currentReminder.licensePlate || 'KK11'}
                 </Text>
               </>
             )}
