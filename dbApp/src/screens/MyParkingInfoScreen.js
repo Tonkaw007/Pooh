@@ -31,12 +31,12 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
     const handleCancelBooking = () => setShowCancelModal(true);
 
     const handlePayFine = () => {
-        Alert.alert(
-            "Payment",
-            "Proceed to pay the overdue fine.",
-            [{ text: "OK", onPress: () => console.log("Fine paid") }]
-        );
+        navigation.navigate('PayFine', { 
+            username, 
+            bookingData 
+        });
     };
+    
 
     // Control Barrier Function
     const controlBarrier = (action) => {
