@@ -254,14 +254,14 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 20,
         paddingVertical: 15,
-        paddingTop: 50,
+        paddingTop: 60,
         backgroundColor: '#B19CD8',
     },
     backButton: {
         padding: 5,
     },
     headerTitle: {
-        fontSize: 20,
+        fontSize: 32,
         fontWeight: 'bold',
         color: 'white',
     },
