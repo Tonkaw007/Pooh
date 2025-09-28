@@ -69,7 +69,7 @@ const MyParkingScreen = ({ route, navigation }) => {
       );
 
       setBookings(activeBookings);
-      bookingsRef.current = activeBookings; // เก็บไว้ใน ref
+      bookingsRef.current = activeBookings; // <-- เก็บไว้ใน ref
       setLoading(false);
 
       // Check for reminders
@@ -122,37 +122,38 @@ const MyParkingScreen = ({ route, navigation }) => {
   };
 
   const checkBookingReminders = async () => {
-    const now = new Date();
-    const activeBookings = bookingsRef.current; // ใช้ ref แทน state
+  const now = new Date();
+  const activeBookings = bookingsRef.current;
 
-    for (const booking of activeBookings) {
-      if (!booking.rateType) continue;
+  for (const booking of activeBookings) {
+    if (!booking.rateType) continue;
 
+    if (booking.rateType === 'hourly') {
       const endDate = new Date(`${booking.entryDate}T${booking.exitTime}:00`);
+      const diffMinutes = (endDate - now) / 60000;
+      if (diffMinutes <= 10 && diffMinutes > 0 && !booking.notifiedHour) {
+        const bookingRef = ref(db, `bookings/${booking.id}`);
+        await update(bookingRef, { notifiedHour: true });
+        booking.notifiedHour = true;
+        await showBookingReminder(booking);
+      }
+    } else {
+      // daily / monthly reminder: วันก่อน exitDate เวลา 23:50
+      if (!booking.exitDate) continue;
+      const exitDate = new Date(booking.exitDate);
+      exitDate.setDate(exitDate.getDate() - 1); // แจ้งเตือนก่อน exitDate (วันที่ออก)
+      exitDate.setHours(23, 50, 0, 0); // เวลา 23:50
+      const diffMinutes = (exitDate - now) / 60000;
 
-      if (booking.rateType === 'hourly') {
-        const diffMinutes = (endDate - now) / 60000;
-        if (diffMinutes <= 10 && diffMinutes > 0 && !booking.notifiedHour) {
-          const bookingRef = ref(db, `bookings/${booking.id}`);
-          await update(bookingRef, { notifiedHour: true });
-          booking.notifiedHour = true;
-          await showBookingReminder(booking);
-        }
-      } else {
-        
-        // daily reminder เวลา 23:50
-        const reminderDate = new Date();
-        reminderDate.setHours(23, 50, 0, 0);
-        const diffMinutes = (reminderDate - now) / 60000;
-        if (diffMinutes <= 1 && diffMinutes > 0 && !booking.notifiedDaily) {
-          const bookingRef = ref(db, `bookings/${booking.id}`);
-          await update(bookingRef, { notifiedDaily: true });
-          booking.notifiedDaily = true;
-          await showBookingReminder(booking);
-        }
+      if (diffMinutes <= 1 && diffMinutes > 0 && !booking.notifiedDaily) {
+        const bookingRef = ref(db, `bookings/${booking.id}`);
+        await update(bookingRef, { notifiedDaily: true });
+        booking.notifiedDaily = true;
+        await showBookingReminder(booking);
       }
     }
-  };
+  }
+};
 
   useEffect(() => {
     fetchBookings();
@@ -310,7 +311,7 @@ const MyParkingScreen = ({ route, navigation }) => {
           style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]}
           onPress={() => handleDemoPopup("visitor")}
         >
-          <Text style={styles.bookAgainText}>Show Visitor Slot 06 Demo</Text>
+          <Text style={styles.bookAgainText}>Show Visitor Slot B06 Demo</Text>
         </TouchableOpacity>
 
       </ScrollView>
@@ -542,7 +543,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
     padding: 10,
     borderRadius: 10,
-    width: 100,
+    width: 100, 
     alignItems: 'center',
   },
   modalButtonText: {
