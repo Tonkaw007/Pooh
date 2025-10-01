@@ -9,6 +9,9 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
     const [showBarrierModal, setShowBarrierModal] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
 
+    // state ใหม่สำหรับติดตาม payFineStatus
+    const [payFineStatus, setPayFineStatus] = useState(bookingData.payFineStatus);
+
     // Check if booking is overdue
     const now = new Date();
     let isOverdue = false;
@@ -17,11 +20,18 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         isOverdue = now > exitDateTime;
     }
 
+    // Check if fine is paid
+    const isPaidFine = payFineStatus === 'paid';
+
     // Navigation Handlers
     const handleBack = () => navigation.goBack();
 
     const handleControlBarrier = () => {
-        if (!isOverdue) setShowBarrierModal(true);
+        if (isOverdue && !isPaidFine) {
+            Alert.alert("Action not allowed", "Please pay the fine first.");
+            return;
+        }
+        setShowBarrierModal(true);
     };
 
     const handleSendInviteLink = () => {
@@ -30,13 +40,14 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
 
     const handleCancelBooking = () => setShowCancelModal(true);
 
+    // handler ไปหน้า PayFine พร้อม callback
     const handlePayFine = () => {
         navigation.navigate('PayFine', { 
             username, 
-            bookingData 
+            bookingData,
+            onPaid: () => setPayFineStatus('paid') // callback เมื่อจ่ายแล้ว
         });
     };
-    
 
     // Control Barrier Function
     const controlBarrier = (action) => {
@@ -54,7 +65,6 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         const actionTime = `${hours}:${minutes}`;      
 
         const logRef = ref(db, `bookings/${bookingData.id}/barrierLogs`);
-
         const newLog = { status, date: actionDate, time: actionTime };
 
         push(logRef, newLog)
@@ -112,276 +122,258 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
     };
 
     // Render
-return (
-    <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
+    return (
+        <View style={styles.container}>
+            <ScrollView contentContainerStyle={styles.scrollContainer}>
+                {/* Back Button */}
+                <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+                    <Ionicons name="arrow-back" size={24} color="white" />
+                </TouchableOpacity>
 
-            {/* Back Button */}
-            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-                <Ionicons name="arrow-back" size={24} color="white" />
-            </TouchableOpacity>
+                {/* Header */}
+                <View style={styles.header}>
+                    <Text style={styles.title}>Parking Details</Text>
+                </View>
 
-            {/* Header */}
-            <View style={styles.header}>
-                <Text style={styles.title}>Parking Details</Text>
-            </View>
+                {/* Info Card */}
+                <View style={styles.infoCard}>
+                    <Text style={styles.cardTitle}>
+                        Slot {bookingData.slotId} - Floor {bookingData.floor}
+                    </Text>
 
-            {/* Info Card */}
-            <View style={styles.infoCard}>
-                <Text style={styles.cardTitle}>
-                    Slot {bookingData.slotId} - Floor {bookingData.floor}
-                </Text>
+                    {/* Visitor Information */}
+                    {bookingData.visitorInfo && (
+                        <View style={styles.detailSection}>
+                            <Text style={styles.sectionTitle}>Visitor Information</Text>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Visitor Name:</Text>
+                                <Text style={styles.detailValue}>{bookingData.visitorInfo.visitorUsername}</Text>
+                            </View>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Phone Number:</Text>
+                                <Text style={styles.detailValue}>{bookingData.visitorInfo.phoneNumber}</Text>
+                            </View>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Email:</Text>
+                                <Text style={styles.detailValue}>{bookingData.visitorInfo.email}</Text>
+                            </View>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>License Plate:</Text>
+                                <Text style={styles.detailValue}>{bookingData.visitorInfo.licensePlate}</Text>
+                            </View>
+                        </View>
+                    )}
 
-                {/* Visitor Information */}
-                {bookingData.visitorInfo && (
+                    {/* Booking Information */}
                     <View style={styles.detailSection}>
-                        <Text style={styles.sectionTitle}>Visitor Information</Text>
-
+                        <Text style={styles.sectionTitle}>Booking Information</Text>
                         <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Visitor Name:</Text>
-                            <Text style={styles.detailValue}>{bookingData.visitorInfo.visitorUsername}</Text>
+                            <Text style={styles.detailLabel}>Booking ID:</Text>
+                            <Text style={styles.detailValue}>{bookingData.id}</Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>Username:</Text>
+                            <Text style={styles.detailValue}>{username}</Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>Booking Type:</Text>
+                            <Text style={styles.detailValue}>{formatBookingType(bookingData.rateType)}</Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>Booking Date:</Text>
+                            <Text style={styles.detailValue}>{formatDate(bookingData.bookingDate)}</Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>Status:</Text>
+                            <Text style={styles.detailValue}>{bookingData.status}</Text>
                         </View>
 
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Phone Number:</Text>
-                            <Text style={styles.detailValue}>{bookingData.visitorInfo.phoneNumber}</Text>
-                        </View>
-
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Email:</Text>
-                            <Text style={styles.detailValue}>{bookingData.visitorInfo.email}</Text>
-                        </View>
-
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>License Plate:</Text>
-                            <Text style={styles.detailValue}>{bookingData.visitorInfo.licensePlate}</Text>
-                        </View>
-                    </View>
-                )}
-
-                {/* Booking Information */}
-                <View style={styles.detailSection}>
-                    <Text style={styles.sectionTitle}>Booking Information</Text>
-
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Booking ID:</Text>
-                        <Text style={styles.detailValue}>{bookingData.id}</Text>
-                    </View>
-
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Username:</Text>
-                        <Text style={styles.detailValue}>{username}</Text>
-                    </View>
-
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Booking Type:</Text>
-                        <Text style={styles.detailValue}>{formatBookingType(bookingData.rateType)}</Text>
-                    </View>
-
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Booking Date:</Text>
-                        <Text style={styles.detailValue}>{formatDate(bookingData.bookingDate)}</Text>
-                    </View>
-
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Status:</Text>
-                        <Text style={styles.detailValue}>{bookingData.status}</Text>
-                    </View>
-
-                    {/* License Plate for Residents only */}
-                    {!bookingData.visitorInfo && (
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>License Plate:</Text>
-                            <Text style={styles.detailValue}>{bookingData.licensePlate}</Text>
-                        </View>
-                    )}
-                </View>
-
-                {/* Time Information */}
-                <View style={styles.detailSection}>
-                    <Text style={styles.sectionTitle}>Time Information</Text>
-
-                    {bookingData.entryDate && (
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Entry Date:</Text>
-                            <Text style={styles.detailValue}>{formatDate(bookingData.entryDate)}</Text>
-                        </View>
-                    )}
-
-                    {bookingData.entryTime && (
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Entry Time:</Text>
-                            <Text style={styles.detailValue}>{formatTime(bookingData.entryTime)}</Text>
-                        </View>
-                    )}
-
-                    {bookingData.exitDate && (
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Exit Date:</Text>
-                            <Text style={styles.detailValue}>{formatDate(bookingData.exitDate)}</Text>
-                        </View>
-                    )}
-
-                    {bookingData.exitTime && (
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Exit Time:</Text>
-                            <Text style={styles.detailValue}>{formatTime(bookingData.exitTime)}</Text>
-                        </View>
-                    )}
-
-                    {bookingData.durationMonths && (
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Duration (Months):</Text>
-                            <Text style={styles.detailValue}>{bookingData.durationMonths}</Text>
-                        </View>
-                    )}
-                </View>
-
-                {/* Payment Information */}
-                <View style={styles.detailSection}>
-                    <Text style={styles.sectionTitle}>Payment Information</Text>
-
-                    <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Payment Status:</Text>
-                        <Text
-                            style={[
-                                styles.detailValue,
-                                { color: bookingData.paymentStatus === 'paid' ? '#4CAF50' : '#FF9800' }
-                            ]}
-                        >
-                            {bookingData.paymentStatus}
-                        </Text>
-                    </View>
-
-                    {bookingData.paymentDate && (
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Payment Date:</Text>
-                            <Text style={styles.detailValue}>{formatDate(bookingData.paymentDate)}</Text>
-                        </View>
-                    )}
-
-                    {bookingData.price && (
-                        <View style={styles.detailRow}>
-                            <Text style={styles.detailLabel}>Total Price:</Text>
-                            <Text style={styles.detailValue}>{bookingData.price} baht</Text>
-                        </View>
-                    )}
-                </View>
-
-                {/* Action Buttons*/}
-                <View style={styles.actionButtonsContainer}>
-
-                    {/* Upper row: Send Link / Control Barrier & Cancel */}
-                    <View style={styles.upperButtonRow}>
-                        {bookingData.bookingType === 'visitor' ? (
-                            <TouchableOpacity style={styles.inviteButton} onPress={handleSendInviteLink}>
-                                <Ionicons name="share" size={20} color="white" />
-                                <Text style={styles.inviteButtonText}>Send Invite Link</Text>
-                            </TouchableOpacity>
-                        ) : (
-                            <TouchableOpacity
-                                style={[styles.barrierButton, isOverdue ? { backgroundColor: '#B0BEC5' } : {}]}
-                                onPress={handleControlBarrier}
-                                disabled={isOverdue}
-                            >
-                                <Ionicons name="lock-open" size={20} color="white" />
-                                <Text style={styles.barrierButtonText}>Control Barrier</Text>
-                            </TouchableOpacity>
+                        {!bookingData.visitorInfo && (
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>License Plate:</Text>
+                                <Text style={styles.detailValue}>{bookingData.licensePlate}</Text>
+                            </View>
                         )}
-
-                        <TouchableOpacity style={styles.cancelButton} onPress={handleCancelBooking}>
-                            <Ionicons name="close-circle" size={20} color="white" />
-                            <Text style={styles.cancelButtonText}>Cancel Booking</Text>
-                        </TouchableOpacity>
                     </View>
 
-                    {/* Pay Fine button centered below upper row */}
-                    {isOverdue && (
-                        <View style={styles.payFineWrapper}>
-                            <TouchableOpacity style={styles.payFineButton} onPress={handlePayFine}>
-                                <Ionicons name="cash" size={20} color="white" />
-                                <Text style={styles.payFineButtonText}>Pay Fine</Text>
-                            </TouchableOpacity>
-                        </View>
-                    )}
-                </View>
-            </View>
+                    {/* Time Information */}
+                    <View style={styles.detailSection}>
+                        <Text style={styles.sectionTitle}>Time Information</Text>
+                        {bookingData.entryDate && (
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Entry Date:</Text>
+                                <Text style={styles.detailValue}>{formatDate(bookingData.entryDate)}</Text>
+                            </View>
+                        )}
+                        {bookingData.entryTime && (
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Entry Time:</Text>
+                                <Text style={styles.detailValue}>{formatTime(bookingData.entryTime)}</Text>
+                            </View>
+                        )}
+                        {bookingData.exitDate && (
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Exit Date:</Text>
+                                <Text style={styles.detailValue}>{formatDate(bookingData.exitDate)}</Text>
+                            </View>
+                        )}
+                        {bookingData.exitTime && (
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Exit Time:</Text>
+                                <Text style={styles.detailValue}>{formatTime(bookingData.exitTime)}</Text>
+                            </View>
+                        )}
+                        {bookingData.durationMonths && (
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Duration (Months):</Text>
+                                <Text style={styles.detailValue}>{bookingData.durationMonths}</Text>
+                            </View>
+                        )}
+                    </View>
 
-            {/* Barrier Modal */}
-            <Modal
-                visible={showBarrierModal}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={cancelAction}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContainer}>
-                        <View style={styles.modalHeader}>
-                            <Ionicons name="car-sport" size={40} color="#FFA000" />
-                            <Text style={styles.modalTitle}>Control Parking Barrier</Text>
-                        </View>
-                        <Text style={styles.modalMessage}>
-                            Choose an action for Slot {bookingData.slotId}, Floor: {bookingData.floor}
-                        </Text>
-                        <View style={styles.modalRowButtons}>
-                            <TouchableOpacity
-                                style={styles.modalConfirmButton}
-                                onPress={() => controlBarrier('lift')}
+                    {/* Payment Information */}
+                    <View style={styles.detailSection}>
+                        <Text style={styles.sectionTitle}>Payment Information</Text>
+                        <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>Payment Status:</Text>
+                            <Text
+                                style={[
+                                    styles.detailValue,
+                                    { color: bookingData.paymentStatus === 'paid' ? '#4CAF50' : '#FF9800' }
+                                ]}
                             >
-                                <Text style={styles.modalConfirmText}>Lift</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.modalConfirmButton, { backgroundColor: '#ff4d00ff' }]}
-                                onPress={() => controlBarrier('lower')}
-                            >
-                                <Text style={styles.modalConfirmText}>Lower</Text>
+                                {bookingData.paymentStatus}
+                            </Text>
+                        </View>
+                        {bookingData.paymentDate && (
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Payment Date:</Text>
+                                <Text style={styles.detailValue}>{formatDate(bookingData.paymentDate)}</Text>
+                            </View>
+                        )}
+                        {bookingData.price && (
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Total Price:</Text>
+                                <Text style={styles.detailValue}>{bookingData.price} baht</Text>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Action Buttons*/}
+                    <View style={styles.actionButtonsContainer}>
+                        <View style={styles.upperButtonRow}>
+                            {bookingData.bookingType === 'visitor' ? (
+                                <TouchableOpacity style={styles.inviteButton} onPress={handleSendInviteLink}>
+                                    <Ionicons name="share" size={20} color="white" />
+                                    <Text style={styles.inviteButtonText}>Send Invite Link</Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.barrierButton,
+                                        (isOverdue && !isPaidFine) ? { backgroundColor: '#B0BEC5' } : {}
+                                    ]}
+                                    onPress={handleControlBarrier}
+                                    disabled={isOverdue && !isPaidFine}
+                                >
+                                    <Ionicons name="lock-open" size={20} color="white" />
+                                    <Text style={styles.barrierButtonText}>Control Barrier</Text>
+                                </TouchableOpacity>
+                            )}
+
+                            <TouchableOpacity style={styles.cancelButton} onPress={handleCancelBooking}>
+                                <Ionicons name="close-circle" size={20} color="white" />
+                                <Text style={styles.cancelButtonText}>Cancel Booking</Text>
                             </TouchableOpacity>
                         </View>
-                        <TouchableOpacity
-                            style={styles.modalCancelButtonBottom}
-                            onPress={cancelAction}
-                        >
-                            <Text style={styles.modalCancelText}>Cancel</Text>
-                        </TouchableOpacity>
+
+                        {/* Pay Fine button centered below upper row */}
+                        {isOverdue && !isPaidFine && (
+                            <View style={styles.payFineWrapper}>
+                                <TouchableOpacity style={styles.payFineButton} onPress={handlePayFine}>
+                                    <Ionicons name="cash" size={20} color="white" />
+                                    <Text style={styles.payFineButtonText}>Pay Fine</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </View>
                 </View>
-            </Modal>
 
-            {/*Cancel Modal*/}
-            <Modal
-                visible={showCancelModal}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={cancelAction}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContainer}>
-                        <View style={styles.modalHeader}>
-                            <Ionicons name="warning" size={40} color="#FF6B6B" />
-                            <Text style={styles.modalTitle}>Cancel Booking</Text>
-                        </View>
-                        <Text style={styles.modalMessage}>
-                            Are you sure you want to cancel this booking for Slot {bookingData.slotId}, Floor {bookingData.floor}?
-                        </Text>
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity style={styles.modalCancelButton} onPress={cancelAction}>
-                                <Text style={styles.modalCancelText}>No, Keep It</Text>
-                            </TouchableOpacity>
+                {/* Barrier Modal */}
+                <Modal
+                    visible={showBarrierModal}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={cancelAction}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContainer}>
+                            <View style={styles.modalHeader}>
+                                <Ionicons name="car-sport" size={40} color="#FFA000" />
+                                <Text style={styles.modalTitle}>Control Parking Barrier</Text>
+                            </View>
+                            <Text style={styles.modalMessage}>
+                                Choose an action for Slot {bookingData.slotId}, Floor: {bookingData.floor}
+                            </Text>
+                            <View style={styles.modalRowButtons}>
+                                <TouchableOpacity
+                                    style={styles.modalConfirmButton}
+                                    onPress={() => controlBarrier('lift')}
+                                >
+                                    <Text style={styles.modalConfirmText}>Lift</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.modalConfirmButton, { backgroundColor: '#ff4d00ff' }]}
+                                    onPress={() => controlBarrier('lower')}
+                                >
+                                    <Text style={styles.modalConfirmText}>Lower</Text>
+                                </TouchableOpacity>
+                            </View>
                             <TouchableOpacity
-                                style={[styles.modalConfirmButton, { backgroundColor: '#FF6B6B' }]}
-                                onPress={confirmCancelBooking}
+                                style={styles.modalCancelButtonBottom}
+                                onPress={cancelAction}
                             >
-                                <Text style={styles.modalConfirmText}>Yes, Cancel</Text>
+                                <Text style={styles.modalCancelText}>Cancel</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
-                </View>
-            </Modal>
+                </Modal>
 
-        </ScrollView>
-    </View>
-);
-}
+                {/*Cancel Modal*/}
+                <Modal
+                    visible={showCancelModal}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={cancelAction}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContainer}>
+                            <View style={styles.modalHeader}>
+                                <Ionicons name="warning" size={40} color="#FF6B6B" />
+                                <Text style={styles.modalTitle}>Cancel Booking</Text>
+                            </View>
+                            <Text style={styles.modalMessage}>
+                                Are you sure you want to cancel this booking for Slot {bookingData.slotId}, Floor {bookingData.floor}?
+                            </Text>
+                            <View style={styles.modalButtons}>
+                                <TouchableOpacity style={styles.modalCancelButton} onPress={cancelAction}>
+                                    <Text style={styles.modalCancelText}>No, Keep It</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.modalConfirmButton, { backgroundColor: '#FF6B6B' }]}
+                                    onPress={confirmCancelBooking}
+                                >
+                                    <Text style={styles.modalConfirmText}>Yes, Cancel</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
+
+            </ScrollView>
+        </View>
+    );
+};
 
 const styles = StyleSheet.create({
     container: { 

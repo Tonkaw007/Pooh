@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Image } from 'react-native';
 import { db } from '../firebaseConfig';
-import { ref, update, get, push, child } from 'firebase/database';
+import { ref, update, set } from 'firebase/database';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const PayFineScreen = ({ route, navigation }) => {
@@ -18,53 +18,69 @@ const PayFineScreen = ({ route, navigation }) => {
 
         const now = new Date();
         const exitDateTime = new Date(`${bookingData.exitDate}T${bookingData.exitTime}`);
-        
-        // คำนวณเวลาที่เกินมา (นาที)
         const minutesOverdue = Math.max(0, Math.floor((now - exitDateTime) / (1000 * 60)));
         setOverdueMinutes(minutesOverdue);
 
-        // คำนวณจำนวนรอบ (ทุก 15 นาที)
         const rounds = Math.ceil(minutesOverdue / 15);
         setFineRounds(rounds);
 
-        // ราคาเดิม
         const price = bookingData.price ? parseFloat(bookingData.price) : 0;
         setOriginalPrice(price);
 
-        // คำนวณค่าปรับ (2^n เท่า) และปัดเศษเป็นจำนวนเต็ม
         if (rounds === 0) {
             setFineAmount(0);
         } else {
             const fineMultiplier = Math.pow(2, rounds);
             const calculatedFine = price * fineMultiplier;
-            setFineAmount(Math.round(calculatedFine)); // ปัดเศษเป็นจำนวนเต็ม
+            // แก้ fineAmount: ถ้าเป็นจำนวนเต็มเก็บเป็นจำนวนเต็ม ถ้ามีทศนิยมให้ 2 ตำแหน่ง
+            const finalFine = Number.isInteger(calculatedFine)
+                ? calculatedFine
+                : parseFloat(calculatedFine.toFixed(2));
+            setFineAmount(finalFine);
         }
     };
 
-    // จ่ายค่าปรับ
     const handlePaymentSuccess = async () => {
         try {
-            // อัพเดทสถานะการจ่าย
-            const updates = {};
-            updates[`bookings/${bookingData.id}/finePaid`] = true;
-            updates[`bookings/${bookingData.id}/fineAmount`] = fineAmount;
-            updates[`bookings/${bookingData.id}/finePaidDate`] = new Date().toISOString().split('T')[0];
-            updates[`bookings/${bookingData.id}/finePaidTime`] = new Date().toTimeString().split(' ')[0];
-            updates[`bookings/${bookingData.id}/paymentStatus`] = 'paid';
+            const now = new Date();
+            const todayDate = now.toISOString().split('T')[0];
+            const nowTime = now.toTimeString().split(' ')[0].substring(0,5);
 
-            await update(ref(db), updates);
+            // fineAmount เวอร์ชันส่ง Firebase ต้องตรงกับ UI
+            let roundedFineAmount = Number.isInteger(fineAmount)
+                ? fineAmount
+                : parseFloat(fineAmount.toFixed(2));
+
+            const payFineData = {
+                id: bookingData.id,
+                username: bookingData.username,
+                bookingType: bookingData.bookingType,
+                rateType: bookingData.rateType,
+                entryDate: bookingData.entryDate,
+                exitDate: bookingData.exitDate,
+                entryTime: bookingData.entryTime,
+                exitTime: bookingData.exitTime,
+                floor: bookingData.floor,
+                slotId: bookingData.slotId,
+                price: bookingData.price || 0,
+                visitorInfo: bookingData.visitorInfo || null,
+                overdueMinutes: overdueMinutes,
+                rounds: fineRounds,
+                fineAmount: roundedFineAmount,
+                fineIssuedDate: todayDate,
+                payFineDate: todayDate,
+                payFineTime: nowTime,
+                payFineStatus: 'paid'
+            };
+
+            await set(ref(db, `payFine/${bookingData.id}`), payFineData);
 
             setPaymentCompleted(true);
-            
+
             Alert.alert(
                 "Payment Successful",
-                `Fine of ${fineAmount} baht has been paid successfully.`,
-                [
-                    { 
-                        text: "OK", 
-                        onPress: () => navigation.navigate('MyParking', { username }) 
-                    }
-                ]
+                `Fine of ${roundedFineAmount} baht has been paid successfully.`,
+                [{ text: "OK", onPress: () => navigation.navigate('MyParking', { username }) }]
             );
         } catch (error) {
             console.error("Payment error:", error);
@@ -77,40 +93,24 @@ const PayFineScreen = ({ route, navigation }) => {
     }, []);
 
     const formatTime = (minutes) => {
-        if (minutes < 60) {
-            return `${minutes} minutes`;
-        } else {
-            const hours = Math.floor(minutes / 60);
-            const remainingMinutes = minutes % 60;
-            return `${hours}h ${remainingMinutes}m`;
-        }
+        if (minutes < 60) return `${minutes} minutes`;
+        const hours = Math.floor(minutes / 60);
+        const remainingMinutes = minutes % 60;
+        return `${hours}h ${remainingMinutes}m`;
     };
 
     const formatDate = (dateString) => {
         if (!dateString) return '-';
         const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
-        });
-    };
-
-    const formatTimeString = (timeString) => {
-        if (!timeString) return '-';
-        return timeString;
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     };
 
     const handleBack = () => navigation.goBack();
 
     return (
         <View style={styles.container}>
-            {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity 
-                    style={styles.backButton} 
-                    onPress={handleBack}
-                >
+                <TouchableOpacity style={styles.backButton} onPress={handleBack}>
                     <Ionicons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Pay Fine</Text>
@@ -118,31 +118,41 @@ const PayFineScreen = ({ route, navigation }) => {
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContainer}>
-                {/* Booking Info Card */}
+                {/* Booking Info */}
                 <View style={styles.infoCard}>
                     <Text style={styles.cardTitle}>Booking Information</Text>
-                    
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Slot:</Text>
-                        <Text style={styles.detailValue}>
-                            {bookingData.slotId} - Floor {bookingData.floor}
-                        </Text>
+                        <Text style={styles.detailValue}>{bookingData.slotId} - Floor {bookingData.floor}</Text>
                     </View>
-
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Exit Time:</Text>
-                        <Text style={styles.detailValue}>
-                            {formatDate(bookingData.exitDate)} at {formatTimeString(bookingData.exitTime)}
-                        </Text>
+                        <Text style={styles.detailValue}>{formatDate(bookingData.exitDate)} at {bookingData.exitTime}</Text>
                     </View>
-
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Original Price:</Text>
                         <Text style={styles.detailValue}>{Math.round(originalPrice)} baht</Text>
                     </View>
+
+                    {bookingData.bookingType === 'visitor' && bookingData.visitorInfo && (
+                        <>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Visitor:</Text>
+                                <Text style={styles.detailValue}>{bookingData.visitorInfo.visitorUsername}</Text>
+                            </View>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Phone:</Text>
+                                <Text style={styles.detailValue}>{bookingData.visitorInfo.phoneNumber}</Text>
+                            </View>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>License Plate:</Text>
+                                <Text style={styles.detailValue}>{bookingData.visitorInfo.licensePlate}</Text>
+                            </View>
+                        </>
+                    )}
                 </View>
 
-                {/* Combined Fine & Payment Card */}
+                {/* Fine & Payment */}
                 {fineAmount > 0 && !paymentCompleted && (
                     <View style={styles.combinedCard}>
                         <View style={styles.fineHeader}>
@@ -157,66 +167,35 @@ const PayFineScreen = ({ route, navigation }) => {
                             </View>
 
                             <View style={styles.fineRow}>
-                                <Text style={styles.fineLabel}>Fine Rounds (15min/round):</Text>
+                                <Text style={styles.fineLabel}>Fine Rounds:</Text>
                                 <Text style={styles.fineValue}>{fineRounds} rounds</Text>
                             </View>
 
                             <View style={styles.fineRow}>
                                 <Text style={styles.fineLabel}>Calculation:</Text>
-                                <Text style={styles.fineValue}>
-                                    {Math.round(originalPrice)} × 2^{fineRounds}
-                                </Text>
+                                <Text style={styles.fineValue}>{Math.round(originalPrice)} × 2^{fineRounds}</Text>
                             </View>
 
                             <View style={styles.divider} />
-
-                            {/* Total Fine - แสดงเป็นจำนวนเต็ม */}
                             <View style={styles.totalFineSection}>
                                 <Text style={styles.totalFineLabel}>TOTAL FINE:</Text>
                                 <Text style={styles.totalFineAmount}>{fineAmount} baht</Text>
                             </View>
-
                             <View style={styles.divider} />
 
-                            {/* QR Code Payment Section */}
+                            {/* QR Payment */}
                             <View style={styles.paymentSection}>
                                 <Text style={styles.paymentTitle}>Scan QR Code to Pay</Text>
-                                
                                 <View style={styles.qrContainer}>
-                                    <Image
-                                        source={require('../../assets/images/demo-qr.png')}
-                                        style={styles.qrImage}
-                                        resizeMode="contain"
-                                    />
-                                    <Text style={styles.qrInstruction}>
-                                        Scan QR code with your banking app
-                                    </Text>
+                                    <Image source={require('../../assets/images/demo-qr.png')} style={styles.qrImage} resizeMode="contain" />
+                                    <Text style={styles.qrInstruction}>Scan QR code with your banking app</Text>
                                 </View>
-
-                                <TouchableOpacity 
-                                    style={styles.confirmButton} 
-                                    onPress={handlePaymentSuccess}
-                                >
+                                <TouchableOpacity style={styles.confirmButton} onPress={handlePaymentSuccess}>
                                     <Ionicons name="checkmark-circle" size={24} color="white" />
                                     <Text style={styles.confirmButtonText}>Confirm Payment</Text>
                                 </TouchableOpacity>
-
-                                <Text style={styles.noteText}>
-                                    * Scan QR code first, then click Confirm Payment
-                                </Text>
+                                <Text style={styles.noteText}>* Scan QR code first, then click Confirm Payment</Text>
                             </View>
-                        </View>
-
-                        {/* Fine Explanation */}
-                        <View style={styles.explanation}>
-                            <Text style={styles.explanationTitle}>Fine Calculation Method:</Text>
-                            <Text style={styles.explanationText}>
-                                • Every 15 minutes overdue: Fine doubles{'\n'}
-                                • Round 1 (0-15min): 2× original price{'\n'}
-                                • Round 2 (16-30min): 4× original price{'\n'}
-                                • Round 3 (31-45min): 8× original price{'\n'}
-                                • And so on...
-                            </Text>
                         </View>
                     </View>
                 )}
@@ -225,9 +204,7 @@ const PayFineScreen = ({ route, navigation }) => {
                     <View style={styles.successCard}>
                         <Ionicons name="checkmark-circle" size={50} color="#4CAF50" />
                         <Text style={styles.successTitle}>Payment Completed!</Text>
-                        <Text style={styles.successText}>
-                            Your fine of {fineAmount} baht has been paid successfully.
-                        </Text>
+                        <Text style={styles.successText}>Your fine of {fineAmount} baht has been paid successfully.</Text>
                     </View>
                 )}
 

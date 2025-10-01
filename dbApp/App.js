@@ -17,6 +17,7 @@ import VisitorControlScreen from "./src/screens/VisitorControlScreen";
 import NotificationsScreen from "./src/screens/NotificationsScreen";
 import {Text} from "react-native";
 import PayFineScreen from "./src/screens/PayFineScreen";
+import MyCouponScreen from "./src/screens/MyCouponScreen";
 
 
 const Stack = createStackNavigator();
@@ -141,6 +142,11 @@ const App = () => {
         <Stack.Screen
           name="PayFine"
           component={PayFineScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="MyCoupon"
+          component={MyCouponScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>
