@@ -13,6 +13,7 @@ const MyParkingScreen = ({ route, navigation }) => {
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [currentReminder, setCurrentReminder] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [couponCount, setCouponCount] = useState(0);
 
   // Ref เก็บ bookings ล่าสุดเพื่อใช้ใน interval
   const bookingsRef = useRef([]);
@@ -58,6 +59,52 @@ const MyParkingScreen = ({ route, navigation }) => {
     }
   };
 
+  // ฟังก์ชันดึงข้อมูลคูปอง
+  const fetchCoupons = async () => {
+    try {
+      // ตัวอย่างข้อมูลคูปอง - ในกรณีจริงอาจดึงจาก Firebase
+      const demoCoupons = [
+        {
+          id: '1',
+          createdDate: new Date().toISOString(),
+          expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          reason: "The previous vehicle exceeded parking time, causing your delay",
+          discountType: 'hourly',
+          used: false
+        },
+        {
+          id: '2',
+          createdDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+          expiryDate: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(),
+          reason: "Compensation for maintenance delay",
+          discountType: 'daily',
+          used: false
+        },
+        {
+          id: '3',
+          createdDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          expiryDate: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(),
+          reason: "Apology for system error during your last booking",
+          discountType: 'monthly',
+          used: false
+        }
+      ];
+
+      // กรองคูปองที่ยังไม่หมดอายุและยังไม่ได้ใช้
+      const activeCoupons = demoCoupons.filter(coupon => {
+        const expiryDate = new Date(coupon.expiryDate);
+        return expiryDate > new Date() && !coupon.used;
+      });
+
+      setCouponCount(activeCoupons.length);
+
+    } catch (error) {
+      console.error("Error fetching coupons:", error);
+      // ถ้าเกิด error ให้ตั้งค่าเป็น 0
+      setCouponCount(0);
+    }
+  };
+
   // Fetch bookings
   const fetchBookings = async () => {
     try {
@@ -69,7 +116,7 @@ const MyParkingScreen = ({ route, navigation }) => {
       );
 
       setBookings(activeBookings);
-      bookingsRef.current = activeBookings; // <-- เก็บไว้ใน ref
+      bookingsRef.current = activeBookings;
       setLoading(false);
 
       // Check for reminders
@@ -80,6 +127,9 @@ const MyParkingScreen = ({ route, navigation }) => {
       const notifData = notifSnapshot.val() || {};
       const unread = Object.values(notifData).filter(n => !n.read).length;
       setUnreadCount(unread);
+
+      // ดึงข้อมูลคูปอง
+      await fetchCoupons();
 
     } catch (error) {
       console.error(error);
@@ -122,44 +172,44 @@ const MyParkingScreen = ({ route, navigation }) => {
   };
 
   const checkBookingReminders = async () => {
-  const now = new Date();
-  const activeBookings = bookingsRef.current;
+    const now = new Date();
+    const activeBookings = bookingsRef.current;
 
-  for (const booking of activeBookings) {
-    if (!booking.rateType) continue;
+    for (const booking of activeBookings) {
+      if (!booking.rateType) continue;
 
-    if (booking.rateType === 'hourly') {
-      const endDate = new Date(`${booking.entryDate}T${booking.exitTime}:00`);
-      const diffMinutes = (endDate - now) / 60000;
-      if (diffMinutes <= 10 && diffMinutes > 0 && !booking.notifiedHour) {
-        const bookingRef = ref(db, `bookings/${booking.id}`);
-        await update(bookingRef, { notifiedHour: true });
-        booking.notifiedHour = true;
-        await showBookingReminder(booking);
-      }
-    } else {
-      // daily / monthly reminder: วันก่อน exitDate เวลา 23:50
-      if (!booking.exitDate) continue;
-      const exitDate = new Date(booking.exitDate);
-      exitDate.setDate(exitDate.getDate() - 1); // แจ้งเตือนก่อน exitDate (วันที่ออก)
-      exitDate.setHours(23, 50, 0, 0); // เวลา 23:50
-      const diffMinutes = (exitDate - now) / 60000;
+      if (booking.rateType === 'hourly') {
+        const endDate = new Date(`${booking.entryDate}T${booking.exitTime}:00`);
+        const diffMinutes = (endDate - now) / 60000;
+        if (diffMinutes <= 10 && diffMinutes > 0 && !booking.notifiedHour) {
+          const bookingRef = ref(db, `bookings/${booking.id}`);
+          await update(bookingRef, { notifiedHour: true });
+          booking.notifiedHour = true;
+          await showBookingReminder(booking);
+        }
+      } else {
+        // daily / monthly reminder: วันก่อน exitDate เวลา 23:50
+        if (!booking.exitDate) continue;
+        const exitDate = new Date(booking.exitDate);
+        exitDate.setDate(exitDate.getDate() - 1); // แจ้งเตือนก่อน exitDate (วันที่ออก)
+        exitDate.setHours(23, 50, 0, 0); // เวลา 23:50
+        const diffMinutes = (exitDate - now) / 60000;
 
-      if (diffMinutes <= 1 && diffMinutes > 0 && !booking.notifiedDaily) {
-        const bookingRef = ref(db, `bookings/${booking.id}`);
-        await update(bookingRef, { notifiedDaily: true });
-        booking.notifiedDaily = true;
-        await showBookingReminder(booking);
+        if (diffMinutes <= 1 && diffMinutes > 0 && !booking.notifiedDaily) {
+          const bookingRef = ref(db, `bookings/${booking.id}`);
+          await update(bookingRef, { notifiedDaily: true });
+          booking.notifiedDaily = true;
+          await showBookingReminder(booking);
+        }
       }
     }
-  }
-};
+  };
 
   useEffect(() => {
     fetchBookings();
 
-    const unsubscribe = navigation.addListener("focus", () => {
-      fetchBookings();
+    const unsubscribeFocus = navigation.addListener("focus", () => {
+      fetchBookings(); // โหลดข้อมูลใหม่ทุกครั้งที่กลับมาที่หน้า
     });
 
     const reminderInterval = setInterval(() => {
@@ -167,7 +217,7 @@ const MyParkingScreen = ({ route, navigation }) => {
     }, 60000);
 
     return () => {
-      unsubscribe();
+      unsubscribeFocus();
       clearInterval(reminderInterval);
     };
   }, [navigation, username]);
@@ -179,6 +229,11 @@ const MyParkingScreen = ({ route, navigation }) => {
   const handleNotificationPress = () => {
     setShowReminderModal(false);
     navigation.navigate("Notifications", { username });
+  };
+  
+  // เพิ่มฟังก์ชันสำหรับการกดที่ icon คูปอง
+  const handleCouponPress = () => {
+    navigation.navigate("MyCoupon", { username });
   };
 
   const formatBookingType = (type) => {
@@ -231,14 +286,26 @@ const MyParkingScreen = ({ route, navigation }) => {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.notificationButton} onPress={handleNotificationPress}>
-            <Ionicons name="notifications" size={24} color="white" />
-            {unreadCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{unreadCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <View style={styles.headerIcons}>
+            {/* เพิ่ม icon คูปอง */}
+            <TouchableOpacity style={styles.couponButton} onPress={handleCouponPress}>
+              <Ionicons name="ticket" size={24} color="white" />
+              {couponCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{couponCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.notificationButton} onPress={handleNotificationPress}>
+              <Ionicons name="notifications" size={24} color="white" />
+              {unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{unreadCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.header}>
@@ -396,8 +463,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'white',
   },
+  headerIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  couponButton: {
+    padding: 8,
+    marginRight: 8,
+    position: 'relative',
+  },
   notificationButton: {
     padding: 8,
+    position: 'relative',
   },
   header: { 
     alignItems: 'center', 
@@ -507,6 +584,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 5,
     paddingVertical: 1,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   badgeText: {
     color: 'white',
