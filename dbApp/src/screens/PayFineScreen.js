@@ -12,6 +12,11 @@ const PayFineScreen = ({ route, navigation }) => {
     const [fineRounds, setFineRounds] = useState(0);
     const [paymentCompleted, setPaymentCompleted] = useState(false);
 
+    // ฟังก์ชันจัดรูปแบบตัวเลขด้วยลูกน้ำ
+    const formatNumberWithCommas = (number) => {
+        return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    };
+
     // คำนวณค่าปรับ
     const calculateFine = () => {
         if (!bookingData.exitDate || !bookingData.exitTime) return;
@@ -22,6 +27,7 @@ const PayFineScreen = ({ route, navigation }) => {
         setOverdueMinutes(minutesOverdue);
 
         const rounds = Math.ceil(minutesOverdue / 15);
+        //const rounds = Math.min(Math.ceil(minutesOverdue / 15), 10); ถ้าจะให้ limitแค่ 10 ก็เอาตรงนี้ไปแทนในบรรทัดที่ 29 
         setFineRounds(rounds);
 
         const price = bookingData.price ? parseFloat(bookingData.price) : 0;
@@ -79,7 +85,7 @@ const PayFineScreen = ({ route, navigation }) => {
 
             Alert.alert(
                 "Payment Successful",
-                `Fine of ${roundedFineAmount} baht has been paid successfully.`,
+                `Fine of ${formatNumberWithCommas(roundedFineAmount)} baht has been paid successfully.`,
                 [{ text: "OK", onPress: () => navigation.navigate('MyParking', { username }) }]
             );
         } catch (error) {
@@ -131,7 +137,7 @@ const PayFineScreen = ({ route, navigation }) => {
                     </View>
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Original Price:</Text>
-                        <Text style={styles.detailValue}>{Math.round(originalPrice)} baht</Text>
+                        <Text style={styles.detailValue}>{formatNumberWithCommas(Math.round(originalPrice))} baht</Text>
                     </View>
 
                     {bookingData.bookingType === 'visitor' && bookingData.visitorInfo && (
@@ -173,13 +179,13 @@ const PayFineScreen = ({ route, navigation }) => {
 
                             <View style={styles.fineRow}>
                                 <Text style={styles.fineLabel}>Calculation:</Text>
-                                <Text style={styles.fineValue}>{Math.round(originalPrice)} × 2^{fineRounds}</Text>
+                                <Text style={styles.fineValue}>{formatNumberWithCommas(Math.round(originalPrice))} × 2^{fineRounds}</Text>
                             </View>
 
                             <View style={styles.divider} />
                             <View style={styles.totalFineSection}>
                                 <Text style={styles.totalFineLabel}>TOTAL FINE:</Text>
-                                <Text style={styles.totalFineAmount}>{fineAmount} baht</Text>
+                                <Text style={styles.totalFineAmount}>{formatNumberWithCommas(fineAmount)} baht</Text>
                             </View>
                             <View style={styles.divider} />
 
@@ -204,7 +210,7 @@ const PayFineScreen = ({ route, navigation }) => {
                     <View style={styles.successCard}>
                         <Ionicons name="checkmark-circle" size={50} color="#4CAF50" />
                         <Text style={styles.successTitle}>Payment Completed!</Text>
-                        <Text style={styles.successText}>Your fine of {fineAmount} baht has been paid successfully.</Text>
+                        <Text style={styles.successText}>Your fine of {formatNumberWithCommas(fineAmount)} baht has been paid successfully.</Text>
                     </View>
                 )}
 
