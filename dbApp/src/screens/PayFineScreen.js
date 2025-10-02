@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Image } from 'react-native';
 import { db } from '../firebaseConfig';
-import { ref, update, set } from 'firebase/database';
+import { ref, set } from 'firebase/database';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const PayFineScreen = ({ route, navigation }) => {
-    const { username, bookingData } = route.params;
+    const { username, bookingData, onPaid } = route.params; // เพิ่ม onPaid
     const [overdueMinutes, setOverdueMinutes] = useState(0);
     const [fineAmount, setFineAmount] = useState(0);
     const [originalPrice, setOriginalPrice] = useState(0);
@@ -32,7 +32,7 @@ const PayFineScreen = ({ route, navigation }) => {
         } else {
             const fineMultiplier = Math.pow(2, rounds);
             const calculatedFine = price * fineMultiplier;
-            // แก้ fineAmount: ถ้าเป็นจำนวนเต็มเก็บเป็นจำนวนเต็ม ถ้ามีทศนิยมให้ 2 ตำแหน่ง
+            // แก้ fineAmount: ถ้าเป็นจำนวนเต็มเก็บเป็นจำนวนเต็ม ถ้ามีทศนิยมให้มี 2 ตำแหน่ง
             const finalFine = Number.isInteger(calculatedFine)
                 ? calculatedFine
                 : parseFloat(calculatedFine.toFixed(2));
@@ -41,52 +41,57 @@ const PayFineScreen = ({ route, navigation }) => {
     };
 
     const handlePaymentSuccess = async () => {
-        try {
-            const now = new Date();
-            const todayDate = now.toISOString().split('T')[0];
-            const nowTime = now.toTimeString().split(' ')[0].substring(0,5);
+    try {
+        const now = new Date();
+        const todayDate = now.toISOString().split('T')[0];
+        const nowTime = now.toTimeString().split(' ')[0].substring(0,5);
 
-            // fineAmount เวอร์ชันส่ง Firebase ต้องตรงกับ UI
-            let roundedFineAmount = Number.isInteger(fineAmount)
-                ? fineAmount
-                : parseFloat(fineAmount.toFixed(2));
+        let roundedFineAmount = Number.isInteger(fineAmount)
+            ? fineAmount
+            : parseFloat(fineAmount.toFixed(2));
 
-            const payFineData = {
-                id: bookingData.id,
-                username: bookingData.username,
-                bookingType: bookingData.bookingType,
-                rateType: bookingData.rateType,
-                entryDate: bookingData.entryDate,
-                exitDate: bookingData.exitDate,
-                entryTime: bookingData.entryTime,
-                exitTime: bookingData.exitTime,
-                floor: bookingData.floor,
-                slotId: bookingData.slotId,
-                price: bookingData.price || 0,
-                visitorInfo: bookingData.visitorInfo || null,
-                overdueMinutes: overdueMinutes,
-                rounds: fineRounds,
-                fineAmount: roundedFineAmount,
-                fineIssuedDate: todayDate,
-                payFineDate: todayDate,
-                payFineTime: nowTime,
-                payFineStatus: 'paid'
-            };
+        const payFineData = {
+            id: bookingData.id,
+            username: bookingData.username,
+            bookingType: bookingData.bookingType,
+            rateType: bookingData.rateType,
+            entryDate: bookingData.entryDate,
+            exitDate: bookingData.exitDate,
+            entryTime: bookingData.entryTime,
+            exitTime: bookingData.exitTime,
+            floor: bookingData.floor,
+            slotId: bookingData.slotId,
+            price: bookingData.price || 0,
+            visitorInfo: bookingData.visitorInfo || null,
+            overdueMinutes,
+            rounds: fineRounds,
+            fineAmount: roundedFineAmount,
+            fineIssuedDate: todayDate,
+            payFineDate: todayDate,
+            payFineTime: nowTime,
+            payFineStatus: 'paid'
+        };
 
-            await set(ref(db, `payFine/${bookingData.id}`), payFineData);
+        // เก็บข้อมูลลง payFine/{bookingId} เท่านั้น
+        await set(ref(db, `payFine/${bookingData.id}`), payFineData);
 
-            setPaymentCompleted(true);
+        setPaymentCompleted(true);
 
-            Alert.alert(
-                "Payment Successful",
-                `Fine of ${roundedFineAmount} baht has been paid successfully.`,
-                [{ text: "OK", onPress: () => navigation.navigate('MyParking', { username }) }]
-            );
-        } catch (error) {
-            console.error("Payment error:", error);
-            Alert.alert("Error", "Failed to process payment. Please try again.");
+        // callback กลับไป MyParkingInfoScreen ให้ state เปลี่ยน
+        if (onPaid) {
+            onPaid();
         }
-    };
+
+        Alert.alert(
+            "Payment Successful",
+            `Fine of ${roundedFineAmount} baht has been paid successfully.`,
+            [{ text: "OK", onPress: () => navigation.navigate('MyParking', { username }) }]
+        );
+    } catch (error) {
+        console.error("Payment error:", error);
+        Alert.alert("Error", "Failed to process payment. Please try again.");
+    }
+};
 
     useEffect(() => {
         calculateFine();

@@ -1,16 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '../firebaseConfig';
-import { ref, update, push } from 'firebase/database';
+import { ref, get, push, update } from 'firebase/database';
 
 const MyParkingInfoScreen = ({ route, navigation }) => {
     const { username, bookingData } = route.params;
     const [showBarrierModal, setShowBarrierModal] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
 
-    // state ใหม่สำหรับติดตาม payFineStatus
-    const [payFineStatus, setPayFineStatus] = useState(bookingData.payFineStatus);
+    // state ใหม่ สำหรับติดตาม payFineStatus
+    const [payFineStatus, setPayFineStatus] = useState(null);
+
+    // เช็ก payFineStatus จาก Firebase
+    useEffect(() => {
+        const payFineRef = ref(db, `payFine/${bookingData.id}`);
+        get(payFineRef)
+            .then(snapshot => {
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    if (data.payFineStatus === 'paid') {
+                        setPayFineStatus('paid');
+                    } else {
+                        setPayFineStatus('unpaid');
+                    }
+                } else {
+                    setPayFineStatus('unpaid');
+                }
+            })
+            .catch(error => {
+                console.error('Failed to fetch payFineStatus:', error);
+                setPayFineStatus('unpaid');
+            });
+    }, [bookingData.id]);
 
     // Check if booking is overdue
     const now = new Date();
@@ -20,7 +42,6 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         isOverdue = now > exitDateTime;
     }
 
-    // Check if fine is paid
     const isPaidFine = payFineStatus === 'paid';
 
     // Navigation Handlers
@@ -40,12 +61,12 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
 
     const handleCancelBooking = () => setShowCancelModal(true);
 
-    // handler ไปหน้า PayFine พร้อม callback
+    // handler ไปหน้า PayFine พร้อม callback onPaid
     const handlePayFine = () => {
         navigation.navigate('PayFine', { 
             username, 
             bookingData,
-            onPaid: () => setPayFineStatus('paid') // callback เมื่อจ่ายแล้ว
+            onPaid: () => setPayFineStatus('paid') // callback เมื่อจ่ายแล้ว อัปเดต state
         });
     };
 
@@ -287,7 +308,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                             </TouchableOpacity>
                         </View>
 
-                        {/* Pay Fine button centered below upper row */}
+                        {/* ✅ ปุ่ม Pay Fine จะแสดงก็ต่อเมื่อ overdue และยังไม่จ่าย (แก้ไขเพิ่ม) */}
                         {isOverdue && !isPaidFine && (
                             <View style={styles.payFineWrapper}>
                                 <TouchableOpacity style={styles.payFineButton} onPress={handlePayFine}>
