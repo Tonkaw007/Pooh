@@ -13,9 +13,36 @@ const MyParkingScreen = ({ route, navigation }) => {
   const [currentReminder, setCurrentReminder] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [couponCount, setCouponCount] = useState(0);
+  
+  // State สำหรับ Demo Popup ใหม่
+  const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
 
   const bookingsRef = useRef([]);
 
+  // ฟังก์ชันเปิด Demo Popup
+  const showParkingProblemDemo = () => {
+    setShowParkingProblemModal(true);
+  };
+
+  // ฟังก์ชันเมื่อกดตกลง (ย้ายที่จอด)
+  const handleAcceptRelocation = () => {
+    Alert.alert(
+      "Parking Relocated Successfully", 
+      "Your booking has been moved to Slot C05",
+      [{ text: "OK", onPress: () => setShowParkingProblemModal(false) }]
+    );
+  };
+
+  // ฟังก์ชันเมื่อกดปฏิเสธ (รับคูปอง)
+  const handleDeclineRelocation = () => {
+    Alert.alert(
+      "Compensation Coupon Received", 
+      "You have received a 10% discount coupon for your next booking. The refund will be processed to your account within 3-5 business days.",
+      [{ text: "OK", onPress: () => setShowParkingProblemModal(false) }]
+    );
+  };
+
+  // ส่วนที่เหลือของโค้ดเดิม...
   const handleDemoPopup = async (type = "resident") => {
     try {
       const snapshot = await get(child(ref(db), "bookings"));
@@ -368,8 +395,17 @@ const MyParkingScreen = ({ route, navigation }) => {
           <Text style={styles.bookAgainText}>Show Visitor Slot B06 Demo</Text>
         </TouchableOpacity>
 
+        {/* ปุ่มทดสอบ Popup ใหม่ */}
+        <TouchableOpacity
+          style={[styles.bookAgainButton, { backgroundColor: '#FF5252', marginTop: 10 }]}
+          onPress={showParkingProblemDemo}
+        >
+          <Text style={styles.bookAgainText}>Demo: Parking Slot Unavailable</Text>
+        </TouchableOpacity>
+
       </ScrollView>
 
+      {/* Modal เดิมสำหรับแจ้งเตือนเวลาใกล้หมด */}
       <Modal
         visible={showReminderModal}
         transparent
@@ -396,6 +432,51 @@ const MyParkingScreen = ({ route, navigation }) => {
             >
               <Text style={styles.modalButtonText}>OK</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal ใหม่สำหรับ Demo ที่จอดรถไม่พร้อมใช้งาน */}
+      <Modal
+        visible={showParkingProblemModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowParkingProblemModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { width: '85%' }]}>
+            <View style={styles.warningIconContainer}>
+              <Ionicons name="warning" size={50} color="#FF9800" />
+            </View>
+            
+            <Text style={styles.modalTitle}>Parking Slot Unavailable</Text>
+            
+            <Text style={styles.modalMessage}>
+              The parking slot B03 you booked is currently unavailable 
+              because the previous vehicle exceeded the parking time.
+            </Text>
+            
+            <Text style={styles.modalMessage}>
+              We apologize for the inconvenience. Please choose one of the following options:
+            </Text>
+            
+            <View style={styles.optionsContainer}>
+              <TouchableOpacity
+                style={[styles.optionButton, { backgroundColor: '#4CAF50' }]}
+                onPress={handleAcceptRelocation}
+              >
+                <Text style={styles.optionButtonText}>Accept Relocation</Text>
+                <Text style={styles.optionSubtext}>We will move your booking to Slot C05</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.optionButton, { backgroundColor: '#FF5252' }]}
+                onPress={handleDeclineRelocation}
+              >
+                <Text style={styles.optionButtonText}>Decline & Get Coupon</Text>
+                <Text style={styles.optionSubtext}>Receive 10% discount coupon + Full refund</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -486,16 +567,16 @@ const styles = StyleSheet.create({
     marginTop: 5,
     flexDirection: 'column',  
     gap: 10,                    
-},
-addButton: {
-   width: 40,
-   height: 40,
-   borderRadius: 20,
-   backgroundColor: 'white',
-   justifyContent: 'center',
-   alignItems: 'center',
-},
-parkingCard: {
+  },
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  parkingCard: {
     backgroundColor: 'white',
     borderRadius: 15,
     padding: 20,
@@ -633,6 +714,31 @@ parkingCard: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  // สไตล์ใหม่สำหรับ Modal ที่จอดรถไม่พร้อมใช้งาน
+  warningIconContainer: {
+    marginBottom: 15,
+  },
+  optionsContainer: {
+    width: '100%',
+    marginTop: 10,
+  },
+  optionButton: {
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  optionButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  optionSubtext: {
+    color: 'white',
+    fontSize: 12,
+    marginTop: 5,
+    textAlign: 'center',
   },
 });
 
