@@ -154,12 +154,30 @@ const MyParkingScreen = ({ route, navigation }) => {
     }
   };
 
+  // 🔧 แก้ไข: ป้องกัน push แจ้งเตือนซ้ำ
   const showBookingReminder = async (booking) => {
-    const isVisitor = booking.visitorInfo !== undefined;
+    const notifRef = ref(db, `notifications/${username}`);
+    const snapshot = await get(notifRef);
+    const notifData = snapshot.val() || {};
 
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10);
-    const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const alreadyNotified = Object.values(notifData).some(
+      n => n.message.includes(`Slot ${booking.slotId} ends at ${booking.exitTime}`)
+    );
+
+    if (!alreadyNotified) {
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 10);
+      const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+      await push(notifRef, {
+        date: dateStr,
+        time: timeStr,
+        message: `Reminder: Parking Slot ${booking.slotId} ends at ${booking.exitTime}`,
+        read: false,
+        timestamp: serverTimestamp(),
+        type: "Time reminder (10 minutes before end)"
+      });
+    }
 
     setCurrentReminder({
       username: booking.bookingType === "visitor" 
@@ -167,24 +185,15 @@ const MyParkingScreen = ({ route, navigation }) => {
                 : booking.username || "N/A",
       slotId: booking.slotId || 'N/A',
       floor: booking.floor || 'N/A',
-      licensePlate: isVisitor 
+      licensePlate: booking.visitorInfo 
                     ? booking.visitorInfo?.licensePlate || 'N/A' 
                     : booking.licensePlate || 'N/A',
       endTime: booking.exitTime,
     });
     setShowReminderModal(true);
-
-    const notifRef = ref(db, `notifications/${username}`);
-    await push(notifRef, {
-      date: dateStr,
-      time: timeStr,
-      message: `Reminder: Parking Slot ${booking.slotId} ends at ${booking.exitTime}`,
-      read: false,
-      timestamp: serverTimestamp(),
-      type: "Time reminder (10 minutes before end)"
-    });
   };
 
+  // 🔧 แก้ไข: ให้รายวัน/รายเดือนแจ้งเตือนตรงเวลา 23:50
   const checkBookingReminders = async () => {
     const now = new Date();
     const activeBookings = bookingsRef.current;
@@ -206,9 +215,11 @@ const MyParkingScreen = ({ route, navigation }) => {
         const exitDate = new Date(booking.exitDate);
         exitDate.setDate(exitDate.getDate() - 1);
         exitDate.setHours(23, 50, 0, 0);
-        const diffMinutes = (exitDate - now) / 60000;
 
-        if (diffMinutes <= 1 && diffMinutes > 0 && !booking.notifiedDaily) {
+        const nowMinutes = Math.floor(now.getTime() / 60000);
+        const exitMinutes = Math.floor(exitDate.getTime() / 60000);
+
+        if (exitMinutes === nowMinutes && !booking.notifiedDaily) {
           const bookingRef = ref(db, `bookings/${booking.id}`);
           await update(bookingRef, { notifiedDaily: true });
           booking.notifiedDaily = true;
@@ -466,15 +477,15 @@ const MyParkingScreen = ({ route, navigation }) => {
                 onPress={handleAcceptRelocation}
               >
                 <Text style={styles.optionButtonText}>Accept Relocation</Text>
-                <Text style={styles.optionSubtext}>We will move your booking to Slot C05</Text>
+                <Text style={styles.optionSubText}>Move to Slot C05</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={[styles.optionButton, { backgroundColor: '#FF5252' }]}
+                style={[styles.optionButton, { backgroundColor: '#2196F3' }]}
                 onPress={handleDeclineRelocation}
               >
-                <Text style={styles.optionButtonText}>Decline & Get Coupon</Text>
-                <Text style={styles.optionSubtext}>Receive 10% discount coupon + Full refund</Text>
+                <Text style={styles.optionButtonText}>Decline & Receive Coupon</Text>
+                <Text style={styles.optionSubText}>10% off next booking</Text>
               </TouchableOpacity>
             </View>
           </View>

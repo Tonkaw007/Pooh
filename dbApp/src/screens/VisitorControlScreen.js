@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react'; 
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { db } from '../firebaseConfig';
@@ -7,60 +7,104 @@ import { ref, update, get, push } from 'firebase/database';
 const VisitorControlScreen = ({ route, navigation }) => {
     const { sessionId } = route.params || {}; // ใช้ sessionId จาก params
 
+    // State ใหม่สำหรับเก็บสถานะ payFine และ overdue
+    const [payFineStatus, setPayFineStatus] = useState('unpaid');
+    const [isOverdue, setIsOverdue] = useState(false);
+
+    // useEffect เช็ก payFine และ overdue จาก Firebase
+    useEffect(() => {
+        if (!sessionId) return;
+
+        const sessionKey = sessionId.includes('-') 
+            ? sessionId.substring(0, sessionId.lastIndexOf('-')) 
+            : sessionId;
+
+        // เช็ก payFine status
+        get(ref(db, `payFine/${sessionKey}`))
+            .then(snapshot => {
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    setPayFineStatus(data.payFineStatus || 'unpaid');
+                } else {
+                    setPayFineStatus('unpaid');
+                }
+            })
+            .catch(error => console.error('Failed to fetch payFineStatus:', error));
+
+        // เช็กว่า booking เกินเวลา
+        get(ref(db, `bookings/${sessionKey}`))
+            .then(snapshot => {
+                if (snapshot.exists()) {
+                    const booking = snapshot.val();
+                    if (booking.exitDate && booking.exitTime) {
+                        const exitDateTime = new Date(`${booking.exitDate}T${booking.exitTime}`);
+                        setIsOverdue(new Date() > exitDateTime);
+                    }
+                }
+            })
+            .catch(error => console.error('Failed to fetch booking:', error));
+    }, [sessionId]);
+
     const handleControl = async (action) => {
-    console.log("🔍 handleControl called with:", action);
-    console.log("original sessionId:", sessionId);
+        console.log("🔍 handleControl called with:", action);
+        console.log("original sessionId:", sessionId);
 
-    if (!sessionId) {
-        Alert.alert("Error", "Session ID is missing.");
-        return;
-    }
-
-    const sessionKey = sessionId.includes('-') 
-        ? sessionId.substring(0, sessionId.lastIndexOf('-')) 
-        : sessionId;
-    console.log("🔑 sessionKey used for DB lookup:", sessionKey);
-
-    const status = action === 'Open Barrier' ? 'lifted' : 'lowered';
-    const now = new Date();
-    const actionDate = now.toISOString().slice(0, 10); 
-    const actionTime = now.toTimeString().slice(0, 5); 
-
-    try {
-        const bookingsSnap = await get(ref(db, 'bookings'));
-        if (!bookingsSnap.exists()) {
-            Alert.alert("Error", "No bookings found.");
+        if (!sessionId) {
+            Alert.alert("Error", "Session ID is missing.");
             return;
         }
 
-        const bookings = bookingsSnap.val();
-        console.log("📂 bookings from DB:", bookings);
+        const sessionKey = sessionId.includes('-') 
+            ? sessionId.substring(0, sessionId.lastIndexOf('-')) 
+            : sessionId;
+        console.log("🔑 sessionKey used for DB lookup:", sessionKey);
 
-        const existingKey = Object.keys(bookings).find(
-            key => key === sessionKey
-        );
-
-        if (!existingKey) {
-            Alert.alert("Error", "Booking not found for this session.");
+        // ถ้า overdue และยังไม่จ่ายค่าปรับ ล็อคปุ่ม
+        if (isOverdue && payFineStatus !== 'paid') {
+            Alert.alert("Action not allowed", "Please pay the fine first.");
             return;
         }
 
-        // บันทึก log ของ barrier
-        const logRef = ref(db, `bookings/${existingKey}/barrierLogs`);
-        await push(logRef, {
-            status: status,
-            date: actionDate,
-            time: actionTime
-        });
+        const status = action === 'Open Barrier' ? 'lifted' : 'lowered';
+        const now = new Date();
+        const actionDate = now.toISOString().slice(0, 10); 
+        const actionTime = now.toTimeString().slice(0, 5); 
 
-        console.log("✅ Pushed barrier log:", { status, actionDate, actionTime });
+        try {
+            const bookingsSnap = await get(ref(db, 'bookings'));
+            if (!bookingsSnap.exists()) {
+                Alert.alert("Error", "No bookings found.");
+                return;
+            }
 
-        Alert.alert("Success", `Barrier action '${status}' has been logged.`);
-    } catch (error) {
-        console.error("❌ Failed to log barrier action:", error);
-        Alert.alert("Error", "Failed to log barrier action.");
-    }
-};
+            const bookings = bookingsSnap.val();
+            console.log("📂 bookings from DB:", bookings);
+
+            const existingKey = Object.keys(bookings).find(
+                key => key === sessionKey
+            );
+
+            if (!existingKey) {
+                Alert.alert("Error", "Booking not found for this session.");
+                return;
+            }
+
+            // บันทึก log ของ barrier
+            const logRef = ref(db, `bookings/${existingKey}/barrierLogs`);
+            await push(logRef, {
+                status: status,
+                date: actionDate,
+                time: actionTime
+            });
+
+            console.log(" Pushed barrier log:", { status, actionDate, actionTime });
+
+            Alert.alert("Success", `Barrier action '${status}' has been logged.`);
+        } catch (error) {
+            console.error("❌ Failed to log barrier action:", error);
+            Alert.alert("Error", "Failed to log barrier action.");
+        }
+    };
 
     const handleBack = () => navigation.goBack();
 
@@ -113,9 +157,14 @@ const VisitorControlScreen = ({ route, navigation }) => {
 
                     <View style={styles.buttonContainer}>
                         <TouchableOpacity
-                            style={[styles.controlButton, styles.openButton]}
+                            style={[
+                                styles.controlButton, 
+                                styles.openButton,
+                                (isOverdue && payFineStatus !== 'paid') ? { backgroundColor: '#B0BEC5' } : {}
+                            ]}
                             onPress={() => handleControl('Open Barrier')}
                             activeOpacity={0.8}
+                            disabled={isOverdue && payFineStatus !== 'paid'} //  ปุ่มล็อคถ้า overdue & unpaid
                         >
                             <View style={styles.buttonContent}>
                                 <Ionicons name="arrow-up" size={32} color="white" />
@@ -125,9 +174,14 @@ const VisitorControlScreen = ({ route, navigation }) => {
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.controlButton, styles.closeButton]}
+                            style={[
+                                styles.controlButton, 
+                                styles.closeButton,
+                                (isOverdue && payFineStatus !== 'paid') ? { backgroundColor: '#B0BEC5' } : {}
+                            ]}
                             onPress={() => handleControl('Close Barrier')}
                             activeOpacity={0.8}
+                            disabled={isOverdue && payFineStatus !== 'paid'} //  ปุ่มล็อคถ้า overdue & unpaid
                         >
                             <View style={styles.buttonContent}>
                                 <Ionicons name="arrow-down" size={32} color="white" />
@@ -307,11 +361,9 @@ const styles = StyleSheet.create({
         shadowRadius: 3.84,
         elevation: 3,
     },
-
     openButton: {
         backgroundColor: '#4CAF50',
     },
-
     closeButton: {
         backgroundColor: '#ff4d00ff',
     },
@@ -319,7 +371,6 @@ const styles = StyleSheet.create({
     buttonContent: {
         alignItems: 'center',
     },
-
     buttonText: {
         color: 'white',
         fontSize: 18,
@@ -327,13 +378,11 @@ const styles = StyleSheet.create({
         marginTop: 8,
         marginBottom: 4,
     },
-
     buttonSubtext: {
         color: 'rgba(255, 255, 255, 0.8)',
         fontSize: 12,
         textAlign: 'center',
     },
-
     instructionText: {
         fontSize: 14,
         color: '#4A5568',
