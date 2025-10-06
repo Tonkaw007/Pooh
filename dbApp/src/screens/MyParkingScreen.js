@@ -13,18 +13,14 @@ const MyParkingScreen = ({ route, navigation }) => {
   const [currentReminder, setCurrentReminder] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [couponCount, setCouponCount] = useState(0);
-  
-  // State สำหรับ Demo Popup ใหม่
+
+  // Demo Popup ใหม่
   const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
 
   const bookingsRef = useRef([]);
 
-  // ฟังก์ชันเปิด Demo Popup
-  const showParkingProblemDemo = () => {
-    setShowParkingProblemModal(true);
-  };
+  const showParkingProblemDemo = () => setShowParkingProblemModal(true);
 
-  // ฟังก์ชันเมื่อกดตกลง (ย้ายที่จอด)
   const handleAcceptRelocation = () => {
     Alert.alert(
       "Parking Relocated Successfully", 
@@ -33,7 +29,6 @@ const MyParkingScreen = ({ route, navigation }) => {
     );
   };
 
-  // ฟังก์ชันเมื่อกดปฏิเสธ (รับคูปอง)
   const handleDeclineRelocation = () => {
     Alert.alert(
       "Compensation Coupon Received", 
@@ -42,7 +37,6 @@ const MyParkingScreen = ({ route, navigation }) => {
     );
   };
 
-  // ส่วนที่เหลือของโค้ดเดิม...
   const handleDemoPopup = async (type = "resident") => {
     try {
       const snapshot = await get(child(ref(db), "bookings"));
@@ -86,30 +80,9 @@ const MyParkingScreen = ({ route, navigation }) => {
   const fetchCoupons = async () => {
     try {
       const demoCoupons = [
-        {
-          id: '1',
-          createdDate: new Date().toISOString(),
-          expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          reason: "The previous vehicle exceeded parking time, causing your delay",
-          discountType: 'hourly',
-          used: false
-        },
-        {
-          id: '2',
-          createdDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          expiryDate: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(),
-          reason: "Compensation for maintenance delay",
-          discountType: 'daily',
-          used: false
-        },
-        {
-          id: '3',
-          createdDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          expiryDate: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(),
-          reason: "Apology for system error during your last booking",
-          discountType: 'monthly',
-          used: false
-        }
+        { id: '1', createdDate: new Date().toISOString(), expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), reason: "The previous vehicle exceeded parking time, causing your delay", discountType: 'hourly', used: false },
+        { id: '2', createdDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), expiryDate: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(), reason: "Compensation for maintenance delay", discountType: 'daily', used: false },
+        { id: '3', createdDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), expiryDate: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(), reason: "Apology for system error during your last booking", discountType: 'monthly', used: false }
       ];
 
       const activeCoupons = demoCoupons.filter(coupon => {
@@ -131,7 +104,7 @@ const MyParkingScreen = ({ route, navigation }) => {
       const data = snapshot.val() || {};
 
       const activeBookings = Object.values(data).filter(
-        (b) => b.username === username && b.slotId && b.status !== "cancelled"
+        (b) => (b.username === username || (userType === "visitor" && b.visitorInfo?.visitorUsername === username)) && b.slotId && b.status !== "cancelled"
       );
 
       setBookings(activeBookings);
@@ -140,10 +113,18 @@ const MyParkingScreen = ({ route, navigation }) => {
 
       checkBookingReminders();
 
-      const notifSnapshot = await get(child(ref(db), `notifications/${username}`));
-      const notifData = notifSnapshot.val() || {};
-      const unread = Object.values(notifData).filter(n => !n.read).length;
-      setUnreadCount(unread);
+      // Fetch notifications สำหรับ resident และ visitor
+      if(userType === "visitor") {
+        const notifSnapshot = await get(child(ref(db), `notifications/${b.ownerUsername || "Khemika Meepin"}/${username}`));
+        const notifData = notifSnapshot.val() || {};
+        const unread = Object.values(notifData).filter(n => !n.read).length;
+        setUnreadCount(unread);
+      } else {
+        const notifSnapshot = await get(child(ref(db), `notifications/${username}`));
+        const notifData = notifSnapshot.val() || {};
+        const unread = Object.values(notifData).filter(n => !n.read).length;
+        setUnreadCount(unread);
+      }
 
       await fetchCoupons();
 
@@ -154,9 +135,12 @@ const MyParkingScreen = ({ route, navigation }) => {
     }
   };
 
-  // 🔧 แก้ไข: ป้องกัน push แจ้งเตือนซ้ำ
   const showBookingReminder = async (booking) => {
-    const notifRef = ref(db, `notifications/${username}`);
+    let notifPath = userType === "visitor"
+                    ? `notifications/${booking.ownerUsername || "Khemika Meepin"}/${username}`
+                    : `notifications/${username}`;
+
+    const notifRef = ref(db, notifPath);
     const snapshot = await get(notifRef);
     const notifData = snapshot.val() || {};
 
@@ -168,17 +152,23 @@ const MyParkingScreen = ({ route, navigation }) => {
       const now = new Date();
       const dateStr = now.toISOString().slice(0, 10);
       const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-
-      await push(notifRef, {
-        date: dateStr,
-        time: timeStr,
-        message: `Reminder: Parking Slot ${booking.slotId} ends at ${booking.exitTime}`,
-        read: false,
-        timestamp: serverTimestamp(),
-        type: "Time reminder (10 minutes before end)"
-      });
+ 
+    // ฐานข้อมูลการแจ้งเตือน
+    await push(notifRef, {  
+     date: dateStr,
+     time: timeStr,
+     message: `Reminder: Parking Slot ${booking.slotId} ends at ${booking.exitTime}`,
+     read: false,
+     timestamp: serverTimestamp(),
+     type: booking.rateType === 'hourly'
+        ? "Hourly reminder (10 minutes before end)"
+        : booking.rateType === 'daily'
+        ? "Daily reminder (10 minutes before end)"
+        : booking.rateType === 'monthly'
+        ? "Monthly reminder (10 minutes before end)"
+        : null 
+});
     }
-
     setCurrentReminder({
       username: booking.bookingType === "visitor" 
                 ? booking.visitorInfo?.visitorUsername || "N/A" 
@@ -193,7 +183,6 @@ const MyParkingScreen = ({ route, navigation }) => {
     setShowReminderModal(true);
   };
 
-  // 🔧 แก้ไข: ให้รายวัน/รายเดือนแจ้งเตือนตรงเวลา 23:50
   const checkBookingReminders = async () => {
     const now = new Date();
     const activeBookings = bookingsRef.current;
@@ -204,12 +193,14 @@ const MyParkingScreen = ({ route, navigation }) => {
       if (booking.rateType === 'hourly') {
         const endDate = new Date(`${booking.entryDate}T${booking.exitTime}:00`);
         const diffMinutes = (endDate - now) / 60000;
+
         if (diffMinutes <= 10 && diffMinutes > 0 && !booking.notifiedHour) {
           const bookingRef = ref(db, `bookings/${booking.id}`);
           await update(bookingRef, { notifiedHour: true });
           booking.notifiedHour = true;
           await showBookingReminder(booking);
         }
+
       } else {
         if (!booking.exitDate) continue;
         const exitDate = new Date(booking.exitDate);
@@ -232,9 +223,7 @@ const MyParkingScreen = ({ route, navigation }) => {
   useEffect(() => {
     fetchBookings();
 
-    const unsubscribeFocus = navigation.addListener("focus", () => {
-      fetchBookings();
-    });
+    const unsubscribeFocus = navigation.addListener("focus", () => fetchBookings());
 
     const reminderInterval = setInterval(() => {
       checkBookingReminders();
@@ -247,16 +236,12 @@ const MyParkingScreen = ({ route, navigation }) => {
   }, [navigation, username]);
 
   const handleBack = () => navigation.navigate("BookingType", { username });
-  const handleCardPress = (bookingData) => {
-    navigation.navigate("MyParkingInfo", { username, bookingData, userType });
-  };
+  const handleCardPress = (bookingData) => navigation.navigate("MyParkingInfo", { username, bookingData, userType });
   const handleNotificationPress = () => {
     setShowReminderModal(false);
     navigation.navigate("Notifications", { username });
   };
-  const handleCouponPress = () => {
-    navigation.navigate("MyCoupon", { username });
-  };
+  const handleCouponPress = () => navigation.navigate("MyCoupon", { username });
 
   const formatBookingType = (type) => {
     if (type === "hourly") return "Hourly";
@@ -289,6 +274,7 @@ const MyParkingScreen = ({ route, navigation }) => {
       </View>
     );
   }
+
 
   return (
     <View style={styles.container}>

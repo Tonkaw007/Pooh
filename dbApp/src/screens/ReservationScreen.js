@@ -13,11 +13,11 @@ const ReservationScreen = ({ navigation, route }) => {
   const [showFloorDropdown, setShowFloorDropdown] = useState(false);
 
   const [selectedEntryDate, setSelectedEntryDate] = useState(
-  bookingData.entryDate.slice(0, 10)
-);
-const [selectedExitDate, setSelectedExitDate] = useState(
-  bookingData.rateType === 'hourly' ? bookingData.entryDate.slice(0, 10) : bookingData.exitDate.slice(0, 10)
-);
+    bookingData.entryDate.slice(0, 10)
+  );
+  const [selectedExitDate, setSelectedExitDate] = useState(
+    bookingData.rateType === 'hourly' ? bookingData.entryDate.slice(0, 10) : bookingData.exitDate.slice(0, 10)
+  );
 
   const floors = ['1st Floor', '2nd Floor', '3rd Floor', '4th Floor'];
 
@@ -67,17 +67,25 @@ const [selectedExitDate, setSelectedExitDate] = useState(
       Object.keys(updatedSlots).forEach((floor) => {
         Object.keys(updatedSlots[floor]).forEach((slotId) => {
           updatedSlots[floor][slotId].status = 'available';
+
           Object.values(allBookings).forEach((booking) => {
-            if (booking.slotId === slotId) {
-              const newEntry = selectedEntryDate;
-const newExit = selectedExitDate;
-const existEntry = booking.entryDate.slice(0, 10);
-const existExit = booking.exitDate.slice(0, 10);
+            if (booking.slotId === slotId && booking.floor === floor) {
+              const bookingEntry = new Date(`${booking.entryDate}T${booking.entryTime || '00:00'}`);
+              const bookingExit = new Date(`${booking.exitDate}T${booking.exitTime || '23:59'}`);
+              const selectedEntry = new Date(`${selectedEntryDate}T${bookingData.entryTime || '00:00'}`);
+              const selectedExit = new Date(`${selectedExitDate}T${bookingData.exitTime || '23:59'}`);
 
-if (newEntry <= existExit && newExit >= existEntry) {
-  updatedSlots[floor][slotId].status = 'unavailable';
-}
-
+              if (bookingData.rateType === 'hourly') {
+                // เช็คช่วงเวลาซ้อนทับสำหรับ hourly
+                if (selectedEntry < bookingExit && selectedExit > bookingEntry) {
+                  updatedSlots[floor][slotId].status = 'unavailable';
+                }
+              } else {
+                // เช็ควันซ้อนทับสำหรับ daily/monthly
+                if (selectedEntryDate <= booking.exitDate && selectedExitDate >= booking.entryDate) {
+                  updatedSlots[floor][slotId].status = 'unavailable';
+                }
+              }
             }
           });
         });
@@ -88,7 +96,7 @@ if (newEntry <= existExit && newExit >= existEntry) {
     });
 
     return () => unsubscribeSlots();
-  }, [selectedEntryDate, selectedExitDate, selectedFloor]);
+  }, [selectedEntryDate, selectedExitDate, selectedFloor, bookingData]);
 
   const handleSlotSelection = (slotId) => {
     if (slots[slotId]?.status === 'available') {
@@ -130,19 +138,18 @@ if (newEntry <= existExit && newExit >= existEntry) {
         return;
       } else {
         navigation.navigate('Payment', {
-  username,
-  bookingData: {
-    ...bookingData,
-    entryDate: selectedEntryDate,   // YYYY-MM-DD
-    exitDate: selectedExitDate,     // YYYY-MM-DD
-    licensePlate: bookingData.licensePlate,
-    visitorInfo: bookingData.visitorInfo,
-  },
-  selectedSlot,
-  selectedFloor,
-  bookingType,
-});
-
+          username,
+          bookingData: {
+            ...bookingData,
+            entryDate: selectedEntryDate,
+            exitDate: selectedExitDate,
+            licensePlate: bookingData.licensePlate,
+            visitorInfo: bookingData.visitorInfo,
+          },
+          selectedSlot,
+          selectedFloor,
+          bookingType,
+        });
       }
     }, { onlyOnce: true });
   };
