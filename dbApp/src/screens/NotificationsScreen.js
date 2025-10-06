@@ -5,7 +5,7 @@ import { db } from '../firebaseConfig';
 import { ref, onValue, update } from 'firebase/database';
 
 const NotificationsScreen = ({ route, navigation }) => {
-  const { username } = route.params;
+  const { username, userType, ownerUsername } = route.params; // เพิ่ม userType และ ownerUsername
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -13,7 +13,12 @@ const NotificationsScreen = ({ route, navigation }) => {
   // Fetch notifications
   const fetchNotifications = () => {
     try {
-      const notifRef = ref(db, `notifications/${username}`);
+      // เลือก path สำหรับ visitor หรือ resident
+      const notifPath = userType === "visitor" 
+                         ? `notifications/${ownerUsername || "Khemika Meepin"}/${username}` 
+                         : `notifications/${username}`;
+      const notifRef = ref(db, notifPath);
+
       onValue(notifRef, (snapshot) => {
         const data = snapshot.val() || {};
         const notificationsArray = Object.keys(data)
@@ -38,7 +43,10 @@ const NotificationsScreen = ({ route, navigation }) => {
 
   const markAsRead = async (notificationId) => {
     try {
-      const notifRef = ref(db, `notifications/${username}/${notificationId}`);
+      const notifPath = userType === "visitor" 
+                         ? `notifications/${ownerUsername || "Khemika Meepin"}/${username}/${notificationId}`
+                         : `notifications/${username}/${notificationId}`;
+      const notifRef = ref(db, notifPath);
       await update(notifRef, { read: true });
       setNotifications(prev => prev.map(notif => notif.id === notificationId ? { ...notif, read: true } : notif));
       setUnreadCount(prev => prev - 1);
@@ -52,7 +60,10 @@ const NotificationsScreen = ({ route, navigation }) => {
     try {
       const unreadNotifications = notifications.filter(notif => !notif.read);
       for (const notif of unreadNotifications) {
-        const notifRef = ref(db, `notifications/${username}/${notif.id}`);
+        const notifPath = userType === "visitor" 
+                           ? `notifications/${ownerUsername || "Khemika Meepin"}/${username}/${notif.id}`
+                           : `notifications/${username}/${notif.id}`;
+        const notifRef = ref(db, notifPath);
         await update(notifRef, { read: true });
       }
       setNotifications(prev => prev.map(notif => ({ ...notif, read: true })));
@@ -64,12 +75,11 @@ const NotificationsScreen = ({ route, navigation }) => {
     }
   };
 
-  useEffect(() => { fetchNotifications(); }, [username]);
+  useEffect(() => { fetchNotifications(); }, [username, ownerUsername]);
 
   const handleBack = () => { navigation.goBack(); };
   const handleNotificationPress = (item) => { if (!item.read) markAsRead(item.id); };
 
-  // แปลง timestamp เป็นวันที่และเวลา
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return { date: "Unknown date", time: "" };
     try {

@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Image } from 'react-native';
 import { db } from '../firebaseConfig';
-import { ref, update, get, push, child } from 'firebase/database';
+import { ref, update, get, push, child, onValue } from 'firebase/database';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const PaymentScreen = ({ navigation, route }) => {
   const { username, bookingData, selectedSlot, selectedFloor, bookingType } = route.params;
   const [residentLicense, setResidentLicense] = useState('');
+  const [prompayStatus, setPrompayStatus] = useState('pending');
 
   // ดึง license plate ของ resident
   const fetchUserBookings = async () => {
@@ -25,10 +26,24 @@ const PaymentScreen = ({ navigation, route }) => {
     }
   };
 
+  // เช็คสถานะ Prompay auto
   useEffect(() => {
     fetchUserBookings();
+
+    const bookingId = bookingData.id;
+    if (!bookingId) return;
+
+    const promRef = ref(db, `prompayPayments/${bookingId}`);
+    const unsubscribe = onValue(promRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setPrompayStatus(snapshot.val().status || 'pending');
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
+  // handle Payment button เดิม
   const handlePaymentSuccess = async () => {
     try {
       const updates = {};
@@ -46,22 +61,17 @@ const PaymentScreen = ({ navigation, route }) => {
         entry.setMonth(entry.getMonth() + (bookingData.durationMonths || 1));
         exitDate = entry.toISOString().slice(0, 10); // รายเดือน
       }
-      // daily ใช้ exitDate ตามที่ user เลือก
 
-      // ==============================
       // กำหนด date และ timeRange สำหรับ slot
-      // ==============================
       let slotDate;
       let slotTimeRange = '00:00-23:59'; // default สำหรับ daily/monthly
 
       if (bookingData.rateType === 'hourly') {
         slotDate = entryDate;
-        // ใช้เวลาที่ user เลือกแทน 00:00-23:59
         const startTime = bookingData.entryTime || '00:00';
         const endTime = bookingData.exitTime || '23:59';
         slotTimeRange = `${startTime}-${endTime}`;
       } else {
-        // daily/monthly
         slotDate = `${entryDate} - ${exitDate}`;
       }
 
@@ -71,28 +81,22 @@ const PaymentScreen = ({ navigation, route }) => {
         available: false,
       };
 
-      // ดึงข้อมูล slot ปัจจุบัน
       const slotRef = ref(db, `parkingSlots/${selectedFloor}/${selectedSlot}`);
       const slotSnap = await get(slotRef);
 
       let updatedSlotData = [];
-
       if (!slotSnap.exists() || slotSnap.val().status === 'available') {
-        // slot ว่าง → สร้าง array ใหม่
         updatedSlotData = [newSlotBooking];
       } else if (Array.isArray(slotSnap.val())) {
-        // slot มี booking อยู่แล้ว → append ถ้าไม่ซ้ำ
         const existingBookings = slotSnap.val();
         const isDuplicate = existingBookings.some(
           (b) => b.date === newSlotBooking.date && b.timeRange === newSlotBooking.timeRange
         );
         updatedSlotData = isDuplicate ? existingBookings : [...existingBookings, newSlotBooking];
       } else {
-        // fallback
         updatedSlotData = [newSlotBooking];
       }
 
-      // อัปเดต slot
       updates[`parkingSlots/${selectedFloor}/${selectedSlot}`] = updatedSlotData;
 
       // สร้าง booking ใหม่
@@ -138,6 +142,40 @@ const PaymentScreen = ({ navigation, route }) => {
     } catch (error) {
       console.error(error);
       Alert.alert('Error', 'Payment failed. Please try again.');
+    }
+  };
+
+  // handle Prompay auto update
+  const handlePrompayPayment = async (payerPhone, amount) => {
+    try {
+      const bookingId = bookingData.id;
+      if (!bookingId) return;
+
+      const bookingSnap = await get(ref(db, `bookings/${bookingId}`));
+      if (!bookingSnap.exists()) return;
+
+      const bookingInfo = bookingSnap.val();
+
+      // อัปเดต booking
+      await update(ref(db, `bookings/${bookingId}`), {
+        paymentStatus: 'paid',
+        paymentDate: new Date().toISOString(),
+        paymentMethod: 'Prompay',
+      });
+
+      // อัปเดต Prompay payment
+      await update(ref(db, `prompayPayments/${bookingId}`), {
+        status: 'paid',
+        timestamp: new Date().toISOString(),
+        amount,
+        payerPhone,
+        payerUsername: bookingInfo.bookingType === 'resident' ? bookingInfo.username : '',
+        visitorUsername: bookingInfo.bookingType === 'visitor' ? bookingInfo.visitorInfo?.visitorUsername : ''
+      });
+
+      console.log('Prompay payment recorded successfully');
+    } catch (err) {
+      console.error('Error handling Prompay payment:', err);
     }
   };
 
@@ -213,9 +251,7 @@ const PaymentScreen = ({ navigation, route }) => {
           {bookingData.entryTime && renderBookingDetail('Entry Time', bookingData.entryTime)}
           {bookingData.exitDate && renderBookingDetail('Exit Date', bookingData.exitDate)}
           {bookingData.exitTime && renderBookingDetail('Exit Time', bookingData.exitTime)}
-
           {renderBookingDetail('License Plate', residentLicense)}
-
           {bookingData.durationMonths &&
             renderBookingDetail('Duration (Months)', bookingData.durationMonths)}
 
@@ -240,6 +276,25 @@ const PaymentScreen = ({ navigation, route }) => {
           <View style={styles.totalContainer}>
             <Text style={styles.totalLabel}>Total Amount:</Text>
             <Text style={styles.totalAmount}>{formatPrice()}</Text>
+          </View>
+
+          {/* ===== Prompay Section ===== */}
+          <View style={styles.prompaySection}>
+            <Text style={styles.sectionTitle}>Pay Prompay</Text>
+            <Text>Scan the QR code to pay</Text>
+
+            <View style={styles.prompayStatusRow}>
+              <Text>Status:</Text>
+              <Text style={{ fontWeight: '700', color: prompayStatus === 'paid' ? 'green' : 'red' }}>
+                {prompayStatus === 'pending' ? 'Waiting for payment' : prompayStatus === 'paid' ? 'Paid' : 'Failed'}
+              </Text>
+            </View>
+
+            {prompayStatus === 'pending' && (
+              <Text style={{ fontSize: 12, color: '#718096', marginTop: 5 }}>
+                Payment will be recorded automatically once transfer is detected.
+              </Text>
+            )}
           </View>
         </View>
 
@@ -375,6 +430,17 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '700',
+  },
+  prompaySection: {
+    marginTop: 20,
+    padding: 15,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+  },
+  prompayStatusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
   },
 });
 
