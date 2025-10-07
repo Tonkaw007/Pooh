@@ -9,7 +9,6 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
     const [showBarrierModal, setShowBarrierModal] = useState(false);
     const [showCancelModal, setShowCancelModal] = useState(false);
 
-    // state ใหม่ สำหรับติดตาม payFineStatus
     const [payFineStatus, setPayFineStatus] = useState(null);
 
     // เช็ก payFineStatus จาก Firebase
@@ -19,11 +18,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
             .then(snapshot => {
                 if (snapshot.exists()) {
                     const data = snapshot.val();
-                    if (data.payFineStatus === 'paid') {
-                        setPayFineStatus('paid');
-                    } else {
-                        setPayFineStatus('unpaid');
-                    }
+                    setPayFineStatus(data.payFineStatus === 'paid' ? 'paid' : 'unpaid');
                 } else {
                     setPayFineStatus('unpaid');
                 }
@@ -34,19 +29,37 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
             });
     }, [bookingData.id]);
 
-    // Check if booking is overdue
     const now = new Date();
+    const isPaidFine = payFineStatus === 'paid';
+
+    // Logic แสดงปุ่ม Pay Fine สำหรับทุกประเภท
+    let showPayFineButton = false;
+    if (!isPaidFine) {
+        if (bookingData.rateType === 'hourly') {
+            if (bookingData.exitDate && bookingData.exitTime) {
+                const exitDateTime = new Date(`${bookingData.exitDate}T${bookingData.exitTime}`);
+                if (now > exitDateTime) showPayFineButton = true;
+            }
+        } else if (bookingData.rateType === 'daily' || bookingData.rateType === 'monthly') {
+            if (bookingData.exitDate) {
+                const [year, month, day] = bookingData.exitDate.split('-').map(Number);
+                const exitDate = new Date(year, month - 1, day);
+                exitDate.setDate(exitDate.getDate() + 1);
+                exitDate.setHours(0, 0, 0, 0);
+                if (now >= exitDate) showPayFineButton = true;
+            }
+        }
+    }
+
+    // Check if booking is overdue (สำหรับรายชั่วโมง)
     let isOverdue = false;
     if (bookingData.exitDate && bookingData.exitTime) {
         const exitDateTime = new Date(`${bookingData.exitDate}T${bookingData.exitTime}`);
         isOverdue = now > exitDateTime;
     }
 
-    const isPaidFine = payFineStatus === 'paid';
-
     // Navigation Handlers
     const handleBack = () => navigation.goBack();
-
     const handleControlBarrier = () => {
         if (isOverdue && !isPaidFine) {
             Alert.alert("Action not allowed", "Please pay the fine first.");
@@ -54,21 +67,13 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         }
         setShowBarrierModal(true);
     };
-
-    const handleSendInviteLink = () => {
-        navigation.navigate('InviteLink', { username, bookingData });
-    };
-
+    const handleSendInviteLink = () => navigation.navigate('InviteLink', { username, bookingData });
     const handleCancelBooking = () => setShowCancelModal(true);
-
-    // handler ไปหน้า PayFine พร้อม callback onPaid
-    const handlePayFine = () => {
-        navigation.navigate('PayFine', { 
-            username, 
-            bookingData,
-            onPaid: () => setPayFineStatus('paid') // callback เมื่อจ่ายแล้ว อัปเดต state
-        });
-    };
+    const handlePayFine = () => navigation.navigate('PayFine', { 
+        username, 
+        bookingData,
+        onPaid: () => setPayFineStatus('paid')
+    });
 
     // Control Barrier Function
     const controlBarrier = (action) => {
@@ -130,17 +135,16 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         if (type === 'monthly') return 'Monthly';
         return type;
     };
-
     const formatDate = (dateString) => {
         if (!dateString) return '-';
         const date = new Date(dateString);
         return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     };
-
     const formatTime = (timeString) => {
         if (!timeString) return '-';
         return timeString.includes(':') ? timeString : timeString;
     };
+
 
     // Render
     return (
@@ -305,7 +309,8 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                             </TouchableOpacity>
                         </View>
 
-                        {isOverdue && !isPaidFine && (
+                        {/* Render ปุ่ม Pay Fine ตัวเดียว */}
+                        {showPayFineButton && (
                             <View style={styles.payFineWrapper}>
                                 <TouchableOpacity style={styles.payFineButton} onPress={handlePayFine}>
                                     <Ionicons name="cash" size={20} color="white" />

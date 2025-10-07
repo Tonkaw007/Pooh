@@ -2,16 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { db } from '../firebaseConfig';
-import { ref, update, get, push } from 'firebase/database';
+import { ref, push, get } from 'firebase/database';
 
 const VisitorControlScreen = ({ route, navigation }) => {
-    const { sessionId } = route.params || {}; // ใช้ sessionId จาก params
+    const { sessionId } = route.params || {}; 
 
-    // State ใหม่สำหรับเก็บสถานะ payFine และ overdue
     const [payFineStatus, setPayFineStatus] = useState('unpaid');
     const [isOverdue, setIsOverdue] = useState(false);
 
-    // useEffect เช็ก payFine และ overdue จาก Firebase
+    // เช็ก payFine และ overdue ตามประเภท booking
     useEffect(() => {
         if (!sessionId) return;
 
@@ -31,14 +30,31 @@ const VisitorControlScreen = ({ route, navigation }) => {
             })
             .catch(error => console.error('Failed to fetch payFineStatus:', error));
 
-        // เช็กว่า booking เกินเวลา
+        // เช็ก booking และ overdue
         get(ref(db, `bookings/${sessionKey}`))
             .then(snapshot => {
                 if (snapshot.exists()) {
                     const booking = snapshot.val();
-                    if (booking.exitDate && booking.exitTime) {
-                        const exitDateTime = new Date(`${booking.exitDate}T${booking.exitTime}`);
-                        setIsOverdue(new Date() > exitDateTime);
+                    if (booking.exitDate && booking.exitTime && booking.type) {
+                        const now = new Date();
+                        let overdue = false;
+
+                        if (booking.type === 'hourly') {
+                            const exitDateTime = new Date(`${booking.exitDate}T${booking.exitTime}`);
+                            overdue = now > exitDateTime;
+                        } else if (booking.type === 'daily') {
+                            const dailyOverdue = new Date(booking.exitDate);
+                            dailyOverdue.setDate(dailyOverdue.getDate() + 1);
+                            dailyOverdue.setHours(0, 0, 0, 0);
+                            overdue = now > dailyOverdue;
+                        } else if (booking.type === 'monthly') {
+                            const monthlyOverdue = new Date(booking.exitDate);
+                            monthlyOverdue.setMonth(monthlyOverdue.getMonth() + 1);
+                            monthlyOverdue.setHours(0, 0, 0, 0);
+                            overdue = now > monthlyOverdue;
+                        }
+
+                        setIsOverdue(overdue);
                     }
                 }
             })
@@ -46,9 +62,6 @@ const VisitorControlScreen = ({ route, navigation }) => {
     }, [sessionId]);
 
     const handleControl = async (action) => {
-        console.log("🔍 handleControl called with:", action);
-        console.log("original sessionId:", sessionId);
-
         if (!sessionId) {
             Alert.alert("Error", "Session ID is missing.");
             return;
@@ -57,9 +70,8 @@ const VisitorControlScreen = ({ route, navigation }) => {
         const sessionKey = sessionId.includes('-') 
             ? sessionId.substring(0, sessionId.lastIndexOf('-')) 
             : sessionId;
-        console.log("🔑 sessionKey used for DB lookup:", sessionKey);
 
-        // ถ้า overdue และยังไม่จ่ายค่าปรับ ล็อคปุ่ม
+        // ถ้า overdue และยังไม่ได้จ่ายค่าปรับ ล็อคปุ่ม
         if (isOverdue && payFineStatus !== 'paid') {
             Alert.alert("Action not allowed", "Please pay the fine first.");
             return;
@@ -78,11 +90,7 @@ const VisitorControlScreen = ({ route, navigation }) => {
             }
 
             const bookings = bookingsSnap.val();
-            console.log("📂 bookings from DB:", bookings);
-
-            const existingKey = Object.keys(bookings).find(
-                key => key === sessionKey
-            );
+            const existingKey = Object.keys(bookings).find(key => key === sessionKey);
 
             if (!existingKey) {
                 Alert.alert("Error", "Booking not found for this session.");
@@ -97,8 +105,6 @@ const VisitorControlScreen = ({ route, navigation }) => {
                 time: actionTime
             });
 
-            console.log(" Pushed barrier log:", { status, actionDate, actionTime });
-
             Alert.alert("Success", `Barrier action '${status}' has been logged.`);
         } catch (error) {
             console.error("❌ Failed to log barrier action:", error);
@@ -109,24 +115,18 @@ const VisitorControlScreen = ({ route, navigation }) => {
     const handleBack = () => navigation.goBack();
 
     return (
-        <KeyboardAvoidingView 
-            style={styles.container} 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
+        <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <ScrollView contentContainerStyle={styles.scrollContainer}>
                 
-                {/* Back Button */}
                 <TouchableOpacity style={styles.backButton} onPress={handleBack}>
                     <Ionicons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
 
-                {/* Header */}
                 <View style={styles.header}>
                     <Text style={styles.title}>Visitor Control</Text>
                     <Text style={styles.subtitle}>Parking Barrier Access</Text>
                 </View>
 
-                {/* Session Info Card */}
                 <View style={styles.infoCard}>
                     <View style={styles.cardHeader}>
                         <Ionicons name="key" size={24} color="#FF9800" />
@@ -144,7 +144,6 @@ const VisitorControlScreen = ({ route, navigation }) => {
                     </View>
                 </View>
 
-                {/* Control Buttons Card */}
                 <View style={styles.controlCard}>
                     <View style={styles.cardHeader}>
                         <Ionicons name="car" size={24} color="#2196F3" />
@@ -164,7 +163,7 @@ const VisitorControlScreen = ({ route, navigation }) => {
                             ]}
                             onPress={() => handleControl('Open Barrier')}
                             activeOpacity={0.8}
-                            disabled={isOverdue && payFineStatus !== 'paid'} //  ปุ่มล็อคถ้า overdue & unpaid
+                            disabled={isOverdue && payFineStatus !== 'paid'}
                         >
                             <View style={styles.buttonContent}>
                                 <Ionicons name="arrow-up" size={32} color="white" />
@@ -181,7 +180,7 @@ const VisitorControlScreen = ({ route, navigation }) => {
                             ]}
                             onPress={() => handleControl('Close Barrier')}
                             activeOpacity={0.8}
-                            disabled={isOverdue && payFineStatus !== 'paid'} //  ปุ่มล็อคถ้า overdue & unpaid
+                            disabled={isOverdue && payFineStatus !== 'paid'}
                         >
                             <View style={styles.buttonContent}>
                                 <Ionicons name="arrow-down" size={32} color="white" />
@@ -192,7 +191,6 @@ const VisitorControlScreen = ({ route, navigation }) => {
                     </View>
                 </View>
 
-                {/* Instructions Card */}
                 <View style={styles.instructionsCard}>
                     <View style={styles.cardHeader}>
                         <Ionicons name="information-circle" size={24} color="#6C757D" />
