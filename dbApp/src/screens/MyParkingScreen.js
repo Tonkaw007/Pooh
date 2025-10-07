@@ -196,22 +196,29 @@ const MyParkingScreen = ({ route, navigation }) => {
   };
 
   const checkBookingReminders = async () => {
-    const now = new Date();
-    const nowTime = now.getTime();
-    const activeBookings = bookingsRef.current;
+  const now = new Date();
+  const activeBookings = bookingsRef.current;
 
-    for (const booking of activeBookings) {
-      if (!booking.rateType) continue;
+  for (const booking of activeBookings) {
+    if (!booking.rateType) continue;
 
-      if (booking.rateType === 'hourly') {
-        const endDate = new Date(`${booking.entryDate}T${booking.exitTime}:00`);
-        const diffMinutes = (endDate - now) / 60000;
+    if (booking.rateType === 'hourly' && booking.entryDate && booking.exitTime) {
 
-        if (diffMinutes <= 10 && diffMinutes > 0 && !booking.notifiedHour) {
-          const bookingRef = ref(db, `bookings/${booking.id}`);
-          await update(bookingRef, { notifiedHour: true });
-          booking.notifiedHour = true;
-          await showBookingReminder(booking);
+      const [exitHour, exitMinute] = booking.exitTime.split(':').map(Number);
+      const [year, month, day] = booking.entryDate.split('-').map(Number);
+
+      // สร้าง Date object ของ exitTime แบบ Local Time
+      const endDate = new Date(year, month - 1, day, exitHour, exitMinute, 0);
+
+      // เวลาแจ้งเตือนล่วงหน้า 10 นาที
+      const reminderTime = new Date(endDate.getTime() - 10 * 60 * 1000);
+
+      if (now >= reminderTime && now < endDate && !booking.notifiedHour) {
+        const bookingRef = ref(db, `bookings/${booking.id}`);
+        await update(bookingRef, { notifiedHour: true });
+        booking.notifiedHour = true;
+
+        await showBookingReminder(booking);
         }
 
       } else if (booking.rateType === 'daily' || booking.rateType === 'monthly') {
