@@ -5,18 +5,19 @@ import { db } from '../firebaseConfig';
 import { ref, onValue, update } from 'firebase/database';
 
 const NotificationsScreen = ({ route, navigation }) => {
-  const { username, userType, ownerUsername } = route.params; // เพิ่ม userType และ ownerUsername
+  const { username, userType, ownerUsername } = route.params; // userType: 'visitor' หรือ 'resident'
+
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Fetch notifications
+  // ฟังก์ชันดึง notification
   const fetchNotifications = () => {
     try {
-      // เลือก path สำหรับ visitor หรือ resident
+      // กำหนด path ตาม userType
       const notifPath = userType === "visitor" 
-                         ? `notifications/${ownerUsername || "Khemika Meepin"}/${username}` 
-                         : `notifications/${username}`;
+                         ? `notifications/${ownerUsername}/${username}` // visitor จะเก็บใน node ของ owner
+                         : `notifications/${username}`; // resident จะเก็บใน node ของตัวเอง
       const notifRef = ref(db, notifPath);
 
       onValue(notifRef, (snapshot) => {
@@ -29,6 +30,7 @@ const NotificationsScreen = ({ route, navigation }) => {
             const timeB = b.timestamp?.seconds || 0;
             return timeB - timeA;
           });
+
         setNotifications(notificationsArray);
         const unread = notificationsArray.filter(notif => !notif.read).length;
         setUnreadCount(unread);
@@ -41,12 +43,14 @@ const NotificationsScreen = ({ route, navigation }) => {
     }
   };
 
+  // ฟังก์ชันทำเครื่องหมาย notification เป็นอ่านแล้ว
   const markAsRead = async (notificationId) => {
     try {
       const notifPath = userType === "visitor" 
-                         ? `notifications/${ownerUsername || "Khemika Meepin"}/${username}/${notificationId}`
+                         ? `notifications/${ownerUsername}/${username}/${notificationId}`
                          : `notifications/${username}/${notificationId}`;
       const notifRef = ref(db, notifPath);
+
       await update(notifRef, { read: true });
       setNotifications(prev => prev.map(notif => notif.id === notificationId ? { ...notif, read: true } : notif));
       setUnreadCount(prev => prev - 1);
@@ -56,12 +60,13 @@ const NotificationsScreen = ({ route, navigation }) => {
     }
   };
 
+  // ฟังก์ชันทำเครื่องหมาย notification ทั้งหมดเป็นอ่านแล้ว
   const markAllAsRead = async () => {
     try {
       const unreadNotifications = notifications.filter(notif => !notif.read);
       for (const notif of unreadNotifications) {
         const notifPath = userType === "visitor" 
-                           ? `notifications/${ownerUsername || "Khemika Meepin"}/${username}/${notif.id}`
+                           ? `notifications/${ownerUsername}/${username}/${notif.id}`
                            : `notifications/${username}/${notif.id}`;
         const notifRef = ref(db, notifPath);
         await update(notifRef, { read: true });
@@ -176,6 +181,7 @@ const NotificationsScreen = ({ route, navigation }) => {
     </View>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {

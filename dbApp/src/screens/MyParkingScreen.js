@@ -14,10 +14,10 @@ const MyParkingScreen = ({ route, navigation }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [couponCount, setCouponCount] = useState(0);
 
-  // Demo Popup ใหม่
-  const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
-
   const bookingsRef = useRef([]);
+
+  // Demo popup ใหม่
+  const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
 
   const showParkingProblemDemo = () => setShowParkingProblemModal(true);
 
@@ -80,9 +80,9 @@ const MyParkingScreen = ({ route, navigation }) => {
   const fetchCoupons = async () => {
     try {
       const demoCoupons = [
-        { id: '1', createdDate: new Date().toISOString(), expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), reason: "The previous vehicle exceeded parking time, causing your delay", discountType: 'hourly', used: false },
-        { id: '2', createdDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), expiryDate: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(), reason: "Compensation for maintenance delay", discountType: 'daily', used: false },
-        { id: '3', createdDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), expiryDate: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(), reason: "Apology for system error during your last booking", discountType: 'monthly', used: false }
+        { id: '1', createdDate: new Date().toISOString(), expiryDate: new Date(Date.now() + 30*24*60*60*1000).toISOString(), reason: "The previous vehicle exceeded parking time", discountType: 'hourly', used: false },
+        { id: '2', createdDate: new Date(Date.now() - 5*24*60*60*1000).toISOString(), expiryDate: new Date(Date.now() + 25*24*60*60*1000).toISOString(), reason: "Compensation for maintenance delay", discountType: 'daily', used: false },
+        { id: '3', createdDate: new Date(Date.now() - 2*24*60*60*1000).toISOString(), expiryDate: new Date(Date.now() + 28*24*60*60*1000).toISOString(), reason: "Apology for system error", discountType: 'monthly', used: false }
       ];
 
       const activeCoupons = demoCoupons.filter(coupon => {
@@ -91,7 +91,6 @@ const MyParkingScreen = ({ route, navigation }) => {
       });
 
       setCouponCount(activeCoupons.length);
-
     } catch (error) {
       console.error("Error fetching coupons:", error);
       setCouponCount(0);
@@ -107,16 +106,18 @@ const MyParkingScreen = ({ route, navigation }) => {
         (b) => (b.username === username || (userType === "visitor" && b.visitorInfo?.visitorUsername === username)) && b.slotId && b.status !== "cancelled"
       );
 
+      // เพิ่ม flag สำหรับ Modal
+      activeBookings.forEach(b => b.showingModal = false);
+
       setBookings(activeBookings);
       bookingsRef.current = activeBookings;
       setLoading(false);
 
       checkBookingReminders();
 
-      // Fetch notifications สำหรับ resident และ visitor
+      // Fetch notifications
       if(userType === "visitor") {
-        // ใช้ ownerUsername จาก booking ของ visitor
-        const visitorBooking = activeBookings[0]; // สมมติ visitor มี booking เดียว
+        const visitorBooking = activeBookings[0];
         const ownerUsername = visitorBooking?.ownerUsername || "Khemika Meepin";
 
         const notifSnapshot = await get(child(ref(db), `notifications/${ownerUsername}/${username}`));
@@ -131,7 +132,6 @@ const MyParkingScreen = ({ route, navigation }) => {
       }
 
       await fetchCoupons();
-
     } catch (error) {
       console.error(error);
       Alert.alert("Error", "Unable to fetch bookings.");
@@ -140,6 +140,9 @@ const MyParkingScreen = ({ route, navigation }) => {
   };
 
   const showBookingReminder = async (booking) => {
+    if (booking.showingModal) return; // ถ้าโชว์อยู่แล้ว ไม่ซ้ำ
+    booking.showingModal = true;
+
     let notifPath = userType === "visitor"
                     ? `notifications/${booking.ownerUsername || "Khemika Meepin"}/${username}`
                     : `notifications/${username}`;
@@ -156,7 +159,7 @@ const MyParkingScreen = ({ route, navigation }) => {
       const now = new Date();
       const dateStr = now.toISOString().slice(0, 10);
       const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
- 
+
       await push(notifRef, {  
         date: dateStr,
         time: timeStr,
@@ -164,13 +167,17 @@ const MyParkingScreen = ({ route, navigation }) => {
         read: false,
         timestamp: serverTimestamp(),
         type: booking.rateType === 'hourly'
-          ? "Hourly reminder (10 minutes before end)"
-          : booking.rateType === 'daily'
-          ? "Daily reminder (10 minutes before end)"
-          : booking.rateType === 'monthly'
-          ? "Monthly reminder (10 minutes before end)"
-          : null 
-      });
+              ? "Hourly reminder (10 minutes before end)"
+              : booking.rateType === 'daily'
+              ? "Daily reminder (10 minutes before end)"
+              : booking.rateType === 'monthly'
+              ? "Monthly reminder (10 minutes before end)"
+              : null,
+        visitorUsername: booking.bookingType === "visitor" ? booking.visitorInfo?.visitorUsername || "N/A" : null,
+});
+
+      // อัปเดต badge ทันที
+      setUnreadCount(prev => prev + 1);
     }
 
     setCurrentReminder({
@@ -184,66 +191,59 @@ const MyParkingScreen = ({ route, navigation }) => {
                     : booking.licensePlate || 'N/A',
       endTime: booking.exitTime,
     });
+
     setShowReminderModal(true);
   };
 
- const checkBookingReminders = async () => {
-  const now = new Date();
-  const nowTime = now.getTime();
-  const activeBookings = bookingsRef.current;
+  const checkBookingReminders = async () => {
+    const now = new Date();
+    const nowTime = now.getTime();
+    const activeBookings = bookingsRef.current;
 
-  for (const booking of activeBookings) {
-    if (!booking.rateType) continue;
+    for (const booking of activeBookings) {
+      if (!booking.rateType) continue;
 
-    if (booking.rateType === 'hourly') {
-      const endDate = new Date(`${booking.entryDate}T${booking.exitTime}:00`);
-      const diffMinutes = (endDate - now) / 60000;
+      if (booking.rateType === 'hourly') {
+        const endDate = new Date(`${booking.entryDate}T${booking.exitTime}:00`);
+        const diffMinutes = (endDate - now) / 60000;
 
-      if (diffMinutes <= 10 && diffMinutes > 0 && !booking.notifiedHour) {
-        const bookingRef = ref(db, `bookings/${booking.id}`);
-        await update(bookingRef, { notifiedHour: true });
-        booking.notifiedHour = true;
-        await showBookingReminder(booking);
-      }
-
-    } else if (booking.rateType === 'daily' || booking.rateType === 'monthly') {
-      if (!booking.exitDate) continue;
-
-      // กำหนดเวลาแจ้งเตือน 23:50 ของ exitDate
-      const reminderDate = new Date(booking.exitDate);
-      reminderDate.setHours(23, 50, 0, 0); 
-
-      const reminderTimeStart = reminderDate.getTime();
-      const reminderTimeEnd = reminderTimeStart + 5000; // ช่วง 5 วินาที
-
-      if (nowTime >= reminderTimeStart && nowTime <= reminderTimeEnd) {
-        if (booking.rateType === 'daily' && !booking.notifiedDaily) {
+        if (diffMinutes <= 10 && diffMinutes > 0 && !booking.notifiedHour) {
           const bookingRef = ref(db, `bookings/${booking.id}`);
-          await update(bookingRef, { notifiedDaily: true });
-          booking.notifiedDaily = true;
+          await update(bookingRef, { notifiedHour: true });
+          booking.notifiedHour = true;
           await showBookingReminder(booking);
-          setUnreadCount(prev => prev + 1);
-        } else if (booking.rateType === 'monthly' && !booking.notifiedMonthly) {
-          const bookingRef = ref(db, `bookings/${booking.id}`);
-          await update(bookingRef, { notifiedMonthly: true });
-          booking.notifiedMonthly = true;
-          await showBookingReminder(booking);
-          setUnreadCount(prev => prev + 1);
+        }
+
+      } else if (booking.rateType === 'daily' || booking.rateType === 'monthly') {
+        if (!booking.exitDate) continue;
+
+        const reminderDate = new Date(booking.exitDate);
+        reminderDate.setHours(23, 50, 0, 0);
+        const reminderTimeStart = reminderDate.getTime();
+        const reminderTimeEnd = reminderTimeStart + 5000;
+
+        if (nowTime >= reminderTimeStart && nowTime <= reminderTimeEnd) {
+          if (booking.rateType === 'daily' && !booking.notifiedDaily) {
+            const bookingRef = ref(db, `bookings/${booking.id}`);
+            await update(bookingRef, { notifiedDaily: true });
+            booking.notifiedDaily = true;
+            await showBookingReminder(booking);
+          } else if (booking.rateType === 'monthly' && !booking.notifiedMonthly) {
+            const bookingRef = ref(db, `bookings/${booking.id}`);
+            await update(bookingRef, { notifiedMonthly: true });
+            booking.notifiedMonthly = true;
+            await showBookingReminder(booking);
+          }
         }
       }
     }
-  }
-};
-
+  };
 
   useEffect(() => {
     fetchBookings();
 
     const unsubscribeFocus = navigation.addListener("focus", () => fetchBookings());
-
-    const reminderInterval = setInterval(() => {
-      checkBookingReminders();
-    }, 60000);
+    const reminderInterval = setInterval(() => checkBookingReminders(), 60000);
 
     return () => {
       unsubscribeFocus();
@@ -259,38 +259,11 @@ const MyParkingScreen = ({ route, navigation }) => {
   };
   const handleCouponPress = () => navigation.navigate("MyCoupon", { username });
 
-  const formatBookingType = (type) => {
-    if (type === "hourly") return "Hourly";
-    if (type === "daily") return "Daily";
-    if (type === "monthly") return "Monthly";
-    return type;
-  };
+  const formatBookingType = (type) => type === "hourly" ? "Hourly" : type === "daily" ? "Daily" : type === "monthly" ? "Monthly" : type;
+  const getBookingTypeColor = (type) => type === "hourly" ? "#bb489cff" : type === "daily" ? "#4e67cdff" : type === "monthly" ? "#45B7D1" : "#B19CD8";
+  const getUserTypeColor = (type) => type === "resident" ? "#4CAF50" : type === "visitor" ? "#FF9800" : "#B19CD8";
 
-  const getBookingTypeColor = (type) => {
-    switch (type) {
-      case "hourly": return "#bb489cff";
-      case "daily": return "#4e67cdff";
-      case "monthly": return "#45B7D1";
-      default: return "#B19CD8";
-    }
-  };
-
-  const getUserTypeColor = (type) => {
-    switch (type) {
-      case "resident": return "#4CAF50";
-      case "visitor": return "#FF9800";
-      default: return "#B19CD8";
-    }
-  };
-
-  if (loading) {
-    return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
-  }
-
+  if (loading) return <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}><ActivityIndicator size="large" color="#fff" /></View>;
 
   return (
     <View style={styles.container}>
@@ -313,20 +286,12 @@ const MyParkingScreen = ({ route, navigation }) => {
           <View style={styles.headerIcons}>
             <TouchableOpacity style={styles.couponButton} onPress={handleCouponPress}>
               <Ionicons name="ticket" size={24} color="white" />
-              {couponCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{couponCount}</Text>
-                </View>
-              )}
+              {couponCount > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{couponCount}</Text></View>}
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.notificationButton} onPress={handleNotificationPress}>
               <Ionicons name="notifications" size={24} color="white" />
-              {unreadCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{unreadCount}</Text>
-                </View>
-              )}
+              {unreadCount > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{unreadCount}</Text></View>}
             </TouchableOpacity>
           </View>
         </View>
@@ -336,158 +301,74 @@ const MyParkingScreen = ({ route, navigation }) => {
           {bookings.length > 0 && (
             <View style={styles.subtitleContainer}>
               <Text style={styles.subtitle}>Tap on a reservation to view details</Text>
-              {/* ปุ่ม + */}
-              <TouchableOpacity 
-                style={styles.addButton} 
-                onPress={() => navigation.navigate("BookingType", { username })}
-              >
+              <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate("BookingType", { username })}>
                 <Ionicons name="add" size={26} color="#B19CD8" />
               </TouchableOpacity>
             </View>
           )}
         </View>
 
-        {bookings.length > 0 ? (
-          bookings.map((bookingData, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.parkingCard}
-              onPress={() => handleCardPress(bookingData)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.cardHeader}>
-                <View>
-                  <Text style={styles.slotText}>Slot {bookingData.slotId}</Text>
-                  <Text style={styles.floorText}>Floor {bookingData.floor}</Text>
-
-                  {bookingData.bookingType === 'visitor' && bookingData.visitorInfo && (
-                    <View style={styles.visitorInfo}>
-                      <Text style={styles.visitorText}>
-                        For: {bookingData.visitorInfo.visitorUsername || "N/A"}
-                      </Text>
-                      <Text style={styles.visitorText}>
-                        License Plate: {bookingData.visitorInfo.licensePlate || "N/A"}
-                      </Text>
-                    </View>
-                  )}
-
-                  {bookingData.bookingType && (
-                    <View style={[styles.userTypeBadge, { backgroundColor: getUserTypeColor(bookingData.bookingType) }]}>
-                      <Text style={styles.userTypeText}>
-                        {bookingData.bookingType === "resident" ? "Resident" : "Visitor"}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.headerRight}>
-                  <View style={[styles.bookingTypeBadge, { backgroundColor: getBookingTypeColor(bookingData.rateType) }]}>
-                    <Text style={styles.bookingTypeText}>{formatBookingType(bookingData.rateType)}</Text>
+        {bookings.length > 0 ? bookings.map((bookingData, index) => (
+          <TouchableOpacity key={index} style={styles.parkingCard} onPress={() => handleCardPress(bookingData)} activeOpacity={0.7}>
+            <View style={styles.cardHeader}>
+              <View>
+                <Text style={styles.slotText}>Slot {bookingData.slotId}</Text>
+                <Text style={styles.floorText}>Floor {bookingData.floor}</Text>
+                {bookingData.bookingType === 'visitor' && bookingData.visitorInfo && (
+                  <View style={styles.visitorInfo}>
+                    <Text style={styles.visitorText}>For: {bookingData.visitorInfo.visitorUsername || "N/A"}</Text>
+                    <Text style={styles.visitorText}>License Plate: {bookingData.visitorInfo.licensePlate || "N/A"}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={24} color="#B19CD8" />
-                </View>
+                )}
+                {bookingData.bookingType && <View style={[styles.userTypeBadge, { backgroundColor: getUserTypeColor(bookingData.bookingType) }]}><Text style={styles.userTypeText}>{bookingData.bookingType === "resident" ? "Resident" : "Visitor"}</Text></View>}
               </View>
-            </TouchableOpacity>
-          ))
-        ) : (
-          <Text style={styles.noBookingText}>No reservations yet</Text>
-        )}
 
-        {/* Demo popup buttons */}
-        <TouchableOpacity
-          style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]}
-          onPress={() => handleDemoPopup("resident")}
-        >
-          <Text style={styles.bookAgainText}>Show Resident Slot B01 Demo</Text>
-        </TouchableOpacity>
+              <View style={styles.headerRight}>
+                <View style={[styles.bookingTypeBadge, { backgroundColor: getBookingTypeColor(bookingData.rateType) }]}><Text style={styles.bookingTypeText}>{formatBookingType(bookingData.rateType)}</Text></View>
+                <Ionicons name="chevron-forward" size={24} color="#B19CD8" />
+              </View>
+            </View>
+          </TouchableOpacity>
+        )) : <Text style={styles.noBookingText}>No reservations yet</Text>}
 
-        <TouchableOpacity
-          style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]}
-          onPress={() => handleDemoPopup("visitor")}
-        >
-          <Text style={styles.bookAgainText}>Show Visitor Slot B06 Demo</Text>
-        </TouchableOpacity>
-
-        {/* ปุ่มทดสอบ Popup ใหม่ */}
-        <TouchableOpacity
-          style={[styles.bookAgainButton, { backgroundColor: '#FF5252', marginTop: 10 }]}
-          onPress={showParkingProblemDemo}
-        >
-          <Text style={styles.bookAgainText}>Demo: Parking Slot Unavailable</Text>
-        </TouchableOpacity>
+        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={() => handleDemoPopup("resident")}><Text style={styles.bookAgainText}>Show Resident Slot B01 Demo</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={() => handleDemoPopup("visitor")}><Text style={styles.bookAgainText}>Show Visitor Slot B06 Demo</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF5252', marginTop: 10 }]} onPress={showParkingProblemDemo}><Text style={styles.bookAgainText}>Demo: Parking Slot Unavailable</Text></TouchableOpacity>
 
       </ScrollView>
 
-      {/* Modal เดิมสำหรับแจ้งเตือนเวลาใกล้หมด */}
-      <Modal
-        visible={showReminderModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowReminderModal(false)}
-      >
+      {/* Modal เดิม */}
+      <Modal visible={showReminderModal} transparent animationType="fade" onRequestClose={() => setShowReminderModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            {currentReminder && (
-              <>
-                <Text style={styles.modalTitle}>⚠️ Parking Time Alert</Text>
-                <Text style={styles.modalMessage}>
-                  10 minutes left, please move your car immediately.
-                </Text>
-                <Text style={styles.modalMessage}>
-                  Username: {currentReminder.username}{"\n"}
-                  Slot {currentReminder.slotId}, Floor: {currentReminder.floor || '2'}, License: {currentReminder.licensePlate || 'KK11'}
-                </Text>
-              </>
-            )}
-            <TouchableOpacity
-              style={[styles.modalButton, { backgroundColor: '#B19CD8' }]} 
-              onPress={() => setShowReminderModal(false)}
-            >
+            {currentReminder && <>
+              <Text style={styles.modalTitle}>⚠️ Parking Time Alert</Text>
+              <Text style={styles.modalMessage}>10 minutes left, please move your car immediately.</Text>
+              <Text style={styles.modalMessage}>Username: {currentReminder.username}{"\n"}Slot {currentReminder.slotId}, Floor: {currentReminder.floor || '2'}, License: {currentReminder.licensePlate || 'KK11'}</Text>
+            </>}
+            <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#B19CD8' }]} onPress={() => setShowReminderModal(false)}>
               <Text style={styles.modalButtonText}>OK</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* Modal ใหม่สำหรับ Demo ที่จอดรถไม่พร้อมใช้งาน */}
-      <Modal
-        visible={showParkingProblemModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowParkingProblemModal(false)}
-      >
+      {/* Modal ใหม่ */}
+      <Modal visible={showParkingProblemModal} transparent animationType="fade" onRequestClose={() => setShowParkingProblemModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContainer, { width: '85%' }]}>
-            <View style={styles.warningIconContainer}>
-              <Ionicons name="warning" size={50} color="#FF9800" />
-            </View>
-            
+            <View style={styles.warningIconContainer}><Ionicons name="warning" size={50} color="#FF9800" /></View>
             <Text style={styles.modalTitle}>Parking Slot Unavailable</Text>
-            
-            <Text style={styles.modalMessage}>
-              The parking slot B03 you booked is currently unavailable 
-              because the previous vehicle exceeded the parking time.
-            </Text>
-            
-            <Text style={styles.modalMessage}>
-              We apologize for the inconvenience. Please choose one of the following options:
-            </Text>
-            
+            <Text style={styles.modalMessage}>The parking slot B03 you booked is currently unavailable because the previous vehicle exceeded the parking time.</Text>
+            <Text style={styles.modalMessage}>We apologize for the inconvenience. Please choose one of the following options:</Text>
             <View style={styles.optionsContainer}>
-              <TouchableOpacity
-                style={[styles.optionButton, { backgroundColor: '#4CAF50' }]}
-                onPress={handleAcceptRelocation}
-              >
+              <TouchableOpacity style={[styles.optionButton, { backgroundColor: '#4CAF50' }]} onPress={handleAcceptRelocation}>
                 <Text style={styles.optionButtonText}>Accept Relocation</Text>
-                <Text style={styles.optionSubText}>Move to Slot C05</Text>
+                <Text style={styles.optionSubtext}>Move to Slot C05</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.optionButton, { backgroundColor: '#2196F3' }]}
-                onPress={handleDeclineRelocation}
-              >
+              <TouchableOpacity style={[styles.optionButton, { backgroundColor: '#2196F3' }]} onPress={handleDeclineRelocation}>
                 <Text style={styles.optionButtonText}>Decline & Receive Coupon</Text>
-                <Text style={styles.optionSubText}>10% off next booking</Text>
+                <Text style={styles.optionSubtext}>10% off next booking</Text>
               </TouchableOpacity>
             </View>
           </View>

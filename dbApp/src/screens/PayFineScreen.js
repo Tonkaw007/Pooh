@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Image } from 'react-native';
 import { db } from '../firebaseConfig';
-import { ref, set } from 'firebase/database';
+import { ref, set, onValue, child, get } from 'firebase/database';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const PayFineScreen = ({ route, navigation }) => {
-    const { username, bookingData, onPaid } = route.params; // เพิ่ม onPaid
+    const { username, bookingData, onPaid } = route.params;
     const [overdueMinutes, setOverdueMinutes] = useState(0);
     const [fineAmount, setFineAmount] = useState(0);
     const [originalPrice, setOriginalPrice] = useState(0);
     const [fineRounds, setFineRounds] = useState(0);
     const [paymentCompleted, setPaymentCompleted] = useState(false);
+    const [prompayStatus, setPrompayStatus] = useState('pending'); // เพิ่ม state status Prompay
 
     // คำนวณค่าปรับ
     const calculateFine = () => {
@@ -32,7 +33,6 @@ const PayFineScreen = ({ route, navigation }) => {
         } else {
             const fineMultiplier = Math.pow(2, rounds);
             const calculatedFine = price * fineMultiplier;
-            // แก้ fineAmount: ถ้าเป็นจำนวนเต็มเก็บเป็นจำนวนเต็ม ถ้ามีทศนิยมให้มี 2 ตำแหน่ง
             const finalFine = Number.isInteger(calculatedFine)
                 ? calculatedFine
                 : parseFloat(calculatedFine.toFixed(2));
@@ -40,62 +40,73 @@ const PayFineScreen = ({ route, navigation }) => {
         }
     };
 
-    const handlePaymentSuccess = async () => {
-    try {
-        const now = new Date();
-        const todayDate = now.toISOString().split('T')[0];
-        const nowTime = now.toTimeString().split(' ')[0].substring(0,5);
-
-        let roundedFineAmount = Number.isInteger(fineAmount)
-            ? fineAmount
-            : parseFloat(fineAmount.toFixed(2));
-
-        const payFineData = {
-            id: bookingData.id,
-            username: bookingData.username,
-            bookingType: bookingData.bookingType,
-            rateType: bookingData.rateType,
-            entryDate: bookingData.entryDate,
-            exitDate: bookingData.exitDate,
-            entryTime: bookingData.entryTime,
-            exitTime: bookingData.exitTime,
-            floor: bookingData.floor,
-            slotId: bookingData.slotId,
-            price: bookingData.price || 0,
-            visitorInfo: bookingData.visitorInfo || null,
-            overdueMinutes,
-            rounds: fineRounds,
-            fineAmount: roundedFineAmount,
-            fineIssuedDate: todayDate,
-            payFineDate: todayDate,
-            payFineTime: nowTime,
-            payFineStatus: 'paid'
-        };
-
-        // เก็บข้อมูลลง payFine/{bookingId} เท่านั้น
-        await set(ref(db, `payFine/${bookingData.id}`), payFineData);
-
-        setPaymentCompleted(true);
-
-        // callback กลับไป MyParkingInfoScreen ให้ state เปลี่ยน
-        if (onPaid) {
-            onPaid();
-        }
-
-        Alert.alert(
-            "Payment Successful",
-            `Fine of ${roundedFineAmount} baht has been paid successfully.`,
-            [{ text: "OK", onPress: () => navigation.navigate('MyParking', { username }) }]
-        );
-    } catch (error) {
-        console.error("Payment error:", error);
-        Alert.alert("Error", "Failed to process payment. Please try again.");
-    }
-};
-
+    // ดึง status Prompay จาก Firebase แบบ realtime
     useEffect(() => {
         calculateFine();
+
+        const bookingId = bookingData.id;
+        if (!bookingId) return;
+
+        const promRef = ref(db, `prompayPayments/${bookingId}`);
+        const unsubscribe = onValue(promRef, (snapshot) => {
+            if (snapshot.exists()) {
+                setPrompayStatus(snapshot.val().status || 'pending');
+            }
+        });
+
+        return () => unsubscribe();
     }, []);
+
+    const handlePaymentSuccess = async () => {
+        try {
+            const now = new Date();
+            const todayDate = now.toISOString().split('T')[0];
+            const nowTime = now.toTimeString().split(' ')[0].substring(0,5);
+
+            let roundedFineAmount = Number.isInteger(fineAmount)
+                ? fineAmount
+                : parseFloat(fineAmount.toFixed(2));
+
+            const payFineData = {
+                id: bookingData.id,
+                username: bookingData.username,
+                bookingType: bookingData.bookingType,
+                rateType: bookingData.rateType,
+                entryDate: bookingData.entryDate,
+                exitDate: bookingData.exitDate,
+                entryTime: bookingData.entryTime,
+                exitTime: bookingData.exitTime,
+                floor: bookingData.floor,
+                slotId: bookingData.slotId,
+                price: bookingData.price || 0,
+                visitorInfo: bookingData.visitorInfo || null,
+                overdueMinutes,
+                rounds: fineRounds,
+                fineAmount: roundedFineAmount,
+                fineIssuedDate: todayDate,
+                payFineDate: todayDate,
+                payFineTime: nowTime,
+                payFineStatus: 'paid'
+            };
+
+            await set(ref(db, `payFine/${bookingData.id}`), payFineData);
+
+            setPaymentCompleted(true);
+
+            if (onPaid) {
+                onPaid();
+            }
+
+            Alert.alert(
+                "Payment Successful",
+                `Fine of ${roundedFineAmount} baht has been paid successfully.`,
+                [{ text: "OK", onPress: () => navigation.navigate('MyParking', { username }) }]
+            );
+        } catch (error) {
+            console.error("Payment error:", error);
+            Alert.alert("Error", "Failed to process payment. Please try again.");
+        }
+    };
 
     const formatTime = (minutes) => {
         if (minutes < 60) return `${minutes} minutes`;
@@ -188,12 +199,21 @@ const PayFineScreen = ({ route, navigation }) => {
                             </View>
                             <View style={styles.divider} />
 
-                            {/* QR Payment */}
+                            {/* QR Payment with Prompay Status */}
                             <View style={styles.paymentSection}>
                                 <Text style={styles.paymentTitle}>Scan QR Code to Pay</Text>
                                 <View style={styles.qrContainer}>
                                     <Image source={require('../../assets/images/demo-qr.png')} style={styles.qrImage} resizeMode="contain" />
-                                    <Text style={styles.qrInstruction}>Scan QR code with your banking app</Text>
+                                    <View style={styles.prompayStatusRow}>
+                                        <Text>Status:</Text>
+                                        <Text style={{
+                                            fontWeight: '700',
+                                            marginLeft: 5,
+                                            color: prompayStatus === 'paid' ? 'green' : prompayStatus === 'pending' ? 'orange' : 'red',
+                                        }}>
+                                            {prompayStatus === 'pending' ? 'Waiting for payment' : prompayStatus === 'paid' ? 'Paid' : 'Failed'}
+                                        </Text>
+                                    </View>
                                 </View>
                                 <TouchableOpacity style={styles.confirmButton} onPress={handlePaymentSuccess}>
                                     <Ionicons name="checkmark-circle" size={24} color="white" />
@@ -224,6 +244,7 @@ const PayFineScreen = ({ route, navigation }) => {
         </View>
     );
 };
+
 
 const styles = StyleSheet.create({
     container: {
@@ -473,6 +494,12 @@ const styles = StyleSheet.create({
         color: '#666',
         textAlign: 'center',
     },
+    prompayStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+}
+
 });
 
 export default PayFineScreen;

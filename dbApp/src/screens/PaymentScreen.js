@@ -285,7 +285,7 @@ const PaymentScreen = ({ navigation, route }) => {
 
             <View style={styles.prompayStatusRow}>
               <Text>Status:</Text>
-              <Text style={{ fontWeight: '700', color: prompayStatus === 'paid' ? 'green' : 'red' }}>
+              <Text style={{ fontWeight: '700', color:  prompayStatus === 'paid'? 'green' : prompayStatus === 'pending'? 'orange': 'red', }}>
                 {prompayStatus === 'pending' ? 'Waiting for payment' : prompayStatus === 'paid' ? 'Paid' : 'Failed'}
               </Text>
             </View>

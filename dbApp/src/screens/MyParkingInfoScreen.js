@@ -280,7 +280,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                         )}
                     </View>
 
-                    {/* Action Buttons*/}
+                    {/* Action Buttons */}
                     <View style={styles.actionButtonsContainer}>
                         <View style={styles.upperButtonRow}>
                             {bookingData.bookingType === 'visitor' ? (
@@ -290,10 +290,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                                 </TouchableOpacity>
                             ) : (
                                 <TouchableOpacity
-                                    style={[
-                                        styles.barrierButton,
-                                        (isOverdue && !isPaidFine) ? { backgroundColor: '#B0BEC5' } : {}
-                                    ]}
+                                    style={[styles.barrierButton, (isOverdue && !isPaidFine) ? { backgroundColor: '#B0BEC5' } : {}]}
                                     onPress={handleControlBarrier}
                                     disabled={isOverdue && !isPaidFine}
                                 >
@@ -308,7 +305,6 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                             </TouchableOpacity>
                         </View>
 
-                        {/* ✅ ปุ่ม Pay Fine จะแสดงก็ต่อเมื่อ overdue และยังไม่จ่าย (แก้ไขเพิ่ม) */}
                         {isOverdue && !isPaidFine && (
                             <View style={styles.payFineWrapper}>
                                 <TouchableOpacity style={styles.payFineButton} onPress={handlePayFine}>
@@ -321,12 +317,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                 </View>
 
                 {/* Barrier Modal */}
-                <Modal
-                    visible={showBarrierModal}
-                    transparent={true}
-                    animationType="fade"
-                    onRequestClose={cancelAction}
-                >
+                <Modal visible={showBarrierModal} transparent={true} animationType="fade" onRequestClose={cancelAction}>
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContainer}>
                             <View style={styles.modalHeader}>
@@ -337,36 +328,22 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                                 Choose an action for Slot {bookingData.slotId}, Floor: {bookingData.floor}
                             </Text>
                             <View style={styles.modalRowButtons}>
-                                <TouchableOpacity
-                                    style={styles.modalConfirmButton}
-                                    onPress={() => controlBarrier('lift')}
-                                >
+                                <TouchableOpacity style={styles.modalConfirmButton} onPress={() => controlBarrier('lift')}>
                                     <Text style={styles.modalConfirmText}>Lift</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.modalConfirmButton, { backgroundColor: '#ff4d00ff' }]}
-                                    onPress={() => controlBarrier('lower')}
-                                >
+                                <TouchableOpacity style={[styles.modalConfirmButton, { backgroundColor: '#ff4d00ff' }]} onPress={() => controlBarrier('lower')}>
                                     <Text style={styles.modalConfirmText}>Lower</Text>
                                 </TouchableOpacity>
                             </View>
-                            <TouchableOpacity
-                                style={styles.modalCancelButtonBottom}
-                                onPress={cancelAction}
-                            >
+                            <TouchableOpacity style={styles.modalCancelButtonBottom} onPress={cancelAction}>
                                 <Text style={styles.modalCancelText}>Cancel</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
                 </Modal>
 
-                {/*Cancel Modal*/}
-                <Modal
-                    visible={showCancelModal}
-                    transparent={true}
-                    animationType="fade"
-                    onRequestClose={cancelAction}
-                >
+                {/* Cancel Modal */}
+                <Modal visible={showCancelModal} transparent={true} animationType="fade" onRequestClose={cancelAction}>
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContainer}>
                             <View style={styles.modalHeader}>
@@ -380,10 +357,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                                 <TouchableOpacity style={styles.modalCancelButton} onPress={cancelAction}>
                                     <Text style={styles.modalCancelText}>No, Keep It</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.modalConfirmButton, { backgroundColor: '#FF6B6B' }]}
-                                    onPress={confirmCancelBooking}
-                                >
+                                <TouchableOpacity style={[styles.modalConfirmButton, { backgroundColor: '#FF6B6B' }]} onPress={confirmCancelBooking}>
                                     <Text style={styles.modalConfirmText}>Yes, Cancel</Text>
                                 </TouchableOpacity>
                             </View>
