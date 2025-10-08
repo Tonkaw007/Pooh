@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react"; 
+import React, { useEffect, useState, useRef } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { db } from '../firebaseConfig';
@@ -8,13 +8,44 @@ const MyParkingScreen = ({ route, navigation }) => {
   const { username, userType } = route.params;
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [currentReminder, setCurrentReminder] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [couponCount, setCouponCount] = useState(0);
-
   const bookingsRef = useRef([]);
+
+   // ฟังก์ชันป้องกัน push แจ้งเตือนซ้ำภายใน 10 นาที
+  const sendNotificationOnce = async (notifRef, newNotif) => {
+    try {
+      const snapshot = await get(notifRef);
+      const now = Date.now();
+      let duplicate = false;
+
+      if (snapshot.exists()) {
+        snapshot.forEach(child => {
+          const item = child.val();
+          if (
+            item.message === newNotif.message &&
+            Math.abs(now - (item.timestamp || 0)) < 10 * 60 * 1000
+          ) {
+            duplicate = true;
+          }
+        });
+      }
+
+      if (!duplicate) {
+        await push(notifRef, newNotif);
+        console.log("✅ Sent new notification:", newNotif.message);
+        return true;
+      } else {
+        console.log("⚠️ Skipped duplicate notification:", newNotif.message);
+        return false;
+      }
+    } catch (err) {
+      console.error("Error checking duplicate notification:", err);
+      return false;
+    }
+  };
 
   // Demo popup ใหม่
   const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
@@ -112,14 +143,11 @@ const MyParkingScreen = ({ route, navigation }) => {
       setBookings(activeBookings);
       bookingsRef.current = activeBookings;
       setLoading(false);
-
       checkBookingReminders();
 
-      // Fetch notifications
-      if(userType === "visitor") {
+      if (userType === "visitor") {
         const visitorBooking = activeBookings[0];
         const ownerUsername = visitorBooking?.ownerUsername || visitorBooking?.username || "N/A";
-
         const notifSnapshot = await get(child(ref(db), `notifications/${ownerUsername}/${username}`));
         const notifData = notifSnapshot.val() || {};
         const unread = Object.values(notifData).filter(n => !n.read).length;
@@ -139,118 +167,114 @@ const MyParkingScreen = ({ route, navigation }) => {
     }
   };
 
+  // ใช้ sendNotificationOnce แทน push()
   const showBookingReminder = async (booking) => {
     if (booking.showingModal) return; 
     booking.showingModal = true;
 
-    const ownerUsername = booking.ownerUsername || booking.username || "N/A";
-
     let notifPath = userType === "visitor"
-                ? `notifications/${booking.ownerUsername}/${booking.visitorInfo.visitorUsername}`
-                : `notifications/${booking.username}`;
+      ? `notifications/${booking.ownerUsername}/${booking.visitorInfo.visitorUsername}`
+      : `notifications/${booking.username}`;
 
     const notifRef = ref(db, notifPath);
-    const snapshot = await get(notifRef);
-    const notifData = snapshot.val() || {};
 
-    const alreadyNotified = Object.values(notifData).some(
-      n => n.message.includes(`Slot ${booking.slotId} ends at ${booking.exitTime}`)
-    );
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-   if (!alreadyNotified) {
-  const now = new Date();
-  const dateStr = now.toISOString().slice(0, 10);
-  const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-
-  await push(notifRef, {  
-    date: dateStr,
-    time: timeStr,
-    message: `Reminder: Parking Slot ${booking.slotId} ends at ${booking.exitTime}`,
-    read: false,
-    timestamp: serverTimestamp(),
-    type: booking.rateType === 'hourly'
+    const newNotif = {
+      date: dateStr,
+      time: timeStr,
+      message: `Reminder: Parking Slot ${booking.slotId} ends at ${booking.exitTime}`,
+      read: false,
+      timestamp: Date.now(),
+      type:
+        booking.rateType === 'hourly'
           ? "Hourly reminder (10 minutes before end)"
           : booking.rateType === 'daily'
           ? "Daily reminder (10 minutes before end)"
           : booking.rateType === 'monthly'
           ? "Monthly reminder (10 minutes before end)"
           : null
-  });
+    };
 
-  setUnreadCount(prev => prev + 1);
-}
-
+    const sent = await sendNotificationOnce(notifRef, newNotif);
+    if (sent) setUnreadCount(prev => prev + 1);
 
     setCurrentReminder({
       username: booking.bookingType === "visitor" 
-                ? booking.visitorInfo?.visitorUsername || "N/A" 
-                : booking.username || "N/A",
+        ? booking.visitorInfo?.visitorUsername || "N/A" 
+        : booking.username || "N/A",
       slotId: booking.slotId || 'N/A',
       floor: booking.floor || 'N/A',
       licensePlate: booking.visitorInfo 
-                    ? booking.visitorInfo?.licensePlate || 'N/A' 
-                    : booking.licensePlate || 'N/A',
+        ? booking.visitorInfo?.licensePlate || 'N/A' 
+        : booking.licensePlate || 'N/A',
       endTime: booking.exitTime,
     });
 
     setShowReminderModal(true);
   };
 
-  const checkBookingReminders = async () => {
-    const now = new Date();
-    const nowTime = now.getTime();
-    const activeBookings = bookingsRef.current;
+  //... ส่วน import และ useState เดิมเหมือนโค้ดของคุณ
 
-    for (const booking of activeBookings) {
-      if (!booking.rateType) continue;
+const checkBookingReminders = async () => {
+  const now = new Date();
+  const nowTime = now.getTime();
+  const activeBookings = bookingsRef.current;
 
-      // HOURLY
-      if (booking.rateType === 'hourly' && booking.entryDate && booking.exitTime) {
-        const [exitHour, exitMinute] = booking.exitTime.split(':').map(Number);
-        const [year, month, day] = booking.entryDate.split('-').map(Number);
+  for (const booking of activeBookings) {
+    if (!booking.rateType) continue;
 
-        const endDate = new Date(year, month - 1, day, exitHour, exitMinute, 0);
-        const reminderTime = new Date(endDate.getTime() - 10 * 60 * 1000);
+    // แจ้งเตือนรายชั่วโมง
+    if (booking.rateType === 'hourly' && booking.entryDate && booking.exitTime) {
+      const [exitHour, exitMinute] = booking.exitTime.split(':').map(Number);
+      const [year, month, day] = booking.entryDate.split('-').map(Number);
+      const endDate = new Date(year, month - 1, day, exitHour, exitMinute, 0);
+      const reminderTime = new Date(endDate.getTime() - 10 * 60 * 1000);
 
-        if (now >= reminderTime && now < endDate && !booking.notifiedHour) {
-          const bookingRef = ref(db, `bookings/${booking.id}`);
-          await update(bookingRef, { notifiedHour: true });
-          booking.notifiedHour = true;
-          await showBookingReminder(booking);
-        }
-
-      // DAILY / MONTHLY
-      } else if (booking.rateType === 'daily' || booking.rateType === 'monthly') {
-        if (!booking.exitDate) continue;
-
-        const reminderDate = new Date(booking.exitDate);
-        reminderDate.setHours(23, 50, 0, 0);
-        const reminderTimeStart = reminderDate.getTime();
-        const reminderTimeEnd = reminderTimeStart + 60000; // 1 นาที
-
-        if (nowTime >= reminderTimeStart && nowTime <= reminderTimeEnd) {
-          if (booking.rateType === 'daily' && !booking.notifiedDaily) {
-            const bookingRef = ref(db, `bookings/${booking.id}`);
-            await update(bookingRef, { notifiedDaily: true });
-            booking.notifiedDaily = true;
-            await showBookingReminder(booking);
-          } else if (booking.rateType === 'monthly' && !booking.notifiedMonthly) {
-            const bookingRef = ref(db, `bookings/${booking.id}`);
-            await update(bookingRef, { notifiedMonthly: true });
-            booking.notifiedMonthly = true;
-            await showBookingReminder(booking);
-          }
-        }
+      if (now >= reminderTime && now < endDate && !booking.notifiedHour) {
+        const bookingRef = ref(db, `bookings/${booking.id}`);
+        await update(bookingRef, { notifiedHour: true });
+        booking.notifiedHour = true;
+        await showBookingReminder(booking);
       }
     }
-  };
+
+    // แจ้งเตือนรายวัน
+    else if (booking.rateType === 'daily' && booking.exitDate) {
+      const reminderDate = new Date(booking.exitDate);
+      reminderDate.setHours(0, 0, 0, 0); // วันเริ่มต้น
+      const reminderTime = new Date(reminderDate.getTime() + 24*60*60*1000 - 10*60*1000); // 10 นาที ก่อนวันถัดไป 00:00
+
+      if (now >= reminderTime && !booking.notifiedDaily) {
+        const bookingRef = ref(db, `bookings/${booking.id}`);
+        await update(bookingRef, { notifiedDaily: true });
+        booking.notifiedDaily = true;
+        await showBookingReminder(booking);
+      }
+    }
+
+    // แจ้งเตือนรายเดือน
+    else if (booking.rateType === 'monthly' && booking.exitDate) {
+      const [year, month, day] = booking.exitDate.split('-').map(Number);
+      const reminderDate = new Date(year, month, day, 0, 0, 0); // วันถัดไปเดือนถัดไป
+      reminderDate.setMinutes(reminderDate.getMinutes() - 10); // 10 นาที ก่อนเวลา
+      if (now >= reminderDate && !booking.notifiedMonthly) {
+        const bookingRef = ref(db, `bookings/${booking.id}`);
+        await update(bookingRef, { notifiedMonthly: true });
+        booking.notifiedMonthly = true;
+        await showBookingReminder(booking);
+      }
+    }
+  }
+};
+
 
   useEffect(() => {
     fetchBookings();
-
     const unsubscribeFocus = navigation.addListener("focus", () => fetchBookings());
-    const reminderInterval = setInterval(() => checkBookingReminders(), 30000); // ทุก 30 วิ
-
+    const reminderInterval = setInterval(() => checkBookingReminders(), 30000);
     return () => {
       unsubscribeFocus();
       clearInterval(reminderInterval);
