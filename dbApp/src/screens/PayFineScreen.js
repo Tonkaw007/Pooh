@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Image } from 'react-native';
 import { db } from '../firebaseConfig';
-import { ref, set, onValue, child, get } from 'firebase/database';
+import { ref, set, onValue } from 'firebase/database';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const PayFineScreen = ({ route, navigation }) => {
@@ -23,16 +23,16 @@ const PayFineScreen = ({ route, navigation }) => {
         if (!bookingData.exitDate) return;
 
         const now = new Date();
-        
-        // สำหรับการจองแบบรายวันและรายเดือน ใช้เวลา 23:59 ของวัน exitDate
+
         let exitDateTime;
-        
+
         if (bookingData.rateType === 'hourly' && bookingData.exitTime) {
             // รายชั่วโมง: ใช้ exitDate + exitTime
             exitDateTime = new Date(`${bookingData.exitDate}T${bookingData.exitTime}`);
         } else {
-            // รายวันและรายเดือน: ใช้เวลา 23:59 ของวัน exitDate
+            // รายวันและรายเดือน: ใช้เวลา 23:59 ของ exitDate แล้วเริ่มคิดค่าปรับ 00:01
             exitDateTime = new Date(`${bookingData.exitDate}T23:59`);
+            exitDateTime.setMinutes(exitDateTime.getMinutes() + 1); // เริ่มคิดค่าปรับหลัง 00:01
         }
 
         const minutesOverdue = Math.max(0, Math.floor((now - exitDateTime) / (1000 * 60)));
@@ -75,55 +75,62 @@ const PayFineScreen = ({ route, navigation }) => {
     }, [bookingData]);
 
     const handlePaymentSuccess = async () => {
-        try {
-            const now = new Date();
-            const todayDate = now.toISOString().split('T')[0];
-            const nowTime = now.toTimeString().split(' ')[0].substring(0,5);
+    try {
+        const now = new Date();
+        const todayDate = now.toISOString().split('T')[0];
+        const nowTime = now.toTimeString().split(' ')[0].substring(0,5);
 
-            let roundedFineAmount = Number.isInteger(fineAmount)
-                ? fineAmount
-                : parseFloat(fineAmount.toFixed(2));
+        let roundedFineAmount = Number.isInteger(fineAmount)
+            ? fineAmount
+            : parseFloat(fineAmount.toFixed(2));
 
-            const payFineData = {
-                id: bookingData.id,
-                username: bookingData.username,
-                bookingType: bookingData.bookingType,
-                rateType: bookingData.rateType,
-                entryDate: bookingData.entryDate,
-                exitDate: bookingData.exitDate,
-                entryTime: bookingData.entryTime,
-                exitTime: bookingData.exitTime,
-                floor: bookingData.floor,
-                slotId: bookingData.slotId,
-                price: bookingData.price || 0,
-                visitorInfo: bookingData.visitorInfo || null,
-                overdueMinutes,
-                rounds: fineRounds,
-                fineAmount: roundedFineAmount,
-                fineIssuedDate: todayDate,
-                payFineDate: todayDate,
-                payFineTime: nowTime,
-                payFineStatus: 'paid'
-            };
+        // กำหนด entryTime และ exitTime สำหรับ daily และ monthly
+        let entryTimeToSave = bookingData.entryTime || '';
+        let exitTimeToSave = bookingData.exitTime || '';
 
-            await set(ref(db, `payFine/${bookingData.id}`), payFineData);
-
-            setPaymentCompleted(true);
-
-            if (onPaid) {
-                onPaid();
-            }
-
-            Alert.alert(
-                "Payment Successful",
-                `Fine of ${formatNumberWithCommas(roundedFineAmount)} baht has been paid successfully.`,
-                [{ text: "OK", onPress: () => navigation.navigate('MyParking', { username }) }]
-            );
-        } catch (error) {
-            console.error("Payment error:", error);
-            Alert.alert("Error", "Failed to process payment. Please try again.");
+        if (bookingData.rateType === 'daily' || bookingData.rateType === 'monthly') {
+            entryTimeToSave = '00:00';
+            exitTimeToSave = '23:59';
         }
-    };
+
+        const payFineData = {
+            id: bookingData.id,
+            username: bookingData.username || '',
+            bookingType: bookingData.bookingType || '',
+            rateType: bookingData.rateType || '',
+            entryDate: bookingData.entryDate || '',
+            exitDate: bookingData.exitDate || '',
+            entryTime: entryTimeToSave,
+            exitTime: exitTimeToSave,
+            floor: bookingData.floor || '',
+            slotId: bookingData.slotId || '',
+            price: bookingData.price || 0,
+            visitorInfo: bookingData.visitorInfo || null,
+            overdueMinutes,
+            rounds: fineRounds,
+            fineAmount: roundedFineAmount,
+            fineIssuedDate: todayDate,
+            payFineDate: todayDate,
+            payFineTime: nowTime,
+            payFineStatus: 'paid'
+        };
+
+        await set(ref(db, `payFine/${bookingData.id}`), payFineData);
+
+        setPaymentCompleted(true);
+
+        if (onPaid) onPaid();
+
+        Alert.alert(
+            "Payment Successful",
+            `Fine of ${formatNumberWithCommas(roundedFineAmount)} baht has been paid successfully.`,
+            [{ text: "OK", onPress: () => navigation.navigate('MyParking', { username }) }]
+        );
+    } catch (error) {
+        console.error("Payment error:", error);
+        Alert.alert("Error", "Failed to process payment. Please try again.");
+    }
+};
 
     const formatTime = (minutes) => {
         if (minutes < 60) return `${minutes} minutes`;
@@ -162,8 +169,7 @@ const PayFineScreen = ({ route, navigation }) => {
                 {/* Booking Info */}
                 <View style={styles.infoCard}>
                     <Text style={styles.cardTitle}>Booking Information</Text>
-                    
-                    {/* เพิ่มแสดงประเภทการจอง */}
+
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Booking Type:</Text>
                         <Text style={styles.detailValue}>
@@ -171,13 +177,12 @@ const PayFineScreen = ({ route, navigation }) => {
                              bookingData.rateType === 'daily' ? 'Daily' : 'Monthly'}
                         </Text>
                     </View>
-                    
+
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Slot:</Text>
                         <Text style={styles.detailValue}>{bookingData.slotId} - Floor {bookingData.floor}</Text>
                     </View>
-                    
-                    {/* แสดงเวลาออกที่ใช้ในการคำนวณ */}
+
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Due Time:</Text>
                         <Text style={styles.detailValue}>
@@ -185,7 +190,7 @@ const PayFineScreen = ({ route, navigation }) => {
                             {bookingData.rateType === 'hourly' ? (bookingData.exitTime || '-') : '23:59'}
                         </Text>
                     </View>
-                    
+
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Original Price:</Text>
                         <Text style={styles.detailValue}>{formatNumberWithCommas(Math.round(originalPrice))} baht</Text>
@@ -240,7 +245,6 @@ const PayFineScreen = ({ route, navigation }) => {
                             </View>
                             <View style={styles.divider} />
 
-                            {/* QR Payment with Prompay Status */}
                             <View style={styles.paymentSection}>
                                 <Text style={styles.paymentTitle}>Scan QR Code to Pay</Text>
                                 <View style={styles.qrContainer}>
@@ -261,12 +265,11 @@ const PayFineScreen = ({ route, navigation }) => {
                                     <Text style={styles.confirmButtonText}>Confirm Payment</Text>
                                 </TouchableOpacity>
                                 <Text style={styles.noteText}>* Scan QR code first, then click Confirm Payment</Text>
-                                
-                                {/* Explanation */}
+
                                 <View style={styles.explanation}>
                                     <Text style={styles.explanationTitle}>Fine Calculation Rule:</Text>
                                     <Text style={styles.explanationText}>
-                                        • 00:00-00:15: 2× price{'\n'}
+                                        • 00:01-00:15: 2× price{'\n'}
                                         • 00:16-00:30: 4× price{'\n'}
                                         • 00:31-00:45: 8× price{'\n'}
                                         • 00:46-01:00: 16× price{'\n'}

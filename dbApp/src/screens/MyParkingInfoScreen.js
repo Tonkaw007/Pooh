@@ -41,53 +41,56 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         }
 
         const checkPayFineHourly = async () => {
-            if (bookingData.rateType === 'hourly' && bookingData.exitDate && bookingData.exitTime) {
-                const exitDateTime = new Date(`${bookingData.exitDate}T${bookingData.exitTime}`);
+    if (bookingData.rateType === 'hourly' && bookingData.exitDate && bookingData.exitTime) {
+        const exitDateTime = new Date(`${bookingData.exitDate}T${bookingData.exitTime}`);
 
-                const barrierRef = ref(db, `bookings/${bookingData.id}/barrierLogs`);
-                try {
-                    const snapshot = await get(barrierRef);
-                    const logs = snapshot.exists() ? snapshot.val() : null;
+        // ถ้าเวลาปัจจุบันยังไม่เลย exitDateTime → ไม่ต้องแสดงปุ่ม
+        if (now < exitDateTime) {
+            setShowPayFineButton(false);
+            return;
+        }
 
-                    if (!logs) {
-                        // ไม่มี log เลย → ต้องจ่าย fine
-                        setShowPayFineButton(true);
-                        return;
-                    }
+        const barrierRef = ref(db, `bookings/${bookingData.id}/barrierLogs`);
+        try {
+            const snapshot = await get(barrierRef);
+            const logs = snapshot.exists() ? snapshot.val() : null;
 
-                    // Sort logs by datetime
-                    const sortedLogs = Object.values(logs)
-                        .map(l => ({ ...l, datetime: new Date(`${l.date}T${l.time}`) }))
-                        .sort((a, b) => a.datetime - b.datetime);
+            if (!logs) {
+                setShowPayFineButton(true);
+                return;
+            }
 
-                    let lastLowered = null;
-                    let lastLifted = null;
+            const sortedLogs = Object.values(logs)
+                .map(l => ({ ...l, datetime: new Date(`${l.date}T${l.time}`) }))
+                .sort((a, b) => a.datetime - b.datetime);
 
-                    for (const log of sortedLogs) {
-                        if (log.status === 'lowered') lastLowered = log.datetime;
-                        else if (log.status === 'lifted') lastLifted = log.datetime;
-                    }
+            let lastLowered = null;
+            let lastLifted = null;
 
-                    let needPayFine = false;
+            for (const log of sortedLogs) {
+                if (log.status === 'lowered') lastLowered = log.datetime;
+                else if (log.status === 'lifted') lastLifted = log.datetime;
+            }
 
-                    if (!lastLowered) {
-                        // ไม่มี lowered log เลย → ต้องจ่าย fine
-                        needPayFine = true;
-                    } else if (lastLowered <= exitDateTime) {
-                        if (!lastLifted || lastLowered < lastLifted) {
-                            // lowered ล่าสุดก่อน lift ล่าสุด หรือไม่มี lift → ต้องจ่าย fine
-                            needPayFine = true;
-                        }
-                    }
+            let needPayFine = false;
 
-                    setShowPayFineButton(needPayFine);
-
-                } catch (err) {
-                    console.error('Failed to fetch barrierLogs:', err);
-                    setShowPayFineButton(false);
+            if (!lastLowered) {
+                needPayFine = true;
+            } else if (lastLowered <= exitDateTime) {
+                if (!lastLifted || lastLowered < lastLifted) {
+                    needPayFine = true;
                 }
             }
-        };
+
+            setShowPayFineButton(needPayFine);
+
+        } catch (err) {
+            console.error('Failed to fetch barrierLogs:', err);
+            setShowPayFineButton(false);
+        }
+    }
+};
+
 
         const checkPayFineDailyMonthly = () => {
             if ((bookingData.rateType === 'daily' || bookingData.rateType === 'monthly') && bookingData.exitDate) {

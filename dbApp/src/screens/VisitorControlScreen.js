@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'; 
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { db } from '../firebaseConfig';
@@ -6,11 +6,11 @@ import { ref, push, get } from 'firebase/database';
 
 const VisitorControlScreen = ({ route, navigation }) => {
     const { sessionId } = route.params || {}; 
-
     const [payFineStatus, setPayFineStatus] = useState('unpaid');
-    const [isOverdue, setIsOverdue] = useState(false);
+    const [barrierLocked, setBarrierLocked] = useState(true);
+    const [bookingData, setBookingData] = useState(null);
 
-    // เช็ก payFine และ overdue ตามประเภท booking
+    // ดึงสถานะ payFine และ bookingData
     useEffect(() => {
         if (!sessionId) return;
 
@@ -18,49 +18,35 @@ const VisitorControlScreen = ({ route, navigation }) => {
             ? sessionId.substring(0, sessionId.lastIndexOf('-')) 
             : sessionId;
 
-        // เช็ก payFine status
+        // ดึง payFineStatus
         get(ref(db, `payFine/${sessionKey}`))
             .then(snapshot => {
-                if (snapshot.exists()) {
-                    const data = snapshot.val();
-                    setPayFineStatus(data.payFineStatus || 'unpaid');
-                } else {
-                    setPayFineStatus('unpaid');
-                }
-            })
-            .catch(error => console.error('Failed to fetch payFineStatus:', error));
+                const payStatus = snapshot.exists() ? snapshot.val().payFineStatus || 'unpaid' : 'unpaid';
+                setPayFineStatus(payStatus);
 
-        // เช็ก booking และ overdue
-        get(ref(db, `bookings/${sessionKey}`))
-            .then(snapshot => {
-                if (snapshot.exists()) {
-                    const booking = snapshot.val();
-                    if (booking.exitDate && booking.exitTime && booking.type) {
-                        const now = new Date();
-                        let overdue = false;
+                // ดึงข้อมูล booking เพื่อเช็ก exitTime
+                get(ref(db, `bookings/${sessionKey}`))
+                    .then(bookingSnap => {
+                        if (!bookingSnap.exists()) return;
 
-                        if (booking.type === 'hourly') {
-                            const exitDateTime = new Date(`${booking.exitDate}T${booking.exitTime}`);
-                            overdue = now > exitDateTime;
-                        } else if (booking.type === 'daily') {
-                            const dailyOverdue = new Date(booking.exitDate);
-                            dailyOverdue.setDate(dailyOverdue.getDate() + 1);
-                            dailyOverdue.setHours(0, 0, 0, 0);
-                            overdue = now > dailyOverdue;
-                        } else if (booking.type === 'monthly') {
-                            const monthlyOverdue = new Date(booking.exitDate);
-                            monthlyOverdue.setMonth(monthlyOverdue.getMonth() + 1);
-                            monthlyOverdue.setHours(0, 0, 0, 0);
-                            overdue = now > monthlyOverdue;
+                        const data = bookingSnap.val();
+                        setBookingData(data);
+
+                        // logic สำหรับรายชั่วโมง
+                        if (data.rateType === 'hourly') {
+                            const exitDateTime = new Date(`${data.exitDate}T${data.exitTime}`);
+                            const now = new Date();
+                            setBarrierLocked(now > exitDateTime && payStatus !== 'paid');
+                        } 
+                        else if (data.rateType === 'daily' || data.rateType === 'monthly') {
+                            setBarrierLocked(snapshot.exists() && payStatus !== 'paid');
                         }
-
-                        setIsOverdue(overdue);
-                    }
-                }
+                    });
             })
-            .catch(error => console.error('Failed to fetch booking:', error));
+            .catch(error => console.error('Failed to fetch payFineStatus or bookingData:', error));
     }, [sessionId]);
 
+    // กดปุ่ม barrier
     const handleControl = async (action) => {
         if (!sessionId) {
             Alert.alert("Error", "Session ID is missing.");
@@ -71,8 +57,7 @@ const VisitorControlScreen = ({ route, navigation }) => {
             ? sessionId.substring(0, sessionId.lastIndexOf('-')) 
             : sessionId;
 
-        // ถ้า overdue และยังไม่ได้จ่ายค่าปรับ ล็อคปุ่ม
-        if (isOverdue && payFineStatus !== 'paid') {
+        if (barrierLocked) {
             Alert.alert("Action not allowed", "Please pay the fine first.");
             return;
         }
@@ -97,13 +82,9 @@ const VisitorControlScreen = ({ route, navigation }) => {
                 return;
             }
 
-            // บันทึก log ของ barrier
+            // บันทึก log การเปิด/ปิด barrier
             const logRef = ref(db, `bookings/${existingKey}/barrierLogs`);
-            await push(logRef, {
-                status: status,
-                date: actionDate,
-                time: actionTime
-            });
+            await push(logRef, { status, date: actionDate, time: actionTime });
 
             Alert.alert("Success", `Barrier action '${status}' has been logged.`);
         } catch (error) {
@@ -115,41 +96,41 @@ const VisitorControlScreen = ({ route, navigation }) => {
     const handleBack = () => navigation.goBack();
 
     return (
-        <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <KeyboardAvoidingView 
+            style={styles.container} 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
             <ScrollView contentContainerStyle={styles.scrollContainer}>
                 
+                {/* ปุ่ม Back */}
                 <TouchableOpacity style={styles.backButton} onPress={handleBack}>
                     <Ionicons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
 
+                {/* Header */}
                 <View style={styles.header}>
                     <Text style={styles.title}>Visitor Control</Text>
                     <Text style={styles.subtitle}>Parking Barrier Access</Text>
                 </View>
 
+                {/* ข้อมูล Session */}
                 <View style={styles.infoCard}>
                     <View style={styles.cardHeader}>
                         <Ionicons name="key" size={24} color="#FF9800" />
                         <Text style={styles.cardTitle}>Session Information</Text>
                     </View>
-                    
                     <View style={styles.sessionContainer}>
                         <Text style={styles.sessionLabel}>Session ID:</Text>
                         <Text style={styles.sessionValue}>{sessionId || 'N/A'}</Text>
                     </View>
-
-                    <View style={styles.statusContainer}>
-                        <View style={styles.statusIndicator} />
-                        <Text style={styles.statusText}>Active Session</Text>
-                    </View>
                 </View>
 
+                {/* ปุ่มควบคุม Barrier */}
                 <View style={styles.controlCard}>
                     <View style={styles.cardHeader}>
                         <Ionicons name="car" size={24} color="#2196F3" />
                         <Text style={styles.cardTitle}>Barrier Control</Text>
                     </View>
-                    
                     <Text style={styles.controlDescription}>
                         Tap the buttons below to control the parking barrier
                     </Text>
@@ -159,11 +140,11 @@ const VisitorControlScreen = ({ route, navigation }) => {
                             style={[
                                 styles.controlButton, 
                                 styles.openButton,
-                                (isOverdue && payFineStatus !== 'paid') ? { backgroundColor: '#B0BEC5' } : {}
+                                barrierLocked ? { backgroundColor: '#B0BEC5' } : {}
                             ]}
                             onPress={() => handleControl('Open Barrier')}
                             activeOpacity={0.8}
-                            disabled={isOverdue && payFineStatus !== 'paid'}
+                            disabled={barrierLocked}
                         >
                             <View style={styles.buttonContent}>
                                 <Ionicons name="arrow-up" size={32} color="white" />
@@ -176,11 +157,11 @@ const VisitorControlScreen = ({ route, navigation }) => {
                             style={[
                                 styles.controlButton, 
                                 styles.closeButton,
-                                (isOverdue && payFineStatus !== 'paid') ? { backgroundColor: '#B0BEC5' } : {}
+                                barrierLocked ? { backgroundColor: '#B0BEC5' } : {}
                             ]}
                             onPress={() => handleControl('Close Barrier')}
                             activeOpacity={0.8}
-                            disabled={isOverdue && payFineStatus !== 'paid'}
+                            disabled={barrierLocked}
                         >
                             <View style={styles.buttonContent}>
                                 <Ionicons name="arrow-down" size={32} color="white" />
@@ -191,12 +172,12 @@ const VisitorControlScreen = ({ route, navigation }) => {
                     </View>
                 </View>
 
+                {/* Instructions */}
                 <View style={styles.instructionsCard}>
                     <View style={styles.cardHeader}>
                         <Ionicons name="information-circle" size={24} color="#6C757D" />
                         <Text style={styles.cardTitle}>Instructions</Text>
                     </View>
-                    
                     <Text style={styles.instructionText}>• Use "Open Barrier" when arriving at the parking</Text>
                     <Text style={styles.instructionText}>• Use "Close Barrier" after your vehicle has passed</Text>
                     <Text style={styles.instructionText}>• Make sure the area is clear before operating</Text>
@@ -208,19 +189,16 @@ const VisitorControlScreen = ({ route, navigation }) => {
     );
 };
 
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#B19CD8',
     },
-
     scrollContainer: {
         padding: 20,
         paddingTop: 60,
         alignItems: 'center',
     },
-
     backButton: {
         position: 'absolute',
         top: 40,
@@ -228,13 +206,11 @@ const styles = StyleSheet.create({
         zIndex: 1,
         padding: 8,
     },
-
     header: {
         alignItems: 'center',
         marginBottom: 30,
         marginTop: 10,
     },
-
     title: {
         fontSize: 28,
         fontWeight: 'bold',
@@ -242,13 +218,11 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginBottom: 8,
     },
-
     subtitle: {
         fontSize: 16,
         color: 'rgba(255, 255, 255, 0.8)',
         textAlign: 'center',
     },
-
     infoCard: {
         backgroundColor: 'white',
         borderRadius: 15,
@@ -261,7 +235,6 @@ const styles = StyleSheet.create({
         shadowRadius: 3.84,
         elevation: 5,
     },
-
     controlCard: {
         backgroundColor: 'white',
         borderRadius: 15,
@@ -274,7 +247,6 @@ const styles = StyleSheet.create({
         shadowRadius: 3.84,
         elevation: 5,
     },
-
     instructionsCard: {
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderRadius: 15,
@@ -282,20 +254,17 @@ const styles = StyleSheet.create({
         marginBottom: 20,
         width: '100%',
     },
-
     cardHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 15,
     },
-
     cardTitle: {
         fontSize: 18,
         fontWeight: 'bold',
         color: '#2D3748',
         marginLeft: 10,
     },
-
     sessionContainer: {
         backgroundColor: '#F7FAFC',
         borderRadius: 10,
@@ -304,25 +273,21 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E2E8F0',
     },
-
     sessionLabel: {
         fontSize: 14,
         color: '#718096',
         marginBottom: 5,
     },
-
     sessionValue: {
         fontSize: 16,
         fontWeight: 'bold',
         color: '#2D3748',
         fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
-
     statusContainer: {
         flexDirection: 'row',
         alignItems: 'center',
     },
-
     statusIndicator: {
         width: 12,
         height: 12,
@@ -330,13 +295,11 @@ const styles = StyleSheet.create({
         backgroundColor: '#4CAF50',
         marginRight: 8,
     },
-
     statusText: {
         fontSize: 14,
         color: '#4CAF50',
         fontWeight: '600',
     },
-
     controlDescription: {
         fontSize: 14,
         color: '#718096',
@@ -344,11 +307,9 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 20,
     },
-
     buttonContainer: {
         gap: 15,
     },
-
     controlButton: {
         borderRadius: 15,
         padding: 20,
@@ -365,7 +326,6 @@ const styles = StyleSheet.create({
     closeButton: {
         backgroundColor: '#ff4d00ff',
     },
-
     buttonContent: {
         alignItems: 'center',
     },
