@@ -107,6 +107,18 @@ const NotificationsScreen = ({ route, navigation }) => {
 
   const renderItem = ({ item }) => {
     const { date, time } = formatTimestamp(item.timestamp);
+    
+    // กำหนดชื่อที่จะแสดงตามประเภทผู้ใช้
+    let displayName = "";
+    
+    if (userType === "visitor") {
+      // สำหรับ visitor: แสดงชื่อ visitor
+      displayName = username + " (Visitor)";
+    } else {
+      // สำหรับ resident: แสดงชื่อ resident
+      displayName = username + " (Resident)";
+    }
+    
     return (
       <TouchableOpacity 
         style={[styles.notificationCard, !item.read && styles.unreadCard]}
@@ -115,10 +127,16 @@ const NotificationsScreen = ({ route, navigation }) => {
       >
         <View style={styles.notificationHeader}>
           <View style={styles.notificationContent}>
+            {/* เพิ่มชื่อผู้ใช้ */}
+            <Text style={styles.usernameText}>
+              {displayName}
+            </Text>
+            
             <Text style={styles.message}>{item.message ?? ""}</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={styles.time}>{date ?? ""}</Text>
-              <Text style={[styles.time, { position: 'absolute', right: 0 }]}>{time ?? ""}</Text>
+            
+            <View style={styles.timeContainer}>
+              <Text style={styles.dateText}>{date ?? ""}</Text>
+              <Text style={styles.timeText}>{time ?? ""}</Text>
             </View>
           </View>
           <View style={styles.statusContainer}>
@@ -270,15 +288,33 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 10,
   },
+  // เพิ่มสไตล์สำหรับชื่อผู้ใช้
+  usernameText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2D3748',
+    marginBottom: 8,
+  },
   message: {
     fontSize: 14,
     color: '#333',
     lineHeight: 20,
-    marginBottom: 5,
+    marginBottom: 8,
   },
-  time: {
+  // ปรับปรุงสไตล์สำหรับเวลา
+  timeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dateText: {
     fontSize: 12,
     color: '#666',
+  },
+  timeText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
   },
   statusContainer: {
     alignItems: 'center',
