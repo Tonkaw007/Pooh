@@ -146,34 +146,6 @@ const PayFineScreen = ({ route, navigation }) => {
         }
     };
 
-    // ฟังก์ชันแสดงรายละเอียดการคำนวณค่าปรับ
-    const renderFineCalculation = () => {
-        if (fineRounds === 0) return null;
-
-        const calculations = [];
-        for (let i = 1; i <= fineRounds; i++) {
-            const multiplier = Math.pow(2, i);
-            const fineForRound = originalPrice * multiplier;
-            const startMin = (i - 1) * 15;
-            const endMin = i * 15;
-            
-            calculations.push(
-                <View key={i} style={styles.calculationRow}>
-                    <Text style={styles.calculationText}>
-                        {startMin}-{endMin} min: {formatNumberWithCommas(Math.round(originalPrice))} × 2^{i} = {formatNumberWithCommas(fineForRound.toFixed(0))} baht
-                    </Text>
-                </View>
-            );
-        }
-
-        return (
-            <View style={styles.calculationSection}>
-                <Text style={styles.calculationTitle}>Fine Calculation Details:</Text>
-                {calculations}
-            </View>
-        );
-    };
-
     const handleBack = () => navigation.goBack();
 
     return (
@@ -260,9 +232,6 @@ const PayFineScreen = ({ route, navigation }) => {
                                 <Text style={styles.fineLabel}>Calculation:</Text>
                                 <Text style={styles.fineValue}>{formatNumberWithCommas(Math.round(originalPrice))} × 2^{fineRounds}</Text>
                             </View>
-
-                            {/* แสดงรายละเอียดการคำนวณ */}
-                            {renderFineCalculation()}
 
                             <View style={styles.divider} />
                             <View style={styles.totalFineSection}>
@@ -435,26 +404,6 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#2D3748',
         fontSize: 14,
-    },
-    // สไตล์สำหรับแสดงรายละเอียดการคำนวณ
-    calculationSection: {
-        backgroundColor: '#F8F9FA',
-        padding: 15,
-        borderRadius: 10,
-        marginVertical: 10,
-    },
-    calculationTitle: {
-        fontWeight: 'bold',
-        color: '#4A5568',
-        marginBottom: 8,
-        fontSize: 14,
-    },
-    calculationRow: {
-        marginBottom: 4,
-    },
-    calculationText: {
-        fontSize: 12,
-        color: '#666',
     },
     divider: {
         height: 1,
