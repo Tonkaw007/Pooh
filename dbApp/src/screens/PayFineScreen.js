@@ -11,17 +11,34 @@ const PayFineScreen = ({ route, navigation }) => {
     const [originalPrice, setOriginalPrice] = useState(0);
     const [fineRounds, setFineRounds] = useState(0);
     const [paymentCompleted, setPaymentCompleted] = useState(false);
-    const [prompayStatus, setPrompayStatus] = useState('pending'); // เพิ่ม state status Prompay
+    const [prompayStatus, setPrompayStatus] = useState('pending');
+
+    // ฟังก์ชันจัดรูปแบบตัวเลขด้วยลูกน้ำ
+    const formatNumberWithCommas = (number) => {
+        return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    };
 
     // คำนวณค่าปรับ
     const calculateFine = () => {
-        if (!bookingData.exitDate || !bookingData.exitTime) return;
+        if (!bookingData.exitDate) return;
 
         const now = new Date();
-        const exitDateTime = new Date(`${bookingData.exitDate}T${bookingData.exitTime}`);
+        
+        // สำหรับการจองแบบรายวันและรายเดือน ใช้เวลา 23:59 ของวัน exitDate
+        let exitDateTime;
+        
+        if (bookingData.rateType === 'hourly' && bookingData.exitTime) {
+            // รายชั่วโมง: ใช้ exitDate + exitTime
+            exitDateTime = new Date(`${bookingData.exitDate}T${bookingData.exitTime}`);
+        } else {
+            // รายวันและรายเดือน: ใช้เวลา 23:59 ของวัน exitDate
+            exitDateTime = new Date(`${bookingData.exitDate}T23:59`);
+        }
+
         const minutesOverdue = Math.max(0, Math.floor((now - exitDateTime) / (1000 * 60)));
         setOverdueMinutes(minutesOverdue);
 
+        // คำนวณรอบค่าปรับ (ทุก 15 นาที) - ใช้ logic เดียวกันทุกประเภทการจอง
         const rounds = Math.ceil(minutesOverdue / 15);
         setFineRounds(rounds);
 
@@ -55,7 +72,7 @@ const PayFineScreen = ({ route, navigation }) => {
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [bookingData]);
 
     const handlePaymentSuccess = async () => {
         try {
@@ -99,7 +116,7 @@ const PayFineScreen = ({ route, navigation }) => {
 
             Alert.alert(
                 "Payment Successful",
-                `Fine of ${roundedFineAmount} baht has been paid successfully.`,
+                `Fine of ${formatNumberWithCommas(roundedFineAmount)} baht has been paid successfully.`,
                 [{ text: "OK", onPress: () => navigation.navigate('MyParking', { username }) }]
             );
         } catch (error) {
@@ -117,8 +134,44 @@ const PayFineScreen = ({ route, navigation }) => {
 
     const formatDate = (dateString) => {
         if (!dateString) return '-';
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+            });
+        } catch (error) {
+            return dateString;
+        }
+    };
+
+    // ฟังก์ชันแสดงรายละเอียดการคำนวณค่าปรับ
+    const renderFineCalculation = () => {
+        if (fineRounds === 0) return null;
+
+        const calculations = [];
+        for (let i = 1; i <= fineRounds; i++) {
+            const multiplier = Math.pow(2, i);
+            const fineForRound = originalPrice * multiplier;
+            const startMin = (i - 1) * 15;
+            const endMin = i * 15;
+            
+            calculations.push(
+                <View key={i} style={styles.calculationRow}>
+                    <Text style={styles.calculationText}>
+                        {startMin}-{endMin} min: {formatNumberWithCommas(Math.round(originalPrice))} × 2^{i} = {formatNumberWithCommas(fineForRound.toFixed(0))} baht
+                    </Text>
+                </View>
+            );
+        }
+
+        return (
+            <View style={styles.calculationSection}>
+                <Text style={styles.calculationTitle}>Fine Calculation Details:</Text>
+                {calculations}
+            </View>
+        );
     };
 
     const handleBack = () => navigation.goBack();
@@ -137,17 +190,33 @@ const PayFineScreen = ({ route, navigation }) => {
                 {/* Booking Info */}
                 <View style={styles.infoCard}>
                     <Text style={styles.cardTitle}>Booking Information</Text>
+                    
+                    {/* เพิ่มแสดงประเภทการจอง */}
+                    <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Booking Type:</Text>
+                        <Text style={styles.detailValue}>
+                            {bookingData.rateType === 'hourly' ? 'Hourly' : 
+                             bookingData.rateType === 'daily' ? 'Daily' : 'Monthly'}
+                        </Text>
+                    </View>
+                    
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Slot:</Text>
                         <Text style={styles.detailValue}>{bookingData.slotId} - Floor {bookingData.floor}</Text>
                     </View>
+                    
+                    {/* แสดงเวลาออกที่ใช้ในการคำนวณ */}
                     <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Exit Time:</Text>
-                        <Text style={styles.detailValue}>{formatDate(bookingData.exitDate)} at {bookingData.exitTime}</Text>
+                        <Text style={styles.detailLabel}>Due Time:</Text>
+                        <Text style={styles.detailValue}>
+                            {formatDate(bookingData.exitDate)} at{' '}
+                            {bookingData.rateType === 'hourly' ? (bookingData.exitTime || '-') : '23:59'}
+                        </Text>
                     </View>
+                    
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Original Price:</Text>
-                        <Text style={styles.detailValue}>{Math.round(originalPrice)} baht</Text>
+                        <Text style={styles.detailValue}>{formatNumberWithCommas(Math.round(originalPrice))} baht</Text>
                     </View>
 
                     {bookingData.bookingType === 'visitor' && bookingData.visitorInfo && (
@@ -184,18 +253,21 @@ const PayFineScreen = ({ route, navigation }) => {
 
                             <View style={styles.fineRow}>
                                 <Text style={styles.fineLabel}>Fine Rounds:</Text>
-                                <Text style={styles.fineValue}>{fineRounds} rounds</Text>
+                                <Text style={styles.fineValue}>{fineRounds} rounds (15 min each)</Text>
                             </View>
 
                             <View style={styles.fineRow}>
                                 <Text style={styles.fineLabel}>Calculation:</Text>
-                                <Text style={styles.fineValue}>{Math.round(originalPrice)} × 2^{fineRounds}</Text>
+                                <Text style={styles.fineValue}>{formatNumberWithCommas(Math.round(originalPrice))} × 2^{fineRounds}</Text>
                             </View>
+
+                            {/* แสดงรายละเอียดการคำนวณ */}
+                            {renderFineCalculation()}
 
                             <View style={styles.divider} />
                             <View style={styles.totalFineSection}>
                                 <Text style={styles.totalFineLabel}>TOTAL FINE:</Text>
-                                <Text style={styles.totalFineAmount}>{fineAmount} baht</Text>
+                                <Text style={styles.totalFineAmount}>{formatNumberWithCommas(fineAmount)} baht</Text>
                             </View>
                             <View style={styles.divider} />
 
@@ -220,6 +292,18 @@ const PayFineScreen = ({ route, navigation }) => {
                                     <Text style={styles.confirmButtonText}>Confirm Payment</Text>
                                 </TouchableOpacity>
                                 <Text style={styles.noteText}>* Scan QR code first, then click Confirm Payment</Text>
+                                
+                                {/* Explanation */}
+                                <View style={styles.explanation}>
+                                    <Text style={styles.explanationTitle}>Fine Calculation Rule:</Text>
+                                    <Text style={styles.explanationText}>
+                                        • 00:00-00:15: 2× price{'\n'}
+                                        • 00:16-00:30: 4× price{'\n'}
+                                        • 00:31-00:45: 8× price{'\n'}
+                                        • 00:46-01:00: 16× price{'\n'}
+                                        • ... and doubles every 15 minutes
+                                    </Text>
+                                </View>
                             </View>
                         </View>
                     </View>
@@ -229,7 +313,7 @@ const PayFineScreen = ({ route, navigation }) => {
                     <View style={styles.successCard}>
                         <Ionicons name="checkmark-circle" size={50} color="#4CAF50" />
                         <Text style={styles.successTitle}>Payment Completed!</Text>
-                        <Text style={styles.successText}>Your fine of {fineAmount} baht has been paid successfully.</Text>
+                        <Text style={styles.successText}>Your fine of {formatNumberWithCommas(fineAmount)} baht has been paid successfully.</Text>
                     </View>
                 )}
 
@@ -244,7 +328,6 @@ const PayFineScreen = ({ route, navigation }) => {
         </View>
     );
 };
-
 
 const styles = StyleSheet.create({
     container: {
@@ -353,6 +436,26 @@ const styles = StyleSheet.create({
         color: '#2D3748',
         fontSize: 14,
     },
+    // สไตล์สำหรับแสดงรายละเอียดการคำนวณ
+    calculationSection: {
+        backgroundColor: '#F8F9FA',
+        padding: 15,
+        borderRadius: 10,
+        marginVertical: 10,
+    },
+    calculationTitle: {
+        fontWeight: 'bold',
+        color: '#4A5568',
+        marginBottom: 8,
+        fontSize: 14,
+    },
+    calculationRow: {
+        marginBottom: 4,
+    },
+    calculationText: {
+        fontSize: 12,
+        color: '#666',
+    },
     divider: {
         height: 1,
         backgroundColor: '#E2E8F0',
@@ -395,11 +498,6 @@ const styles = StyleSheet.create({
         height: 200,
         marginBottom: 10,
     },
-    qrInstruction: {
-        fontSize: 14,
-        color: '#666',
-        textAlign: 'center',
-    },
     confirmButton: {
         backgroundColor: '#4CAF50',
         padding: 18,
@@ -433,7 +531,7 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         borderLeftWidth: 4,
         borderLeftColor: '#FFC107',
-        marginTop: 10,
+        marginTop: 15,
     },
     explanationTitle: {
         fontWeight: 'bold',
@@ -495,11 +593,10 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     prompayStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-}
-
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+    }
 });
 
 export default PayFineScreen;

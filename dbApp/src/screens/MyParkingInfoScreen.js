@@ -41,63 +41,64 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         }
 
         const checkPayFineHourly = async () => {
-    if (bookingData.rateType === 'hourly' && bookingData.exitDate && bookingData.exitTime) {
-        const exitDateTime = new Date(`${bookingData.exitDate}T${bookingData.exitTime}`);
+            if (bookingData.rateType === 'hourly' && bookingData.exitDate && bookingData.exitTime) {
+                const exitDateTime = new Date(`${bookingData.exitDate}T${bookingData.exitTime}`);
 
-        const barrierRef = ref(db, `bookings/${bookingData.id}/barrierLogs`);
-        try {
-            const snapshot = await get(barrierRef);
-            const logs = snapshot.exists() ? snapshot.val() : null;
+                const barrierRef = ref(db, `bookings/${bookingData.id}/barrierLogs`);
+                try {
+                    const snapshot = await get(barrierRef);
+                    const logs = snapshot.exists() ? snapshot.val() : null;
 
-            if (!logs) {
-                // ไม่มี log เลย → ต้องจ่าย fine
-                setShowPayFineButton(true);
-                return;
-            }
+                    if (!logs) {
+                        // ไม่มี log เลย → ต้องจ่าย fine
+                        setShowPayFineButton(true);
+                        return;
+                    }
 
-            // Sort logs by datetime
-            const sortedLogs = Object.values(logs)
-                .map(l => ({ ...l, datetime: new Date(`${l.date}T${l.time}`) }))
-                .sort((a, b) => a.datetime - b.datetime);
+                    // Sort logs by datetime
+                    const sortedLogs = Object.values(logs)
+                        .map(l => ({ ...l, datetime: new Date(`${l.date}T${l.time}`) }))
+                        .sort((a, b) => a.datetime - b.datetime);
 
-            let lastLowered = null;
-            let lastLifted = null;
+                    let lastLowered = null;
+                    let lastLifted = null;
 
-            for (const log of sortedLogs) {
-                if (log.status === 'lowered') lastLowered = log.datetime;
-                else if (log.status === 'lifted') lastLifted = log.datetime;
-            }
+                    for (const log of sortedLogs) {
+                        if (log.status === 'lowered') lastLowered = log.datetime;
+                        else if (log.status === 'lifted') lastLifted = log.datetime;
+                    }
 
-            let needPayFine = false;
+                    let needPayFine = false;
 
-            if (!lastLowered) {
-                // ไม่มี lowered log เลย → ต้องจ่าย fine
-                needPayFine = true;
-            } else if (lastLowered <= exitDateTime) {
-                if (!lastLifted || lastLowered < lastLifted) {
-                    // lowered ล่าสุดก่อน lift ล่าสุด หรือไม่มี lift → ต้องจ่าย fine
-                    needPayFine = true;
+                    if (!lastLowered) {
+                        // ไม่มี lowered log เลย → ต้องจ่าย fine
+                        needPayFine = true;
+                    } else if (lastLowered <= exitDateTime) {
+                        if (!lastLifted || lastLowered < lastLifted) {
+                            // lowered ล่าสุดก่อน lift ล่าสุด หรือไม่มี lift → ต้องจ่าย fine
+                            needPayFine = true;
+                        }
+                    }
+
+                    setShowPayFineButton(needPayFine);
+
+                } catch (err) {
+                    console.error('Failed to fetch barrierLogs:', err);
+                    setShowPayFineButton(false);
                 }
             }
-
-            setShowPayFineButton(needPayFine);
-
-        } catch (err) {
-            console.error('Failed to fetch barrierLogs:', err);
-            setShowPayFineButton(false); // default เผื่อ error
-        }
-    }
-};
-
-
+        };
 
         const checkPayFineDailyMonthly = () => {
             if ((bookingData.rateType === 'daily' || bookingData.rateType === 'monthly') && bookingData.exitDate) {
+                // สำหรับรายวันและรายเดือน: ใช้เวลา 23:59 ของวัน exitDate
                 const [year, month, day] = bookingData.exitDate.split('-').map(Number);
-                const exitDate = new Date(year, month - 1, day);
-                exitDate.setDate(exitDate.getDate() + 1);
-                exitDate.setHours(0, 0, 0, 0);
-                if (now >= exitDate) setShowPayFineButton(true);
+                const exitDateTime = new Date(year, month - 1, day, 23, 59, 0); // 23:59 ของวัน exitDate
+                
+                // ถ้าเวลาปัจจุบันเลยกว่า 23:59 ของวัน exitDate ให้แสดงปุ่ม Pay Fine
+                if (now > exitDateTime) {
+                    setShowPayFineButton(true);
+                }
             }
         };
 
@@ -118,11 +119,23 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
 
     const handleSendInviteLink = () => navigation.navigate('InviteLink', { username, bookingData });
     const handleCancelBooking = () => setShowCancelModal(true);
-    const handlePayFine = () => navigation.navigate('PayFine', { 
-        username, 
-        bookingData,
-        onPaid: () => setPayFineStatus('paid')
-    });
+    
+    const handlePayFine = () => {
+        // เตรียมข้อมูล bookingData ให้ครบถ้วน
+        const payFineBookingData = {
+            ...bookingData,
+            // ตรวจสอบว่ามี exitDate และ exitTime หรือไม่
+            exitDate: bookingData.exitDate || bookingData.bookingDate,
+            exitTime: bookingData.exitTime || '23:59', // ตั้งค่า default สำหรับรายวัน/รายเดือน
+            price: bookingData.price || 0,
+        };
+
+        navigation.navigate('PayFine', { 
+            username, 
+            bookingData: payFineBookingData,
+            onPaid: () => setPayFineStatus('paid')
+        });
+    };
 
     // Control Barrier Function
     const controlBarrier = (action) => {
@@ -186,8 +199,12 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
     };
     const formatDate = (dateString) => {
         if (!dateString) return '-';
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        } catch (error) {
+            return dateString;
+        }
     };
     const formatTime = (timeString) => {
         if (!timeString) return '-';
@@ -292,7 +309,12 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                         {bookingData.exitTime && (
                             <View style={styles.detailRow}>
                                 <Text style={styles.detailLabel}>Exit Time:</Text>
-                                <Text style={styles.detailValue}>{formatTime(bookingData.exitTime)}</Text>
+                                <Text style={styles.detailValue}>
+                                    {bookingData.rateType === 'hourly' 
+                                        ? formatTime(bookingData.exitTime) 
+                                        : '23:59'
+                                    }
+                                </Text>
                             </View>
                         )}
                         {bookingData.durationMonths && (
@@ -425,7 +447,6 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
     );
 };
 
-
 const styles = StyleSheet.create({
     container: { 
         flex: 1, 
@@ -507,11 +528,15 @@ const styles = StyleSheet.create({
         textAlign: 'right',
     },
     actionButtonsContainer: {
+        width: '100%',
+        marginTop: 10,
+    },
+    upperButtonRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         gap: 10,
-        marginTop: 10,
-    },
+        width: '100%',
+   },
     barrierButton: {
         backgroundColor: '#4CAF50',
         padding: 15,
@@ -557,16 +582,6 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         fontSize: 14,
     },
-    actionButtonsContainer: {
-        width: '100%',
-        marginTop: 10,
-    },
-    upperButtonRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: 10,
-        width: '100%',
-   },
     payFineWrapper: {
         marginTop: 10,
         width: '100%',
