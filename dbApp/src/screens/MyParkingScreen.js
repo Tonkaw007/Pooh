@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { db } from '../firebaseConfig';
-import { ref, get, child, push, serverTimestamp, update } from 'firebase/database';
+import { ref, get, child, push, update } from 'firebase/database';
 
 const MyParkingScreen = ({ route, navigation }) => {
   const { username, userType } = route.params;
@@ -13,13 +13,12 @@ const MyParkingScreen = ({ route, navigation }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [couponCount, setCouponCount] = useState(0);
   const bookingsRef = useRef([]);
-  
-  // เก็บ booking.id ของ booking ที่โชว์ Modal ไปแล้ว
   const activeReminderBookings = useRef(new Set());
 
-   // ฟังก์ชันป้องกัน push แจ้งเตือนซ้ำภายใน 10 นาที
-  const sendNotificationOnce = async (notifRef, newNotif) => {
+  // ฟังก์ชันป้องกัน push แจ้งเตือนซ้ำภายใน 10 นาที
+  const sendNotificationOnce = async (newNotif) => {
     try {
+      const notifRef = ref(db, "notifications");
       const snapshot = await get(notifRef);
       const now = Date.now();
       let duplicate = false;
@@ -52,7 +51,6 @@ const MyParkingScreen = ({ route, navigation }) => {
 
   // Demo popup ใหม่
   const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
-
   const showParkingProblemDemo = () => setShowParkingProblemModal(true);
 
   const handleAcceptRelocation = () => {
@@ -71,6 +69,7 @@ const MyParkingScreen = ({ route, navigation }) => {
     );
   };
 
+  // ฟังก์ชัน Demo Popup แบบเก่า
   const handleDemoPopup = async (type = "resident") => {
     try {
       const snapshot = await get(child(ref(db), "bookings"));
@@ -92,23 +91,102 @@ const MyParkingScreen = ({ route, navigation }) => {
         return;
       }
 
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+      const timeStr = now.toTimeString().slice(0,5);  // HH:mm
+
+      let newNotif;
+      if (type === "resident") {
+        newNotif = {
+          username: demoBooking.username,
+          bookingType: "resident",
+          date: dateStr,
+          time: timeStr,
+          read: false,
+          timestamp: Date.now(),
+          type: `Demo Resident ${demoBooking.slotId}`,
+          message: `Reminder: Your parking slot ${demoBooking.slotId} ends at ${demoBooking.exitTime || "N/A"}`
+        };
+      } else if (type === "visitor") {
+        newNotif = {
+          bookingType: "visitor",
+          date: dateStr,
+          time: timeStr,
+          read: false,
+          timestamp: Date.now(),
+          type: `Demo Visitor ${demoBooking.slotId}`,
+          message: `Demo Notification: Visitor ${demoBooking.visitorInfo?.visitorUsername || "N/A"} for Slot ${demoBooking.slotId}`,
+          visitorInfo: demoBooking.visitorInfo || {}
+        };
+      }
+
+      const sent = await sendNotificationOnce(newNotif);
+      if (sent) setUnreadCount(prev => prev + 1);
+
       setCurrentReminder({
-        username: demoBooking.bookingType === "visitor" 
-                  ? demoBooking.visitorInfo?.visitorUsername || "N/A" 
-                  : demoBooking.username || "N/A",
+        username: demoBooking.bookingType === "visitor" ? demoBooking.visitorInfo?.visitorUsername || "N/A" : demoBooking.username || "N/A",
         slotId: demoBooking.slotId,
         floor: demoBooking.floor || "N/A",
-        licensePlate: demoBooking.bookingType === "visitor"
-                      ? demoBooking.visitorInfo?.licensePlate || "N/A"
-                      : demoBooking.licensePlate || "N/A",
+        licensePlate: demoBooking.visitorInfo?.licensePlate || demoBooking.licensePlate || "N/A",
         endTime: demoBooking.exitTime || "N/A",
       });
 
       setShowReminderModal(true);
-      activeReminderBookings.current.add(demoBooking.id); // mark as shown
+      activeReminderBookings.current.add(demoBooking.id);
     } catch (error) {
       console.error(error);
       Alert.alert("Error", "Unable to fetch booking.");
+    }
+  };
+
+
+   // ฟังก์ชันใหม่: Demo สำหรับ Visitor J01
+  const handleDemoVisitorJ01 = async () => {
+    try {
+      const snapshot = await get(child(ref(db), "bookings"));
+      const data = snapshot.val() || {};
+
+      const demoBooking = Object.values(data).find(
+        (b) => b.bookingType === "visitor" && b.slotId === "J01"
+      );
+
+      if (!demoBooking) {
+        Alert.alert("No booking found", "No visitor booking found for J01.");
+        return;
+      }
+
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      const timeStr = now.toTimeString().slice(0,5);
+
+      const newNotif = {
+        bookingType: "visitor",
+        date: dateStr,
+        time: timeStr,
+        read: false,
+        timestamp: Date.now(),
+        type: "Demo Visitor J01",
+        message: `Demo Notification: Visitor ${demoBooking.visitorInfo?.visitorUsername || "N/A"} for Slot J01`,
+        visitorInfo: demoBooking.visitorInfo || {}
+      };
+
+      const sent = await sendNotificationOnce(newNotif);
+      if (sent) setUnreadCount(prev => prev + 1);
+
+      setCurrentReminder({
+        username: demoBooking.visitorInfo?.visitorUsername || "N/A",
+        slotId: demoBooking.slotId,
+        floor: demoBooking.floor || "N/A",
+        licensePlate: demoBooking.visitorInfo?.licensePlate || "N/A",
+        endTime: demoBooking.exitTime || "N/A",
+      });
+
+      setShowReminderModal(true);
+      activeReminderBookings.current.add(demoBooking.id);
+
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "Unable to fetch visitor booking J01.");
     }
   };
 
@@ -141,7 +219,6 @@ const MyParkingScreen = ({ route, navigation }) => {
         (b) => (b.username === username || (userType === "visitor" && b.visitorInfo?.visitorUsername === username)) && b.slotId && b.status !== "cancelled"
       );
 
-      // เพิ่ม flag สำหรับ Modal
       activeBookings.forEach(b => b.showingModal = false);
 
       setBookings(activeBookings);
@@ -149,19 +226,10 @@ const MyParkingScreen = ({ route, navigation }) => {
       setLoading(false);
       checkBookingReminders();
 
-      if (userType === "visitor") {
-        const visitorBooking = activeBookings[0];
-        const ownerUsername = visitorBooking?.ownerUsername || visitorBooking?.username || "N/A";
-        const notifSnapshot = await get(child(ref(db), `notifications/${ownerUsername}/${username}`));
-        const notifData = notifSnapshot.val() || {};
-        const unread = Object.values(notifData).filter(n => !n.read).length;
-        setUnreadCount(unread);
-      } else {
-        const notifSnapshot = await get(child(ref(db), `notifications/${username}`));
-        const notifData = notifSnapshot.val() || {};
-        const unread = Object.values(notifData).filter(n => !n.read).length;
-        setUnreadCount(unread);
-      }
+      const notifSnapshot = await get(child(ref(db), `notifications`));
+      const notifData = notifSnapshot.val() || {};
+      const unread = Object.values(notifData).filter(n => !n.read).length;
+      setUnreadCount(unread);
 
       await fetchCoupons();
     } catch (error) {
@@ -171,49 +239,42 @@ const MyParkingScreen = ({ route, navigation }) => {
     }
   };
 
-  // ใช้ sendNotificationOnce แทน push() + ป้องกัน modal ซ้ำ
   const showBookingReminder = async (booking) => {
-    if (activeReminderBookings.current.has(booking.id)) return; // ไม่โชว์ซ้ำ
+    if (activeReminderBookings.current.has(booking.id)) return;
     activeReminderBookings.current.add(booking.id);
 
-    let notifPath = userType === "visitor"
-      ? `notifications/${booking.ownerUsername}/${booking.visitorInfo.visitorUsername}`
-      : `notifications/${booking.username}`;
-
-    const notifRef = ref(db, notifPath);
-
     const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10);
-    const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const dateStr = now.toISOString().split('T')[0];
+    const timeStr = now.toTimeString().slice(0,5);
+
+    const notifType =
+      booking.rateType === 'hourly'
+        ? "Hourly reminder (10 minutes before end)"
+        : booking.rateType === 'daily'
+        ? "Daily reminder (10 minutes before end)"
+        : booking.rateType === 'monthly'
+        ? "Monthly reminder (10 minutes before end)"
+        : null;
 
     const newNotif = {
+      bookingType: booking.bookingType,
       date: dateStr,
       time: timeStr,
-      message: `Reminder: Parking Slot ${booking.slotId} ends at ${booking.exitTime}`,
       read: false,
       timestamp: Date.now(),
-      type:
-        booking.rateType === 'hourly'
-          ? "Hourly reminder (10 minutes before end)"
-          : booking.rateType === 'daily'
-          ? "Daily reminder (10 minutes before end)"
-          : booking.rateType === 'monthly'
-          ? "Monthly reminder (10 minutes before end)"
-          : null
+      type: notifType,
+      message: `Reminder: Parking Slot ${booking.slotId} ends at ${booking.exitTime}`,
+      visitorInfo: booking.visitorInfo || {}
     };
 
-    const sent = await sendNotificationOnce(notifRef, newNotif);
+    const sent = await sendNotificationOnce(newNotif);
     if (sent) setUnreadCount(prev => prev + 1);
 
     setCurrentReminder({
-      username: booking.bookingType === "visitor" 
-        ? booking.visitorInfo?.visitorUsername || "N/A" 
-        : booking.username || "N/A",
+      username: booking.bookingType === "visitor" ? booking.visitorInfo?.visitorUsername || "N/A" : booking.username || "N/A",
       slotId: booking.slotId || 'N/A',
       floor: booking.floor || 'N/A',
-      licensePlate: booking.visitorInfo 
-        ? booking.visitorInfo?.licensePlate || 'N/A' 
-        : booking.licensePlate || 'N/A',
+      licensePlate: booking.visitorInfo?.licensePlate || booking.licensePlate || 'N/A',
       endTime: booking.exitTime,
     });
 
@@ -222,13 +283,11 @@ const MyParkingScreen = ({ route, navigation }) => {
 
   const checkBookingReminders = async () => {
     const now = new Date();
-    const nowTime = now.getTime();
     const activeBookings = bookingsRef.current;
 
     for (const booking of activeBookings) {
       if (!booking.rateType) continue;
 
-      // แจ้งเตือนรายชั่วโมง
       if (booking.rateType === 'hourly' && booking.entryDate && booking.exitTime) {
         const [exitHour, exitMinute] = booking.exitTime.split(':').map(Number);
         const [year, month, day] = booking.entryDate.split('-').map(Number);
@@ -241,15 +300,11 @@ const MyParkingScreen = ({ route, navigation }) => {
           booking.notifiedHour = true;
           await showBookingReminder(booking);
         }
-      }
-
-       // แจ้งเตือนรายวันและรายเดือน
-      else if ((booking.rateType === 'daily' || booking.rateType === 'monthly') && booking.exitDate) {
+      } else if ((booking.rateType === 'daily' || booking.rateType === 'monthly') && booking.exitDate) {
         const [year, month, day] = booking.exitDate.split('-').map(Number);
         const reminderTime = new Date(year, month - 1, day, 23, 50, 0);
-        
         const notifiedKey = booking.rateType === 'daily' ? 'notifiedDaily' : 'notifiedMonthly';
-        
+
         if (now >= reminderTime && !booking[notifiedKey]) {
           const bookingRef = ref(db, `bookings/${booking.id}`);
           await update(bookingRef, { [notifiedKey]: true });
@@ -352,6 +407,7 @@ const MyParkingScreen = ({ route, navigation }) => {
 
         <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={() => handleDemoPopup("resident")}><Text style={styles.bookAgainText}>Show Resident Slot B01 Demo</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={() => handleDemoPopup("visitor")}><Text style={styles.bookAgainText}>Show Visitor Slot B06 Demo</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={handleDemoVisitorJ01}><Text style={styles.bookAgainText}>Demo Visitor Slot J01</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF5252', marginTop: 10 }]} onPress={showParkingProblemDemo}><Text style={styles.bookAgainText}>Demo: Parking Slot Unavailable</Text></TouchableOpacity>
 
       </ScrollView>
