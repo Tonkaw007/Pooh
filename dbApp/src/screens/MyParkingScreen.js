@@ -19,29 +19,27 @@ const MyParkingScreen = ({ route, navigation }) => {
   const sendNotification = async (newNotif) => {
     try {
       const notifRef = ref(db, "notifications");
-  
+
       // ✅ กำหนดโครงสร้างตาม bookingType
       let formattedNotif = {
         ...newNotif,
         timestamp: Date.now(),
       };
-  
+
       if (newNotif.bookingType === "resident") {
-        // Resident booking → เก็บชื่อ resident ไว้ใน username เท่านั้น
         formattedNotif = {
           ...formattedNotif,
           username: newNotif.username || null,
         };
         delete formattedNotif.visitorUsername;
       } else if (newNotif.bookingType === "visitor") {
-        // Visitor booking → เก็บชื่อ resident และ visitor แยกกัน
         formattedNotif = {
           ...formattedNotif,
-          username: newNotif.username || newNotif.residentUsername || null, // Resident
-          visitorUsername: newNotif.visitorUsername || null, // Visitor
+          username: newNotif.username || newNotif.residentUsername || null,
+          visitorUsername: newNotif.visitorUsername || null,
         };
       }
-  
+
       await push(notifRef, formattedNotif);
       console.log("✅ Sent notification:", formattedNotif);
       return true;
@@ -87,11 +85,10 @@ const MyParkingScreen = ({ route, navigation }) => {
     }
   };
 
-  // Demo popup ใหม่
+  // Demo popup สำหรับ Parking Slot Unavailable
   const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
   
   const showParkingProblemDemo = async () => {
-    // Push notification สำหรับ Parking Slot Unavailable
     const now = new Date();
     const newNotif = {
       username: username,
@@ -102,7 +99,6 @@ const MyParkingScreen = ({ route, navigation }) => {
       date: now.toISOString().split('T')[0],
       time: now.toTimeString().slice(0,5),
       read: false,
-      timestamp: Date.now(),
       type: "Parking Slot Unavailable",
       message: `Your booked parking slot B03 is currently unavailable. Please choose relocation or receive compensation.`
     };
@@ -110,7 +106,6 @@ const MyParkingScreen = ({ route, navigation }) => {
     const sent = await sendNotification(newNotif);
     if (sent) setUnreadCount(prev => prev + 1);
 
-    // แสดง Modal
     setShowParkingProblemModal(true);
   };
 
@@ -130,7 +125,7 @@ const MyParkingScreen = ({ route, navigation }) => {
     );
   };
 
-  // ฟังก์ชัน Demo Popup (ใช้ sendNotification แทน sendNotificationOnce)
+  // Demo popup สำหรับ Resident/Visitor
   const handleDemoPopup = async (type = "resident") => {
     try {
       const snapshot = await get(child(ref(db), "bookings"));
@@ -156,46 +151,50 @@ const MyParkingScreen = ({ route, navigation }) => {
       const dateStr = now.toISOString().split('T')[0];
       const timeStr = now.toTimeString().slice(0,5);
 
+      const notifType =
+        demoBooking.rateType === 'hourly'
+          ? "Hourly reminder (10 minutes before end)"
+          : demoBooking.rateType === 'daily'
+          ? "Daily reminder (10 minutes before end)"
+          : demoBooking.rateType === 'monthly'
+          ? "Monthly reminder (10 minutes before end)"
+          : "General reminder";
+
       let newNotif;
       if (type === "resident") {
         newNotif = {
-          username: demoBooking.username,
           bookingType: "resident",
+          username: demoBooking.username,
           slotId: demoBooking.slotId,
           floor: demoBooking.floor || "2",
           licensePlate: demoBooking.licensePlate || "N/A",
           date: dateStr,
           time: timeStr,
           read: false,
-          timestamp: Date.now(),
-          type: `Demo Resident ${demoBooking.slotId}`,
+          type: notifType,
           message: `10 minutes left, please move your car immediately.`
         };
       } else if (type === "visitor") {
         newNotif = {
           bookingType: "visitor",
-          username: demoBooking.username, // Resident ที่จองให้ visitor
-          visitorUsername: demoBooking.visitorInfo?.visitorUsername || "N/A", // Visitor
+          username: demoBooking.username,
+          visitorUsername: demoBooking.visitorInfo?.visitorUsername || "N/A",
           slotId: demoBooking.slotId,
           floor: demoBooking.floor || "2",
           licensePlate: demoBooking.visitorInfo?.licensePlate || "N/A",
           date: dateStr,
           time: timeStr,
           read: false,
-          timestamp: Date.now(),
-          type: `Demo Visitor ${demoBooking.slotId}`,
+          type: notifType,
           message: `10 minutes left, please move your car immediately.`
         };
       }
 
-      // ใช้ sendNotification แทน (ไม่มีการเช็คซ้ำ)
       const sent = await sendNotification(newNotif);
       if (sent) setUnreadCount(prev => prev + 1);
 
       setCurrentReminder({
-        username: demoBooking.bookingType === "visitor" 
-          ? demoBooking.visitorInfo?.visitorUsername || "N/A" 
-          : demoBooking.username || "N/A",
+        username: type === "visitor" ? demoBooking.visitorInfo?.visitorUsername || "N/A" : demoBooking.username || "N/A",
         slotId: demoBooking.slotId,
         floor: demoBooking.floor || "N/A",
         licensePlate: demoBooking.visitorInfo?.licensePlate || demoBooking.licensePlate || "N/A",
@@ -210,7 +209,7 @@ const MyParkingScreen = ({ route, navigation }) => {
     }
   };
 
-  // ฟังก์ชันใหม่: Demo สำหรับ Visitor J01
+  // Demo สำหรับ Visitor J01
   const handleDemoVisitorJ01 = async () => {
     try {
       const snapshot = await get(child(ref(db), "bookings"));
@@ -229,22 +228,29 @@ const MyParkingScreen = ({ route, navigation }) => {
       const dateStr = now.toISOString().split('T')[0];
       const timeStr = now.toTimeString().slice(0,5);
 
+      const notifType =
+        demoBooking.rateType === 'hourly'
+          ? "Hourly reminder (10 minutes before end)"
+          : demoBooking.rateType === 'daily'
+          ? "Daily reminder (10 minutes before end)"
+          : demoBooking.rateType === 'monthly'
+          ? "Monthly reminder (10 minutes before end)"
+          : "General reminder";
+
       const newNotif = {
         bookingType: "visitor",
-        username: demoBooking.username, // Resident ที่จอง
-        visitorUsername: demoBooking.visitorInfo?.visitorUsername || "N/A", // Visitor
+        username: demoBooking.username,
+        visitorUsername: demoBooking.visitorInfo?.visitorUsername || "N/A",
         slotId: demoBooking.slotId,
         floor: demoBooking.floor || "2",
         licensePlate: demoBooking.visitorInfo?.licensePlate || "N/A",
         date: dateStr,
         time: timeStr,
         read: false,
-        timestamp: Date.now(),
-        type: "Demo Visitor J01",
+        type: notifType,
         message: `10 minutes left, please move your car immediately.`
       };
 
-      // ใช้ sendNotification แทน
       const sent = await sendNotification(newNotif);
       if (sent) setUnreadCount(prev => prev + 1);
 
@@ -303,10 +309,8 @@ const MyParkingScreen = ({ route, navigation }) => {
       const notifSnapshot = await get(child(ref(db), `notifications`));
       const notifData = notifSnapshot.val() || {};
       
-      // นับเฉพาะ notification ของ user นี้
       const userNotifications = Object.values(notifData).filter(n => {
-        return n.username === username || 
-               n.visitorUsername === username;
+        return n.username === username || n.visitorUsername === username;
       });
       
       const unread = userNotifications.filter(n => !n.read).length;
@@ -335,7 +339,7 @@ const MyParkingScreen = ({ route, navigation }) => {
         ? "Daily reminder (10 minutes before end)"
         : booking.rateType === 'monthly'
         ? "Monthly reminder (10 minutes before end)"
-        : null;
+        : "General reminder";
 
     const newNotif = {
       bookingType: booking.bookingType,
@@ -348,12 +352,10 @@ const MyParkingScreen = ({ route, navigation }) => {
       date: dateStr,
       time: timeStr,
       read: false,
-      timestamp: Date.now(),
       type: notifType,
       message: `10 minutes left, please move your car immediately.`
     };
 
-    // ใช้ sendNotificationOnce สำหรับ auto reminder
     const sent = await sendNotificationOnce(newNotif);
     if (sent) setUnreadCount(prev => prev + 1);
 
