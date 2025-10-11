@@ -113,10 +113,10 @@ const NotificationsScreen = ({ route, navigation }) => {
     
     if (userType === "visitor") {
       // สำหรับ visitor: แสดงชื่อ visitor
-      displayName = username + " (Visitor)";
+      displayName = item.visitorInfo?.visitorUsername || username + " (Visitor)";
     } else {
       // สำหรับ resident: แสดงชื่อ resident
-      displayName = username + " (Resident)";
+      displayName = item.username || username + " (Resident)";
     }
     
     return (
@@ -128,11 +128,32 @@ const NotificationsScreen = ({ route, navigation }) => {
         <View style={styles.notificationHeader}>
           <View style={styles.notificationContent}>
             {/* เพิ่มชื่อผู้ใช้ */}
-            <Text style={styles.usernameText}>
-              {displayName}
-            </Text>
+            <View style={styles.alertHeader}>
+              <Ionicons name="warning" size={20} color="#FF9800" />
+              <Text style={styles.alertTitle}>Parking Time Alert</Text>
+            </View>
             
             <Text style={styles.message}>{item.message ?? ""}</Text>
+
+            {item.slotId && (
+              <View style={styles.detailsContainer}>
+                <Text style={styles.detailText}>
+                  <Text style={styles.detailLabel}>Username: </Text>
+                  {displayName}
+                </Text>
+                <Text style={styles.detailText}>
+                  <Text style={styles.detailLabel}>Slot: </Text>
+                  {item.slotId}
+                  {item.floor && `, Floor: ${item.floor}`}
+                </Text>
+                {item.licensePlate && (
+                  <Text style={styles.detailText}>
+                    <Text style={styles.detailLabel}>License: </Text>
+                    {item.licensePlate}
+                  </Text>
+                )}
+              </View>
+            )}
             
             <View style={styles.timeContainer}>
               <Text style={styles.dateText}>{date ?? ""}</Text>

@@ -100,22 +100,29 @@ const MyParkingScreen = ({ route, navigation }) => {
         newNotif = {
           username: demoBooking.username,
           bookingType: "resident",
+          slotId: demoBooking.slotId,
+          floor: demoBooking.floor || "2",
+          licensePlate: demoBooking.licensePlate || "N/A",
           date: dateStr,
           time: timeStr,
           read: false,
           timestamp: Date.now(),
           type: `Demo Resident ${demoBooking.slotId}`,
-          message: `Reminder: Your parking slot ${demoBooking.slotId} ends at ${demoBooking.exitTime || "N/A"}`
+          message: `10 minutes left, please move your car immediately.`
         };
       } else if (type === "visitor") {
         newNotif = {
           bookingType: "visitor",
+          username: demoBooking.visitorInfo?.visitorUsername || "N/A",
+          slotId: demoBooking.slotId,
+          floor: demoBooking.floor || "2",
+          licensePlate: demoBooking.visitorInfo?.licensePlate || "N/A",
           date: dateStr,
           time: timeStr,
           read: false,
           timestamp: Date.now(),
           type: `Demo Visitor ${demoBooking.slotId}`,
-          message: `Demo Notification: Visitor ${demoBooking.visitorInfo?.visitorUsername || "N/A"} for Slot ${demoBooking.slotId}`,
+          message: `10 minutes left, please move your car immediately.`,
           visitorInfo: demoBooking.visitorInfo || {}
         };
       }
@@ -124,7 +131,9 @@ const MyParkingScreen = ({ route, navigation }) => {
       if (sent) setUnreadCount(prev => prev + 1);
 
       setCurrentReminder({
-        username: demoBooking.bookingType === "visitor" ? demoBooking.visitorInfo?.visitorUsername || "N/A" : demoBooking.username || "N/A",
+        username: demoBooking.bookingType === "visitor" 
+          ? demoBooking.visitorInfo?.visitorUsername || "N/A" 
+          : demoBooking.username || "N/A",
         slotId: demoBooking.slotId,
         floor: demoBooking.floor || "N/A",
         licensePlate: demoBooking.visitorInfo?.licensePlate || demoBooking.licensePlate || "N/A",
@@ -132,12 +141,12 @@ const MyParkingScreen = ({ route, navigation }) => {
       });
 
       setShowReminderModal(true);
-      activeReminderBookings.current.add(demoBooking.id);
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Error", "Unable to fetch booking.");
-    }
-  };
+    activeReminderBookings.current.add(demoBooking.id);
+  } catch (error) {
+    console.error(error);
+    Alert.alert("Error", "Unable to fetch booking.");
+  }
+};
 
 
    // ฟังก์ชันใหม่: Demo สำหรับ Visitor J01
@@ -161,12 +170,16 @@ const MyParkingScreen = ({ route, navigation }) => {
 
       const newNotif = {
         bookingType: "visitor",
+        username: demoBooking.visitorInfo?.visitorUsername || "N/A",
+        slotId: demoBooking.slotId,
+        floor: demoBooking.floor || "2",
+        licensePlate: demoBooking.visitorInfo?.licensePlate || "N/A",
         date: dateStr,
         time: timeStr,
         read: false,
         timestamp: Date.now(),
         type: "Demo Visitor J01",
-        message: `Demo Notification: Visitor ${demoBooking.visitorInfo?.visitorUsername || "N/A"} for Slot J01`,
+        message: `10 minutes left, please move your car immediately.`,
         visitorInfo: demoBooking.visitorInfo || {}
       };
 
@@ -180,7 +193,6 @@ const MyParkingScreen = ({ route, navigation }) => {
         licensePlate: demoBooking.visitorInfo?.licensePlate || "N/A",
         endTime: demoBooking.exitTime || "N/A",
       });
-
       setShowReminderModal(true);
       activeReminderBookings.current.add(demoBooking.id);
 
@@ -256,16 +268,22 @@ const MyParkingScreen = ({ route, navigation }) => {
         ? "Monthly reminder (10 minutes before end)"
         : null;
 
-    const newNotif = {
-      bookingType: booking.bookingType,
-      date: dateStr,
-      time: timeStr,
-      read: false,
-      timestamp: Date.now(),
-      type: notifType,
-      message: `Reminder: Parking Slot ${booking.slotId} ends at ${booking.exitTime}`,
-      visitorInfo: booking.visitorInfo || {}
-    };
+        const newNotif = {
+          bookingType: booking.bookingType,
+          username: booking.bookingType === "visitor" 
+            ? booking.visitorInfo?.visitorUsername 
+            : booking.username,
+          slotId: booking.slotId,
+          floor: booking.floor,
+          licensePlate: booking.visitorInfo?.licensePlate || booking.licensePlate,
+          date: dateStr,
+          time: timeStr,
+          read: false,
+          timestamp: Date.now(),
+          type: notifType,
+          message: `10 minutes left, please move your car immediately.`,
+          visitorInfo: booking.visitorInfo || {}
+        };
 
     const sent = await sendNotificationOnce(newNotif);
     if (sent) setUnreadCount(prev => prev + 1);
