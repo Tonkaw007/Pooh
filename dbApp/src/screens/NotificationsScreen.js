@@ -5,29 +5,31 @@ import { db } from '../firebaseConfig';
 import { ref, onValue, update } from 'firebase/database';
 
 const NotificationsScreen = ({ route, navigation }) => {
-  const { username, userType, ownerUsername } = route.params; // userType: 'visitor' หรือ 'resident'
+  const { username, userType, ownerUsername } = route.params;
 
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // ฟังก์ชันดึง notification
+  // ฟังก์ชันดึง notification (แก้ไขให้อ่านจาก root level)
   const fetchNotifications = () => {
     try {
-      // กำหนด path ตาม userType
-      const notifPath = userType === "visitor" 
-                         ? `notifications/${ownerUsername}/${username}` // visitor จะเก็บใน node ของ owner
-                         : `notifications/${username}`; // resident จะเก็บใน node ของตัวเอง
-      const notifRef = ref(db, notifPath);
+      // อ่านจาก root level และ filter ตาม username
+      const notifRef = ref(db, "notifications");
 
       onValue(notifRef, (snapshot) => {
         const data = snapshot.val() || {};
         const notificationsArray = Object.keys(data)
           .map(key => ({ id: key, ...data[key] }))
-          .filter(notif => notif !== null)
+          .filter(notif => {
+            // กรองเฉพาะ notification ของ user นี้
+            // ตรวจสอบทั้ง username โดยตรงและ visitorInfo
+            return notif.username === username || 
+                   notif.visitorInfo?.visitorUsername === username;
+          })
           .sort((a, b) => {
-            const timeA = a.timestamp?.seconds || 0;
-            const timeB = b.timestamp?.seconds || 0;
+            const timeA = a.timestamp || 0;
+            const timeB = b.timestamp || 0;
             return timeB - timeA;
           });
 
@@ -46,14 +48,15 @@ const NotificationsScreen = ({ route, navigation }) => {
   // ฟังก์ชันทำเครื่องหมาย notification เป็นอ่านแล้ว
   const markAsRead = async (notificationId) => {
     try {
-      const notifPath = userType === "visitor" 
-                         ? `notifications/${ownerUsername}/${username}/${notificationId}`
-                         : `notifications/${username}/${notificationId}`;
-      const notifRef = ref(db, notifPath);
-
+      const notifRef = ref(db, `notifications/${notificationId}`);
       await update(notifRef, { read: true });
-      setNotifications(prev => prev.map(notif => notif.id === notificationId ? { ...notif, read: true } : notif));
-      setUnreadCount(prev => prev - 1);
+      
+      setNotifications(prev => 
+        prev.map(notif => 
+          notif.id === notificationId ? { ...notif, read: true } : notif
+        )
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error) {
       console.error("Error marking notification as read:", error);
       Alert.alert("Error", "Failed to mark notification as read.");
@@ -64,13 +67,12 @@ const NotificationsScreen = ({ route, navigation }) => {
   const markAllAsRead = async () => {
     try {
       const unreadNotifications = notifications.filter(notif => !notif.read);
+      
       for (const notif of unreadNotifications) {
-        const notifPath = userType === "visitor" 
-                           ? `notifications/${ownerUsername}/${username}/${notif.id}`
-                           : `notifications/${username}/${notif.id}`;
-        const notifRef = ref(db, notifPath);
+        const notifRef = ref(db, `notifications/${notif.id}`);
         await update(notifRef, { read: true });
       }
+      
       setNotifications(prev => prev.map(notif => ({ ...notif, read: true })));
       setUnreadCount(0);
       Alert.alert("Success", "All notifications marked as read.");
@@ -80,25 +82,26 @@ const NotificationsScreen = ({ route, navigation }) => {
     }
   };
 
-  useEffect(() => { fetchNotifications(); }, [username, ownerUsername]);
+  useEffect(() => { 
+    fetchNotifications(); 
+  }, [username, userType]);
 
   const handleBack = () => { navigation.goBack(); };
-  const handleNotificationPress = (item) => { if (!item.read) markAsRead(item.id); };
+  const handleNotificationPress = (item) => { 
+    if (!item.read) markAsRead(item.id); 
+  };
 
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return { date: "Unknown date", time: "" };
     try {
-      let dateObj;
-      if (timestamp.seconds) {
-        dateObj = new Date(timestamp.seconds * 1000);
-      } else {
-        dateObj = new Date(timestamp);
-      }
+      const dateObj = new Date(timestamp);
       if (isNaN(dateObj.getTime())) return { date: "Invalid date", time: "" };
+      
       const dateStr = dateObj.toLocaleDateString();
       const hours = String(dateObj.getHours()).padStart(2, '0');
       const minutes = String(dateObj.getMinutes()).padStart(2, '0');
       const timeStr = `${hours}:${minutes}`;
+      
       return { date: String(dateStr), time: String(timeStr) };
     } catch (error) {
       return { date: "Invalid date", time: "" };
@@ -111,12 +114,12 @@ const NotificationsScreen = ({ route, navigation }) => {
     // กำหนดชื่อที่จะแสดงตามประเภทผู้ใช้
     let displayName = "";
     
-    if (userType === "visitor") {
-      // สำหรับ visitor: แสดงชื่อ visitor
-      displayName = item.visitorInfo?.visitorUsername || username + " (Visitor)";
+    if (item.bookingType === "visitor") {
+      // สำหรับ visitor ให้แสดง visitorUsername แทน
+      displayName = item.visitorUsername || item.visitorInfo?.visitorUsername || "Visitor";
     } else {
-      // สำหรับ resident: แสดงชื่อ resident
-      displayName = item.username || username + " (Resident)";
+      // สำหรับ resident ให้แสดง username ตามปกติ
+      displayName = item.username || "Resident";
     }
     
     return (
@@ -127,13 +130,12 @@ const NotificationsScreen = ({ route, navigation }) => {
       >
         <View style={styles.notificationHeader}>
           <View style={styles.notificationContent}>
-            {/* เพิ่มชื่อผู้ใช้ */}
             <View style={styles.alertHeader}>
               <Ionicons name="warning" size={20} color="#FF9800" />
               <Text style={styles.alertTitle}>Parking Time Alert</Text>
             </View>
             
-            <Text style={styles.message}>{item.message ?? ""}</Text>
+            <Text style={styles.message}>{item.message || ""}</Text>
 
             {item.slotId && (
               <View style={styles.detailsContainer}>
@@ -156,8 +158,8 @@ const NotificationsScreen = ({ route, navigation }) => {
             )}
             
             <View style={styles.timeContainer}>
-              <Text style={styles.dateText}>{date ?? ""}</Text>
-              <Text style={styles.timeText}>{time ?? ""}</Text>
+              <Text style={styles.dateText}>{date || ""}</Text>
+              <Text style={styles.timeText}>{time || ""}</Text>
             </View>
           </View>
           <View style={styles.statusContainer}>
@@ -220,7 +222,6 @@ const NotificationsScreen = ({ route, navigation }) => {
     </View>
   );
 };
-
 
 const styles = StyleSheet.create({
   container: {
@@ -309,12 +310,16 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 10,
   },
-  // เพิ่มสไตล์สำหรับชื่อผู้ใช้
-  usernameText: {
+  alertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  alertTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#2D3748',
-    marginBottom: 8,
+    color: '#FF9800',
+    marginLeft: 8,
   },
   message: {
     fontSize: 14,
@@ -322,11 +327,26 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 8,
   },
-  // ปรับปรุงสไตล์สำหรับเวลา
+  detailsContainer: {
+    backgroundColor: '#f0f0f0',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  detailText: {
+    fontSize: 13,
+    color: '#555',
+    marginBottom: 4,
+  },
+  detailLabel: {
+    fontWeight: 'bold',
+    color: '#333',
+  },
   timeContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 4,
   },
   dateText: {
     fontSize: 12,
