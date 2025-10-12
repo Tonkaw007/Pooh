@@ -108,6 +108,15 @@ const NotificationsScreen = ({ route, navigation }) => {
     }
   };
 
+  // ฟังก์ชันกำหนดสีตามประเภทผู้ใช้
+  const getUserTypeColor = (type) => {
+    switch (type) {
+      case 'resident': return "#4CAF50";
+      case 'visitor': return "#FF9800";
+      default: return "#B19CD8";
+    }
+  };
+
   const renderItem = ({ item }) => {
     const { date, time } = formatTimestamp(item.timestamp);
     
@@ -130,36 +139,60 @@ const NotificationsScreen = ({ route, navigation }) => {
       >
         <View style={styles.notificationHeader}>
           <View style={styles.notificationContent}>
-            <View style={styles.alertHeader}>
-              <Ionicons name="warning" size={20} color="#FF9800" />
-              <Text style={styles.alertTitle}>Parking Time Alert</Text>
+            <View style={styles.cardHeader}>
+              <View style={styles.alertHeader}>
+                <Ionicons name="warning" size={20} color="#FF9800" />
+                <Text style={styles.alertTitle}>Parking Time Alert</Text>
+              </View>
+              <View style={[styles.userTypeBadge, { backgroundColor: getUserTypeColor(item.bookingType) }]}>
+                <Text style={styles.userTypeText}>
+                  {item.bookingType === "visitor" ? "Visitor" : "Resident"}
+                </Text>
+              </View>
             </View>
             
             <Text style={styles.message}>{item.message || ""}</Text>
 
             {item.slotId && (
               <View style={styles.detailsContainer}>
-                <Text style={styles.detailText}>
-                  <Text style={styles.detailLabel}>Username: </Text>
-                  {displayName}
-                </Text>
-                <Text style={styles.detailText}>
-                  <Text style={styles.detailLabel}>Slot: </Text>
-                  {item.slotId}
-                  {item.floor && `, Floor: ${item.floor}`}
-                </Text>
-                {item.licensePlate && (
+                <View style={styles.detailRow}>
+                  <Ionicons name="person" size={14} color="#666" />
                   <Text style={styles.detailText}>
-                    <Text style={styles.detailLabel}>License: </Text>
-                    {item.licensePlate}
+                    <Text style={styles.detailLabel}>Username: </Text>
+                    {displayName}
                   </Text>
+                </View>
+                
+                <View style={styles.detailRow}>
+                  <Ionicons name="location" size={14} color="#666" />
+                  <Text style={styles.detailText}>
+                    <Text style={styles.detailLabel}>Slot: </Text>
+                    {item.slotId}
+                    {item.floor && `, Floor ${item.floor}`}
+                  </Text>
+                </View>
+                
+                {item.licensePlate && (
+                  <View style={styles.detailRow}>
+                    <Ionicons name="car" size={14} color="#666" />
+                    <Text style={styles.detailText}>
+                      <Text style={styles.detailLabel}>License: </Text>
+                      {item.licensePlate}
+                    </Text>
+                  </View>
                 )}
               </View>
             )}
             
             <View style={styles.timeContainer}>
-              <Text style={styles.dateText}>{date || ""}</Text>
-              <Text style={styles.timeText}>{time || ""}</Text>
+              <View style={styles.timeInfo}>
+                <Ionicons name="calendar" size={12} color="#999" />
+                <Text style={styles.dateText}>{date || ""}</Text>
+              </View>
+              <View style={styles.timeInfo}>
+                <Ionicons name="time" size={12} color="#999" />
+                <Text style={styles.timeText}>{time || ""}</Text>
+              </View>
             </View>
           </View>
           <View style={styles.statusContainer}>
@@ -310,10 +343,16 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 10,
   },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   alertHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    flex: 1,
   },
   alertTitle: {
     fontSize: 16,
@@ -321,22 +360,37 @@ const styles = StyleSheet.create({
     color: '#FF9800',
     marginLeft: 8,
   },
+  userTypeBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  userTypeText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 11,
+  },
   message: {
     fontSize: 14,
     color: '#333',
     lineHeight: 20,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   detailsContainer: {
-    backgroundColor: '#f0f0f0',
-    padding: 10,
+    backgroundColor: 'rgba(240, 240, 240, 0.8)',
+    padding: 12,
     borderRadius: 8,
-    marginBottom: 8,
+    marginBottom: 12,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
   },
   detailText: {
     fontSize: 13,
     color: '#555',
-    marginBottom: 4,
+    marginLeft: 6,
   },
   detailLabel: {
     fontWeight: 'bold',
@@ -346,16 +400,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
+  },
+  timeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   dateText: {
     fontSize: 12,
     color: '#666',
+    marginLeft: 4,
   },
   timeText: {
     fontSize: 12,
     color: '#666',
     fontWeight: '500',
+    marginLeft: 4,
   },
   statusContainer: {
     alignItems: 'center',
