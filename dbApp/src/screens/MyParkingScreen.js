@@ -20,7 +20,7 @@ const MyParkingScreen = ({ route, navigation }) => {
     try {
       const notifRef = ref(db, "notifications");
 
-      // ✅ กำหนดโครงสร้างตาม bookingType
+      // กำหนดโครงสร้างตาม bookingType
       let formattedNotif = {
         ...newNotif,
         timestamp: Date.now(),
@@ -56,7 +56,7 @@ const MyParkingScreen = ({ route, navigation }) => {
       const snapshot = await get(notifRef);
       const now = Date.now();
       let duplicate = false;
-
+      
       if (snapshot.exists()) {
         snapshot.forEach(child => {
           const item = child.val();
@@ -68,22 +68,28 @@ const MyParkingScreen = ({ route, navigation }) => {
           ) {
             duplicate = true;
           }
-        });
-      }
+      });
+    }
 
       if (!duplicate) {
-        await push(notifRef, newNotif);
-        console.log("✅ Sent new notification:", newNotif.message);
-        return true;
-      } else {
-        console.log("⚠️ Skipped duplicate notification:", newNotif.message);
-        return false;
-      }
-    } catch (err) {
-      console.error("Error checking duplicate notification:", err);
+        const formattedNotif = {
+        ...newNotif,
+        timestamp: now,
+      };
+
+      await push(notifRef, formattedNotif);
+      console.log("✅ Sent new notification:", formattedNotif.message);
+      return true;
+    } else {
+      console.log("⚠️ Skipped duplicate notification:", newNotif.message);
       return false;
     }
-  };
+  } catch (err) {
+    console.error("Error checking duplicate notification:", err);
+    return false;
+  }
+};
+
 
   // Demo popup สำหรับ Parking Slot Unavailable
   const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
@@ -475,7 +481,7 @@ const MyParkingScreen = ({ route, navigation }) => {
             <View style={styles.cardHeader}>
               <View>
                 <Text style={styles.slotText}>Slot {bookingData.slotId}</Text>
-                <Text style={styles.floorText}>Floor {bookingData.floor}</Text>
+                <Text style={styles.floorText}>Floor : {bookingData.floor}</Text>
                 {bookingData.bookingType === 'visitor' && bookingData.visitorInfo && (
                   <View style={styles.visitorInfo}>
                     <Text style={styles.visitorText}>For: {bookingData.visitorInfo.visitorUsername || "N/A"}</Text>
