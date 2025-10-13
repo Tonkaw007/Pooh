@@ -168,9 +168,14 @@ const NotificationsScreen = ({ route, navigation }) => {
                   <Text style={styles.detailText}>
                     <Text style={styles.detailLabel}>Slot: </Text>
                     {item.slotId}
-                    {item.floor && `, Floor ${item.floor}`}
-                  </Text>
-                </View>
+                    {item.floor && (
+                      <>
+                      <Text style={styles.detailLabel}>, Floor: </Text>
+                      {item.floor}
+                    </>
+                  )}
+                </Text>
+              </View>
                 
                 {item.licensePlate && (
                   <View style={styles.detailRow}>

@@ -230,7 +230,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                 {/* Info Card */}
                 <View style={styles.infoCard}>
                     <Text style={styles.cardTitle}>
-                        Slot {bookingData.slotId} - Floor {bookingData.floor}
+                        Slot {bookingData.slotId} - Floor: {bookingData.floor}
                     </Text>
 
                     {/* Visitor Information */}
