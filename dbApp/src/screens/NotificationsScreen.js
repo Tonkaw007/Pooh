@@ -5,7 +5,7 @@ import { db } from '../firebaseConfig';
 import { ref, onValue, update } from 'firebase/database';
 
 const NotificationsScreen = ({ route, navigation }) => {
-  const { username, userType, ownerUsername } = route.params;
+  const { username, userType} = route.params;
 
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,9 +23,9 @@ const NotificationsScreen = ({ route, navigation }) => {
           .map(key => ({ id: key, ...data[key] }))
           .filter(notif => {
             // กรองเฉพาะ notification ของ user นี้
-            // ตรวจสอบทั้ง username โดยตรงและ visitorInfo
+            // ตรวจสอบทั้ง username โดยตรงและ visitor
             return notif.username === username || 
-                   notif.visitorInfo?.visitorUsername === username;
+                   notif.visitorUsername === username;
           })
           .sort((a, b) => {
             const timeA = a.timestamp || 0;
@@ -235,11 +235,9 @@ const NotificationsScreen = ({ route, navigation }) => {
             {unreadCount} unread notification{unreadCount !== 1 ? 's' : ''}
           </Text>
         </View>
-        {unreadCount > 0 && (
           <TouchableOpacity style={styles.markAllButton} onPress={markAllAsRead}>
             <Text style={styles.markAllText}>Mark all as read</Text>
           </TouchableOpacity>
-        )}
       </View>
 
       {notifications.length === 0 ? (

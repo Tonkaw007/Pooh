@@ -35,7 +35,7 @@ const MyParkingScreen = ({ route, navigation }) => {
       } else if (newNotif.bookingType === "visitor") {
         formattedNotif = {
           ...formattedNotif,
-          username: newNotif.username || newNotif.residentUsername || null,
+          username: newNotif.username || null,
           visitorUsername: newNotif.visitorUsername || null,
         };
       }
@@ -51,44 +51,56 @@ const MyParkingScreen = ({ route, navigation }) => {
 
   // ฟังก์ชันป้องกัน push แจ้งเตือนซ้ำ (สำหรับ auto reminder เท่านั้น)
   const sendNotificationOnce = async (newNotif) => {
-    try {
-      const notifRef = ref(db, "notifications");
-      const snapshot = await get(notifRef);
-      const now = Date.now();
-      let duplicate = false;
-      
-      if (snapshot.exists()) {
-        snapshot.forEach(child => {
-          const item = child.val();
-          if (
-            item.message === newNotif.message &&
-            item.slotId === newNotif.slotId &&
-            item.username === newNotif.username &&
-            Math.abs(now - (item.timestamp || 0)) < 10 * 60 * 1000
-          ) {
-            duplicate = true;
-          }
+  try {
+    const notifRef = ref(db, "notifications");
+    const snapshot = await get(notifRef);
+    const now = Date.now();
+    let duplicate = false;
+
+    // ตรวจสอบ duplicate ในช่วง 10 นาที
+    if (snapshot.exists()) {
+      snapshot.forEach(child => {
+        const item = child.val();
+        if (
+          item.message === newNotif.message &&
+          item.slotId === newNotif.slotId &&
+          item.username === (newNotif.bookingType === "visitor" ? newNotif.username : newNotif.username) &&
+          Math.abs(now - (item.timestamp || 0)) < 10 * 60 * 1000
+        ) {
+          duplicate = true;
+        }
       });
     }
 
-      if (!duplicate) {
-        const formattedNotif = {
+    if (!duplicate) {
+      // Auto-format notification
+      const formattedNotif = {
         ...newNotif,
         timestamp: now,
       };
 
+      if (newNotif.bookingType === "resident") {
+        // Resident: ไม่มี visitorUsername
+        delete formattedNotif.visitorUsername;
+      } else if (newNotif.bookingType === "visitor") {
+        // Visitor: ใส่ visitorUsername และใช้ resident username
+        formattedNotif.username = newNotif.username || null;
+        formattedNotif.visitorUsername = newNotif.visitorUsername || null;
+      }
+
       await push(notifRef, formattedNotif);
-      console.log("✅ Sent new notification:", formattedNotif.message);
+      console.log("✅ Sent new notification:", formattedNotif);
       return true;
     } else {
       console.log("⚠️ Skipped duplicate notification:", newNotif.message);
       return false;
     }
   } catch (err) {
-    console.error("Error checking duplicate notification:", err);
+    console.error("Error sending notification:", err);
     return false;
   }
 };
+
 
 
   // Demo popup สำหรับ Parking Slot Unavailable
@@ -350,8 +362,8 @@ const MyParkingScreen = ({ route, navigation }) => {
     const newNotif = {
       bookingType: booking.bookingType,
       username: booking.bookingType === "visitor" 
-        ? booking.visitorInfo?.visitorUsername 
-        : booking.username,
+        ? booking.username  // username ของ resident ที่เป็นเจ้าของ slot
+        : booking.username, // resident ใช้ username เหมือนเดิม
       slotId: booking.slotId,
       floor: booking.floor,
       licensePlate: booking.visitorInfo?.licensePlate || booking.licensePlate,
@@ -359,8 +371,11 @@ const MyParkingScreen = ({ route, navigation }) => {
       time: timeStr,
       read: false,
       type: notifType,
-      message: `10 minutes left, please move your car immediately.`
-    };
+      message: `10 minutes left, please move your car immediately.`,
+      ...(booking.bookingType === "visitor" && booking.visitorInfo?.visitorUsername
+      ? { visitorUsername: booking.visitorInfo.visitorUsername }
+      : {})
+};
 
     const sent = await sendNotificationOnce(newNotif);
     if (sent) setUnreadCount(prev => prev + 1);
