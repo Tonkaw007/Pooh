@@ -111,14 +111,14 @@ const MyParkingScreen = ({ route, navigation }) => {
     const newNotif = {
       username: username,
       bookingType: userType || "resident",
-      slotId: "B03",
-      floor: "2",
-      licensePlate: "N/A",
+      slotId: "A02",
+      floor: "1",
+      licensePlate: "bt77",
       date: now.toISOString().split('T')[0],
       time: now.toTimeString().slice(0,5),
       read: false,
       type: "Parking Slot Unavailable",
-      message: `Your booked parking slot B03 is currently unavailable. Please choose relocation or receive compensation.`
+      message: `Your booked parking slot A02 is currently unavailable. Please choose relocation or receive compensation.`
     };
 
     const sent = await sendNotification(newNotif);
@@ -130,7 +130,7 @@ const MyParkingScreen = ({ route, navigation }) => {
   const handleAcceptRelocation = () => {
     Alert.alert(
       "Parking Relocated Successfully", 
-      "Your booking has been moved to Slot C05",
+      "Your booking has been moved to Slot A04",
       [{ text: "OK", onPress: () => setShowParkingProblemModal(false) }]
     );
   };
@@ -541,12 +541,12 @@ const MyParkingScreen = ({ route, navigation }) => {
           <View style={[styles.modalContainer, { width: '85%' }]}>
             <View style={styles.warningIconContainer}><Ionicons name="warning" size={50} color="#FF9800" /></View>
             <Text style={styles.modalTitle}>Parking Slot Unavailable</Text>
-            <Text style={styles.modalMessage}>The parking slot B03 you booked is currently unavailable because the previous vehicle exceeded the parking time.</Text>
+            <Text style={styles.modalMessage}>The parking slot A02 you booked is currently unavailable because the previous vehicle exceeded the parking time.</Text>
             <Text style={styles.modalMessage}>We apologize for the inconvenience. Please choose one of the following options:</Text>
             <View style={styles.optionsContainer}>
               <TouchableOpacity style={[styles.optionButton, { backgroundColor: '#4CAF50' }]} onPress={handleAcceptRelocation}>
                 <Text style={styles.optionButtonText}>Accept Relocation</Text>
-                <Text style={styles.optionSubtext}>Move to Slot C05</Text>
+                <Text style={styles.optionSubtext}>Move to Slot A04</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.optionButton, { backgroundColor: '#2196F3' }]} onPress={handleDeclineRelocation}>
                 <Text style={styles.optionButtonText}>Decline & Receive Coupon</Text>
