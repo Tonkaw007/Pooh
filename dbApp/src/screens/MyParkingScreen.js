@@ -20,7 +20,6 @@ const MyParkingScreen = ({ route, navigation }) => {
     try {
       const notifRef = ref(db, "notifications");
 
-      // กำหนดโครงสร้างตาม bookingType
       let formattedNotif = {
         ...newNotif,
         timestamp: Date.now(),
@@ -51,61 +50,50 @@ const MyParkingScreen = ({ route, navigation }) => {
 
   // ฟังก์ชันป้องกัน push แจ้งเตือนซ้ำ (สำหรับ auto reminder เท่านั้น)
   const sendNotificationOnce = async (newNotif) => {
-  try {
-    const notifRef = ref(db, "notifications");
-    const snapshot = await get(notifRef);
-    const now = Date.now();
-    let duplicate = false;
+    try {
+      const notifRef = ref(db, "notifications");
+      const snapshot = await get(notifRef);
+      const now = Date.now();
+      let duplicate = false;
 
-    // ตรวจสอบ duplicate ในช่วง 10 นาที
-    if (snapshot.exists()) {
-      snapshot.forEach(child => {
-        const item = child.val();
-        if (
-          item.message === newNotif.message &&
-          item.slotId === newNotif.slotId &&
-          item.username === (newNotif.bookingType === "visitor" ? newNotif.username : newNotif.username) &&
-          Math.abs(now - (item.timestamp || 0)) < 10 * 60 * 1000
-        ) {
-          duplicate = true;
-        }
-      });
-    }
-
-    if (!duplicate) {
-      // Auto-format notification
-      const formattedNotif = {
-        ...newNotif,
-        timestamp: now,
-      };
-
-      if (newNotif.bookingType === "resident") {
-        // Resident: ไม่มี visitorUsername
-        delete formattedNotif.visitorUsername;
-      } else if (newNotif.bookingType === "visitor") {
-        // Visitor: ใส่ visitorUsername และใช้ resident username
-        formattedNotif.username = newNotif.username || null;
-        formattedNotif.visitorUsername = newNotif.visitorUsername || null;
+      if (snapshot.exists()) {
+        snapshot.forEach(child => {
+          const item = child.val();
+          if (
+            item.message === newNotif.message &&
+            item.slotId === newNotif.slotId &&
+            item.username === newNotif.username &&
+            Math.abs(now - (item.timestamp || 0)) < 10 * 60 * 1000
+          ) {
+            duplicate = true;
+          }
+        });
       }
 
-      await push(notifRef, formattedNotif);
-      console.log("✅ Sent new notification:", formattedNotif);
-      return true;
-    } else {
-      console.log("⚠️ Skipped duplicate notification:", newNotif.message);
+      if (!duplicate) {
+        const formattedNotif = { ...newNotif, timestamp: now };
+        if (newNotif.bookingType === "resident") delete formattedNotif.visitorUsername;
+        else if (newNotif.bookingType === "visitor") {
+          formattedNotif.username = newNotif.username || null;
+          formattedNotif.visitorUsername = newNotif.visitorUsername || null;
+        }
+
+        await push(notifRef, formattedNotif);
+        console.log("✅ Sent new notification:", formattedNotif);
+        return true;
+      } else {
+        console.log("⚠️ Skipped duplicate notification:", newNotif.message);
+        return false;
+      }
+    } catch (err) {
+      console.error("Error sending notification:", err);
       return false;
     }
-  } catch (err) {
-    console.error("Error sending notification:", err);
-    return false;
-  }
-};
-
-
+  };
 
   // Demo popup สำหรับ Parking Slot Unavailable
   const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
-  
+
   const showParkingProblemDemo = async () => {
     const now = new Date();
     const newNotif = {
@@ -127,13 +115,122 @@ const MyParkingScreen = ({ route, navigation }) => {
     setShowParkingProblemModal(true);
   };
 
-  const handleAcceptRelocation = () => {
-    Alert.alert(
-      "Parking Relocated Successfully", 
-      "Your booking has been moved to Slot A04",
-      [{ text: "OK", onPress: () => setShowParkingProblemModal(false) }]
+   // ฟังก์ชัน relocate สำหรับผู้ใช้เลือกเอง
+  const handleAcceptRelocation = async () => {
+  try {
+    const bookingsSnapshot = await get(child(ref(db), "bookings"));
+    const data = bookingsSnapshot.val() || {};
+
+    // หา booking เดิม slot A02 ของ user
+    const oldBookingEntry = Object.entries(data).find(
+      ([id, b]) => b.username === username && b.slotId === "A02" && b.status !== "cancelled"
     );
-  };
+
+    if (!oldBookingEntry) {
+      Alert.alert("Error", "No booking found for relocation.");
+      return;
+    }
+
+    const [oldBookingId, oldBooking] = oldBookingEntry;
+
+    // ยกเลิก booking เดิม
+    await update(ref(db, `bookings/${oldBookingId}`), { status: "cancelled" });
+
+    // สร้าง booking ใหม่ โดย copy ข้อมูลเดิม แต่เปลี่ยน slotId เป็น A04
+    const newBookingData = {
+      ...oldBooking,         // copy ทุก field
+      slotId: "A04",         // เปลี่ยน slot
+      status: "confirmed",   // ตั้งสถานะ
+    };
+
+    // ลบ field ที่จะถูก generate ใหม่
+    delete newBookingData.id;
+    delete newBookingData.sessionKey;
+    delete newBookingData.notifiedHour;      // ถ้ามี
+    delete newBookingData.notifiedDaily;     // ถ้ามี
+    delete newBookingData.notifiedMonthly;   // ถ้ามี
+
+    // push booking ใหม่ (Firebase จะสร้าง id ใหม่ให้อัตโนมัติ)
+    const newBookingRef = await push(ref(db, "bookings"), newBookingData);
+    const newBookingId = newBookingRef.key;
+
+    // อัพเดต id และ sessionKey ของ booking ใหม่
+    await update(ref(db, `bookings/${newBookingId}`), {
+      id: newBookingId,
+      sessionKey: newBookingId,
+    });
+
+    Alert.alert("Parking Relocated Successfully", "Your booking has been moved to Slot A04");
+    fetchBookings();
+  } catch (error) {
+    console.error("Error relocating booking:", error);
+    Alert.alert("Error", "Failed to relocate booking: " + error.message);
+  }
+};
+
+
+
+
+
+ // ฟังก์ชันสำหรับ auto relocate Jinbts
+  const autoRelocateJinbts = async () => {
+  try {
+    const snapshot = await get(child(ref(db), "bookings"));
+    const data = snapshot.val() || {};
+
+    const khemikaBooking = Object.values(data).find(
+      b => b.username === "Khemika Meepin" && b.slotId === "A02" && b.status !== "cancelled"
+    );
+
+    const jinbtsBookingEntry = Object.entries(data).find(
+      ([id, b]) => b.username === "jinbts" && b.slotId === "A02" && b.status !== "cancelled"
+    );
+
+    if (!khemikaBooking || !jinbtsBookingEntry) return;
+
+    const [jinbtsBookingId, jinbtsBooking] = jinbtsBookingEntry;
+
+    // เงื่อนไขเวลา
+    const now = new Date();
+    const bookingDate = new Date(khemikaBooking.entryDate);
+
+    if (bookingDate.getFullYear() === 2025 &&
+        bookingDate.getMonth() === 9 &&
+        bookingDate.getDate() === 16 &&
+        now.getHours() >= 19) {
+
+      // ยกเลิก booking เดิม
+      await update(ref(db, `bookings/${jinbtsBookingId}`), { status: "cancelled" });
+
+      // สร้าง booking ใหม่
+      const { id, sessionKey, notifiedHour, notifiedDaily, notifiedMonthly, ...bookingData } = jinbtsBooking;
+
+      const newBookingRef = await push(ref(db, "bookings"), {
+        ...bookingData,
+        slotId: "A04",
+        status: "confirmed"
+      });
+
+      const newBookingId = newBookingRef.key;
+
+      // อัพเดต id และ sessionKey
+      await update(ref(db, `bookings/${newBookingId}`), {
+        id: newBookingId,
+        sessionKey: newBookingId
+      });
+
+      setShowParkingProblemModal(false);
+      Alert.alert("Parking Relocated", "Your booking has been moved to Slot A04 (Floor 1)");
+      fetchBookings();
+    }
+  } catch (error) {
+    console.error("Error relocating Jinbts:", error);
+    Alert.alert("Error", "Failed to relocate booking.");
+  }
+};
+
+
+
 
   const handleDeclineRelocation = () => {
     Alert.alert(
@@ -142,6 +239,9 @@ const MyParkingScreen = ({ route, navigation }) => {
       [{ text: "OK", onPress: () => setShowParkingProblemModal(false) }]
     );
   };
+
+  
+
 
   // Demo popup สำหรับ Resident/Visitor
   const handleDemoPopup = async (type = "resident") => {
@@ -425,10 +525,20 @@ const MyParkingScreen = ({ route, navigation }) => {
     }
   };
 
+  // LOGIC เพิ่ม: ตรวจสอบและ relocate Jinbts อัตโนมัติ
+  const checkAutomaticRelocationForJinbts = async () => {
+    await autoRelocateJinbts();
+  };
+
+  // useEffect
   useEffect(() => {
     fetchBookings();
     const unsubscribeFocus = navigation.addListener("focus", () => fetchBookings());
-    const reminderInterval = setInterval(() => checkBookingReminders(), 30000);
+    const reminderInterval = setInterval(() => {
+      checkBookingReminders();
+      checkAutomaticRelocationForJinbts();
+    }, 30000);
+
     return () => {
       unsubscribeFocus();
       clearInterval(reminderInterval);
@@ -537,25 +647,35 @@ const MyParkingScreen = ({ route, navigation }) => {
       </Modal>
 
       <Modal visible={showParkingProblemModal} transparent animationType="fade" onRequestClose={() => setShowParkingProblemModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContainer, { width: '85%' }]}>
-            <View style={styles.warningIconContainer}><Ionicons name="warning" size={50} color="#FF9800" /></View>
-            <Text style={styles.modalTitle}>Parking Slot Unavailable</Text>
-            <Text style={styles.modalMessage}>The parking slot A02 you booked is currently unavailable because the previous vehicle exceeded the parking time.</Text>
-            <Text style={styles.modalMessage}>We apologize for the inconvenience. Please choose one of the following options:</Text>
-            <View style={styles.optionsContainer}>
-              <TouchableOpacity style={[styles.optionButton, { backgroundColor: '#4CAF50' }]} onPress={handleAcceptRelocation}>
-                <Text style={styles.optionButtonText}>Accept Relocation</Text>
-                <Text style={styles.optionSubtext}>Move to Slot A04</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.optionButton, { backgroundColor: '#2196F3' }]} onPress={handleDeclineRelocation}>
-                <Text style={styles.optionButtonText}>Decline & Receive Coupon</Text>
-                <Text style={styles.optionSubtext}>10% off next booking</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+  <View style={styles.modalOverlay}>
+    <View style={[styles.modalContainer, { width: '85%' }]}>
+      
+      {/* ปุ่มปิดมุมขวาบน */}
+      <TouchableOpacity 
+        style={styles.closeButton} 
+        onPress={() => setShowParkingProblemModal(false)}
+      >
+        <Ionicons name="close" size={24} color="#fff" />
+      </TouchableOpacity>
+
+      <View style={styles.warningIconContainer}><Ionicons name="warning" size={50} color="#FF9800" /></View>
+      <Text style={styles.modalTitle}>Parking Slot Unavailable</Text>
+      <Text style={styles.modalMessage}>The parking slot A02 you booked is currently unavailable because the previous vehicle exceeded the parking time.</Text>
+      <Text style={styles.modalMessage}>We apologize for the inconvenience. Please choose one of the following options:</Text>
+      <View style={styles.optionsContainer}>
+        <TouchableOpacity style={[styles.optionButton, { backgroundColor: '#4CAF50' }]} onPress={handleAcceptRelocation}>
+          <Text style={styles.optionButtonText}>Accept Relocation</Text>
+          <Text style={styles.optionSubtext}>Move to Slot A04</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.optionButton, { backgroundColor: '#2196F3' }]} onPress={handleDeclineRelocation}>
+          <Text style={styles.optionButtonText}>Decline & Receive Coupon</Text>
+          <Text style={styles.optionSubtext}>10% off next booking</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+</Modal>
+
 
     </View>
   );
@@ -816,6 +936,19 @@ const styles = StyleSheet.create({
     marginTop: 5,
     textAlign: 'center',
   },
+  closeButton: {
+  position: 'absolute',
+  top: 10,
+  right: 10,
+  backgroundColor: '#B19CD8',
+  borderRadius: 15,
+  width: 30,
+  height: 30,
+  justifyContent: 'center',
+  alignItems: 'center',
+  zIndex: 10,
+},
+
 });
 
 export default MyParkingScreen;
