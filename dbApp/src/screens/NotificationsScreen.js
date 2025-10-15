@@ -142,7 +142,7 @@ const NotificationsScreen = ({ route, navigation }) => {
             <View style={styles.cardHeader}>
               <View style={styles.alertHeader}>
                 <Ionicons name="warning" size={20} color="#FF9800" />
-                <Text style={styles.alertTitle}>Parking Time Alert</Text>
+                <Text style={styles.alertTitle}>{item.type === "Parking Slot Unavailable" ? "Parking Slot Unavailable" : "Parking Time Alert"}</Text>
               </View>
               <View style={[styles.userTypeBadge, { backgroundColor: getUserTypeColor(item.bookingType) }]}>
                 <Text style={styles.userTypeText}>
