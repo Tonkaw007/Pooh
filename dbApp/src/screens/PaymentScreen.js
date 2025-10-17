@@ -45,105 +45,114 @@ const PaymentScreen = ({ navigation, route }) => {
 
   // handle Payment button เดิม
   const handlePaymentSuccess = async () => {
-    try {
-      const updates = {};
-      const now = new Date();
-      const bookingDate = now.toISOString().slice(0, 10);
+  try {
+    const updates = {};
+    const now = new Date();
+    const bookingDate = now.toISOString().slice(0, 10);
 
-      // กำหนด entry/exit ตามเงื่อนไข
-      let entryDate = bookingData.entryDate;
-      let exitDate = bookingData.exitDate;
+    // กำหนด entry/exit ตามเงื่อนไข
+    let entryDate = bookingData.entryDate;
+    let exitDate = bookingData.exitDate;
 
-      if (bookingData.rateType === 'hourly') {
-        exitDate = entryDate; // รายชั่วโมง exitDate = entryDate
-      } else if (bookingData.rateType === 'monthly') {
-        const entry = new Date(entryDate);
-        entry.setMonth(entry.getMonth() + (bookingData.durationMonths || 1));
-        exitDate = entry.toISOString().slice(0, 10); // รายเดือน
-      }
-
-      // กำหนด date และ timeRange สำหรับ slot
-      let slotDate;
-      let slotTimeRange = '00:00-23:59'; // default สำหรับ daily/monthly
-
-      if (bookingData.rateType === 'hourly') {
-        slotDate = entryDate;
-        const startTime = bookingData.entryTime || '00:00';
-        const endTime = bookingData.exitTime || '23:59';
-        slotTimeRange = `${startTime}-${endTime}`;
-      } else {
-        slotDate = `${entryDate} - ${exitDate}`;
-      }
-
-      const newSlotBooking = {
-        date: slotDate,
-        timeRange: slotTimeRange,
-        available: false,
-      };
-
-      const slotRef = ref(db, `parkingSlots/${selectedFloor}/${selectedSlot}`);
-      const slotSnap = await get(slotRef);
-
-      let updatedSlotData = [];
-      if (!slotSnap.exists() || slotSnap.val().status === 'available') {
-        updatedSlotData = [newSlotBooking];
-      } else if (Array.isArray(slotSnap.val())) {
-        const existingBookings = slotSnap.val();
-        const isDuplicate = existingBookings.some(
-          (b) => b.date === newSlotBooking.date && b.timeRange === newSlotBooking.timeRange
-        );
-        updatedSlotData = isDuplicate ? existingBookings : [...existingBookings, newSlotBooking];
-      } else {
-        updatedSlotData = [newSlotBooking];
-      }
-
-      updates[`parkingSlots/${selectedFloor}/${selectedSlot}`] = updatedSlotData;
-
-      // สร้าง booking ใหม่
-      const newBookingRef = push(ref(db, 'bookings'));
-      const newBookingId = newBookingRef.key;
-
-      const licensePlateToSave =
-        bookingType === 'resident'
-          ? residentLicense || '-'
-          : bookingData.visitorInfo?.licensePlate || '-';
-
-      const newBooking = {
-        ...bookingData,
-        id: newBookingId,
-        username,
-        bookingType,
-        status: 'confirmed',
-        slotId: selectedSlot,
-        floor: selectedFloor,
-        entryDate,
-        exitDate,
-        bookingDate,
-        paymentStatus: 'paid',
-        paymentDate: bookingDate,
-        visitorInfo: bookingData.visitorInfo || null,
-        licensePlate: licensePlateToSave,
-      };
-
-      updates[`bookings/${newBookingId}`] = newBooking;
-
-      await update(ref(db), updates);
-
-      Alert.alert('Success', 'Payment successful and slot reserved!', [
-        {
-          text: 'OK',
-          onPress: () =>
-            navigation.navigate('MyParking', {
-              username,
-              userType: bookingType,
-            }),
-        },
-      ]);
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Payment failed. Please try again.');
+    if (bookingData.rateType === 'monthly') {
+      // รายเดือน
+      const entry = new Date(entryDate);
+      entry.setMonth(entry.getMonth() + (bookingData.durationMonths || 1));
+      exitDate = entry.toISOString().slice(0, 10);
     }
-  };
+
+    // กำหนด date และ timeRange สำหรับ slot
+    let slotDate;
+    let slotTimeRange;
+
+    if (bookingData.rateType === 'hourly') {
+      slotDate = bookingData.entryDate;
+      const startTime = bookingData.entryTime || '00:00';
+      const endTime = bookingData.exitTime || '23:59';
+      slotTimeRange = `${startTime}-${endTime}`;
+    } else if (bookingData.rateType === 'daily' || bookingData.rateType === 'monthly') {
+      slotDate = `${bookingData.entryDate} - ${bookingData.exitDate}`;
+      slotTimeRange = '00:00-23:59';
+    }
+
+    // เพิ่ม username เข้าไปใน slot
+    const usernameToSave =
+      bookingType === 'resident'
+        ? username
+        : bookingData.visitorInfo?.visitorUsername || username;
+
+    const newSlotBooking = {
+      date: slotDate,
+      timeRange: slotTimeRange,
+      available: false,
+      status: 'booked',
+      username: usernameToSave,
+    };
+
+    const slotRef = ref(db, `parkingSlots/${selectedFloor}/${selectedSlot}`);
+    const slotSnap = await get(slotRef);
+
+    let updatedSlotData = [];
+    if (!slotSnap.exists() || slotSnap.val().status === 'available') {
+      updatedSlotData = [newSlotBooking];
+    } else if (Array.isArray(slotSnap.val())) {
+      const existingBookings = slotSnap.val();
+      const isDuplicate = existingBookings.some(
+        (b) => b.date === newSlotBooking.date && b.timeRange === newSlotBooking.timeRange
+      );
+      updatedSlotData = isDuplicate ? existingBookings : [...existingBookings, newSlotBooking];
+    } else {
+      updatedSlotData = [newSlotBooking];
+    }
+
+    updates[`parkingSlots/${selectedFloor}/${selectedSlot}`] = updatedSlotData;
+
+    // สร้าง booking ใหม่
+    const newBookingRef = push(ref(db, 'bookings'));
+    const newBookingId = newBookingRef.key;
+
+    const licensePlateToSave =
+      bookingType === 'resident'
+        ? residentLicense || '-'
+        : bookingData.visitorInfo?.licensePlate || '-';
+
+    const newBooking = {
+      ...bookingData,
+      id: newBookingId,
+      username,
+      bookingType,
+      status: 'confirmed',
+      slotId: selectedSlot,
+      floor: selectedFloor,
+      entryDate,
+      exitDate,
+      bookingDate,
+      paymentStatus: 'paid',
+      paymentDate: bookingDate,
+      visitorInfo: bookingData.visitorInfo || null,
+      licensePlate: licensePlateToSave,
+    };
+
+    updates[`bookings/${newBookingId}`] = newBooking;
+
+    await update(ref(db), updates);
+
+    Alert.alert('Success', 'Payment successful and slot reserved!', [
+      {
+        text: 'OK',
+        onPress: () =>
+          navigation.navigate('MyParking', {
+            username,
+            userType: bookingType,
+          }),
+      },
+    ]);
+  } catch (error) {
+    console.error(error);
+    Alert.alert('Error', 'Payment failed. Please try again.');
+  }
+};
+
 
   // handle Prompay auto update
   const handlePrompayPayment = async (payerPhone, amount) => {
