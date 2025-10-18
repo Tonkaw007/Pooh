@@ -491,10 +491,19 @@ const MyCouponScreen = ({ route, navigation }) => {
           ...coupon
         }))
         .filter(coupon => {
-          const expiryDate = new Date(coupon.expiryDate);
-          return coupon.username === username && expiryDate > new Date() && !coupon.used;
+          // แปลง expiryDate เป็น Date object เพื่อเปรียบเทียบ
+          const expiryDate = new Date(coupon.expiryDate + 'T23:59:59');
+          const today = new Date();
+          today.setHours(0, 0, 0, 0); // ตั้งเวลาเป็น 00:00:00 เพื่อเปรียบเทียบวันที่
+          
+          return coupon.username === username && expiryDate >= today && !coupon.used;
         })
-        .sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate)); // เรียงจากใหม่สุดไปเก่าสุด
+        .sort((a, b) => {
+          // เรียงจากใหม่สุดไปเก่าสุดโดยใช้ทั้งวันที่และเวลา
+          const dateTimeA = new Date(a.createdDate + 'T' + a.createdTime);
+          const dateTimeB = new Date(b.createdDate + 'T' + b.createdTime);
+          return dateTimeB - dateTimeA;
+        });
 
       setCoupons(userCoupons);
       setLoading(false);
@@ -620,7 +629,9 @@ const MyCouponScreen = ({ route, navigation }) => {
                     <Text style={styles.discountText}>
                       {getDiscountText(coupon.discountType)}
                     </Text>
-                    {/* ลบ reason ออกจากส่วนหัว */}
+                    <Text style={styles.reasonText}>
+                      {coupon.reason}
+                    </Text>
                   </View>
                 </View>
 
@@ -628,7 +639,7 @@ const MyCouponScreen = ({ route, navigation }) => {
                   <View style={styles.detailRow}>
                     <Ionicons name="calendar-outline" size={16} color="#666" />
                     <Text style={styles.detailText}>
-                      Created: {formatDate(coupon.createdDate)}
+                      Created: {formatDate(coupon.createdDate)} at {coupon.createdTime}
                     </Text>
                   </View>
                   
@@ -821,7 +832,11 @@ const styles = StyleSheet.create({
     color: '#2D3748',
     marginBottom: 5,
   },
-  // ลบ reasonText style ออก
+  reasonText: {
+    fontSize: 14,
+    color: '#718096',
+    fontStyle: 'italic',
+  },
   couponDetails: {
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
