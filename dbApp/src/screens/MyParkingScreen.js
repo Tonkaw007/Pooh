@@ -93,8 +93,9 @@ const MyParkingScreen = ({ route, navigation }) => {
 
   // Demo popup สำหรับ Parking Slot Unavailable
   const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
+  const [autoSelectCoupon, setAutoSelectCoupon] = useState(false);
 
-  const showParkingProblemDemo = async () => {
+  const showParkingProblemDemo = async (couponOption = false) => {
     const now = new Date();
     const newNotif = {
       username: username,
@@ -112,7 +113,15 @@ const MyParkingScreen = ({ route, navigation }) => {
     const sent = await sendNotification(newNotif);
     if (sent) setUnreadCount(prev => prev + 1);
 
+    setAutoSelectCoupon(couponOption);
     setShowParkingProblemModal(true);
+    
+    // ถ้าเป็น coupon demo ให้เลือกตัวเลือกคูปองอัตโนมัติหลังจากแสดง modal
+    if (couponOption) {
+      setTimeout(() => {
+        handleDeclineRelocation();
+      }, 500);
+    }
   };
 
    // ฟังก์ชัน relocate สำหรับผู้ใช้เลือกเอง
@@ -723,7 +732,8 @@ await update(ref(db), updates);
         <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={() => handleDemoPopup("resident")}><Text style={styles.bookAgainText}>Demo Resident Slot B01</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={() => handleDemoPopup("visitor")}><Text style={styles.bookAgainText}>Demo Visitor Slot B06</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={handleDemoVisitorJ01}><Text style={styles.bookAgainText}>Demo Visitor Slot J01</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF5252', marginTop: 10 }]} onPress={showParkingProblemDemo}><Text style={styles.bookAgainText}>Demo: Parking Slot Unavailable (Move)</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF5252', marginTop: 10 }]} onPress={() => showParkingProblemDemo(false)}><Text style={styles.bookAgainText}>Demo: Parking Slot Unavailable (Move)</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#2196F3', marginTop: 10 }]} onPress={() => showParkingProblemDemo(true)}><Text style={styles.bookAgainText}>Demo: Parking Slot Unavailable (Coupon)</Text></TouchableOpacity>
 
       </ScrollView>
 
