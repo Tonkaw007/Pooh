@@ -342,7 +342,10 @@ await update(ref(db), updates);
       Alert.alert("Error", "No booking found for coupon generation.");
       return;
     }
-
+    const discountPercentage = 
+  currentBooking.rateType === 'hourly' ? 10 :
+  currentBooking.rateType === 'daily' ? 20 :
+  currentBooking.rateType === 'monthly' ? 30 : 10;
     // สร้างคูปองตาม rateType ของ booking
     const newCoupon = {
       username: username,
@@ -350,9 +353,10 @@ await update(ref(db), updates);
       expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 วันจากนี้
       reason: "The previous vehicle exceeded parking time, causing your slot to be unavailable",
       discountType: currentBooking.rateType || 'hourly', // ใช้ rateType จาก booking จริง
+      discountPercentage: discountPercentage, // ✅ เพิ่มบรรทัดนี้
       used: false,
-      bookingId: currentBooking.id,
-      originalSlot: currentBooking.slotId
+      bookingId: currentBooking.id
+      // ❌ ลบ originalSlot ออก
     };
 
     // บันทึกคูปองลง Firebase

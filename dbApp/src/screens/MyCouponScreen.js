@@ -456,7 +456,6 @@ const styles = StyleSheet.create({
 
 export default MyCouponScreen;*/
 
-
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -621,9 +620,7 @@ const MyCouponScreen = ({ route, navigation }) => {
                     <Text style={styles.discountText}>
                       {getDiscountText(coupon.discountType)}
                     </Text>
-                    <Text style={styles.reasonText}>
-                      {coupon.reason}
-                    </Text>
+                    {/* ลบ reason ออกจากส่วนหัว */}
                   </View>
                 </View>
 
@@ -824,11 +821,7 @@ const styles = StyleSheet.create({
     color: '#2D3748',
     marginBottom: 5,
   },
-  reasonText: {
-    fontSize: 14,
-    color: '#718096',
-    fontStyle: 'italic',
-  },
+  // ลบ reasonText style ออก
   couponDetails: {
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
