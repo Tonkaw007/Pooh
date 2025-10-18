@@ -116,7 +116,7 @@ const MyParkingScreen = ({ route, navigation }) => {
   };
 
    // ฟังก์ชัน relocate สำหรับผู้ใช้เลือกเอง
-  const handleAcceptRelocation = async () => {
+const handleAcceptRelocation = async () => {
   try {
     const bookingsSnapshot = await get(child(ref(db), "bookings"));
     const data = bookingsSnapshot.val() || {};
@@ -135,18 +135,23 @@ const MyParkingScreen = ({ route, navigation }) => {
     // ยกเลิก booking เดิม
     await update(ref(db, `bookings/${oldBookingId}`), { status: "cancelled" });
 
-    // ลบช่วงเวลาของ booking เดิมใน slot A02
+    // ลบข้อมูลใน slot เดิม
     const oldSlotRef = ref(db, `parkingSlots/1st Floor/A02`);
-    const oldSlotSnapshot = await get(oldSlotRef);
-    if (oldSlotSnapshot.exists()) {
-      const oldSlotData = oldSlotSnapshot.val();
-      const timeKey = `${oldBooking.date}_${oldBooking.timeRange}`;
-      if (oldSlotData[timeKey]) {
-        await update(oldSlotRef, { [timeKey]: null });
+    const oldSlotSnap = await get(oldSlotRef);
+    if (oldSlotSnap.exists()) {
+      const oldSlotData = oldSlotSnap.val();
+      for (const key in oldSlotData) {
+        if (
+          oldSlotData[key]?.date === oldBooking.date &&
+          oldSlotData[key]?.timeRange === oldBooking.timeRange &&
+          oldSlotData[key]?.username === oldBooking.username
+        ) {
+          await update(ref(db, `parkingSlots/1st Floor/A02/${key}`), null);
+        }
       }
     }
 
-    // สร้าง booking ใหม่ โดย copy ข้อมูลเดิม แต่เปลี่ยน slotId เป็น A04
+    // สร้าง booking ใหม่
     const newBookingData = {
       ...oldBooking,
       slotId: "A04",
@@ -169,28 +174,39 @@ const MyParkingScreen = ({ route, navigation }) => {
       sessionKey: newBookingId,
     });
 
-    // --- เพิ่ม booking ใหม่ลง parkingSlots/A04 แบบ array-like
-    const newSlotRef = ref(db, `parkingSlots/1st Floor/A04`);
-    
-    // ลบ status: "available" เดิมถ้ามี
-    const oldSlotSnapshot2 = await get(newSlotRef);
-    if (oldSlotSnapshot2.exists()) {
-      const oldSlotData = oldSlotSnapshot2.val();
-      for (const key in oldSlotData) {
-        if (oldSlotData[key]?.status === "available") {
-          await update(ref(db, `parkingSlots/1st Floor/A04/${key}`), { status: null });
-        }
-      }
-    }
+    // ---------- บันทึกลง parkingSlots แบบ array-like ----------
+    const selectedFloor = "1st Floor";
+    const selectedSlot = "A04";
+    const slotRef = ref(db, `parkingSlots/${selectedFloor}/${selectedSlot}`);
+    const slotSnap = await get(slotRef);
 
-    const newSlotEntryRef = push(newSlotRef);
-    await update(newSlotEntryRef, {
-      available: false,
+    const newSlotBooking = {
       date: newBookingData.date,
       timeRange: newBookingData.timeRange,
+      available: false,
+      status: "moved",
       username: newBookingData.username,
-      status: 'moved'
-    });
+    };
+
+    let updatedSlotData = [];
+    if (!slotSnap.exists()) {
+      updatedSlotData = [newSlotBooking];
+    } else {
+      const val = slotSnap.val();
+      const existingBookings = Object.values(val);
+      const isDuplicate = existingBookings.some(
+        (b) => b.date === newSlotBooking.date && b.timeRange === newSlotBooking.timeRange
+      );
+      updatedSlotData = isDuplicate ? existingBookings : [...existingBookings, newSlotBooking];
+    }
+
+    // 🔥 ลบ status "available" เดิมก่อนอัปเดต
+await update(ref(db, `parkingSlots/${selectedFloor}/${selectedSlot}`), { available: null });
+
+// ✅ เขียน array ใหม่ลง slot
+const updates = {};
+updates[`parkingSlots/${selectedFloor}/${selectedSlot}`] = updatedSlotData;
+await update(ref(db), updates);
 
     Alert.alert("Parking Relocated Successfully", "Your booking has been moved to Slot A04");
     fetchBookings();
@@ -203,6 +219,7 @@ const MyParkingScreen = ({ route, navigation }) => {
 
 
 
+
  // ฟังก์ชันสำหรับ auto relocate Jinbts
    const autoRelocateJinbts = async () => {
   try {
@@ -210,7 +227,7 @@ const MyParkingScreen = ({ route, navigation }) => {
     const data = snapshot.val() || {};
 
     const khemikaBooking = Object.values(data).find(
-      b => b.username === "Khemika Meepin" && b.slotId === "A02" && b.status !== "cancelled"
+      (b) => b.username === "Khemika Meepin" && b.slotId === "A02" && b.status !== "cancelled"
     );
 
     const jinbtsBookingEntry = Object.entries(data).find(
@@ -224,62 +241,79 @@ const MyParkingScreen = ({ route, navigation }) => {
     const now = new Date();
     const bookingDate = new Date(khemikaBooking.entryDate);
 
-    if (bookingDate.getFullYear() === 2025 &&
-        bookingDate.getMonth() === 9 &&
-        bookingDate.getDate() === 16 &&
-        now.getHours() >= 19) {
-
+    if (
+      bookingDate.getFullYear() === 2025 &&
+      bookingDate.getMonth() === 9 &&
+      bookingDate.getDate() === 16 &&
+      now.getHours() >= 19
+    ) {
       // ยกเลิก booking เดิม
       await update(ref(db, `bookings/${jinbtsBookingId}`), { status: "cancelled" });
 
-      // ลบช่วงเวลาของ booking เดิมใน slot A02
+      // ลบข้อมูลใน slot เดิม
       const oldSlotRef = ref(db, `parkingSlots/1st Floor/A02`);
-      const oldSlotSnapshot = await get(oldSlotRef);
-      if (oldSlotSnapshot.exists()) {
-        const oldSlotData = oldSlotSnapshot.val();
-        const timeKey = `${jinbtsBooking.date}_${jinbtsBooking.timeRange}`;
-        if (oldSlotData[timeKey]) {
-          await update(oldSlotRef, { [timeKey]: null });
+      const oldSlotSnap = await get(oldSlotRef);
+      if (oldSlotSnap.exists()) {
+        const oldSlotData = oldSlotSnap.val();
+        for (const key in oldSlotData) {
+          if (
+            oldSlotData[key]?.date === jinbtsBooking.date &&
+            oldSlotData[key]?.timeRange === jinbtsBooking.timeRange &&
+            oldSlotData[key]?.username === jinbtsBooking.username
+          ) {
+            await update(ref(db, `parkingSlots/1st Floor/A02/${key}`), null);
+          }
         }
       }
 
-      const { id, sessionKey, notifiedHour, notifiedDaily, notifiedMonthly, ...bookingData } = jinbtsBooking;
+      const { id, sessionKey, notifiedHour, notifiedDaily, notifiedMonthly, ...bookingData } =
+        jinbtsBooking;
 
       // สร้าง booking ใหม่
       const newBookingRef = await push(ref(db, "bookings"), {
         ...bookingData,
         slotId: "A04",
-        status: "confirmed"
+        status: "confirmed",
       });
       const newBookingId = newBookingRef.key;
-
       await update(ref(db, `bookings/${newBookingId}`), {
         id: newBookingId,
-        sessionKey: newBookingId
+        sessionKey: newBookingId,
       });
 
-      // เพิ่ม booking ใหม่ลง parkingSlots/A04 แบบ array-like
-      const newSlotRef = ref(db, `parkingSlots/1st Floor/A04`);
+      // ---------- บันทึกลง parkingSlots แบบ array-like ----------
+      const selectedFloor = "1st Floor";
+      const selectedSlot = "A04";
+      const slotRef = ref(db, `parkingSlots/${selectedFloor}/${selectedSlot}`);
+      const slotSnap = await get(slotRef);
 
-      // ลบ status: "available" เดิมถ้ามี
-      const oldSlotSnapshot2 = await get(newSlotRef);
-      if (oldSlotSnapshot2.exists()) {
-        const oldSlotData = oldSlotSnapshot2.val();
-        for (const key in oldSlotData) {
-          if (oldSlotData[key]?.status === "available") {
-            await update(ref(db, `parkingSlots/1st Floor/A04/${key}`), { status: null });
-          }
-        }
-      }
-
-      const newSlotEntryRef = push(newSlotRef);
-      await update(newSlotEntryRef, {
-        available: false,
+      const newSlotBooking = {
         date: bookingData.date,
         timeRange: bookingData.timeRange,
+        available: false,
+        status: "moved",
         username: bookingData.username,
-        status: 'moved'
-      });
+      };
+
+      let updatedSlotData = [];
+      if (!slotSnap.exists()) {
+        updatedSlotData = [newSlotBooking];
+      } else {
+        const val = slotSnap.val();
+        const existingBookings = Object.values(val);
+        const isDuplicate = existingBookings.some(
+          (b) => b.date === newSlotBooking.date && b.timeRange === newSlotBooking.timeRange
+        );
+        updatedSlotData = isDuplicate ? existingBookings : [...existingBookings, newSlotBooking];
+      }
+
+      // 🔥 ลบ status "available" เดิมก่อนอัปเดต
+await update(ref(db, `parkingSlots/${selectedFloor}/${selectedSlot}`), { available: null });
+
+// ✅ เขียน array ใหม่ลง slot
+const updates = {};
+updates[`parkingSlots/${selectedFloor}/${selectedSlot}`] = updatedSlotData;
+await update(ref(db), updates);
 
       setShowParkingProblemModal(false);
       Alert.alert("Parking Relocated", "Your booking has been moved to Slot A04 (Floor 1)");
@@ -291,6 +325,8 @@ const MyParkingScreen = ({ route, navigation }) => {
   }
 };
 
+
+  //ปฏิเสธ (รับคูปอง)
   const handleDeclineRelocation = () => {
     Alert.alert(
       "Compensation Coupon Received", 
@@ -687,7 +723,7 @@ const MyParkingScreen = ({ route, navigation }) => {
         <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={() => handleDemoPopup("resident")}><Text style={styles.bookAgainText}>Demo Resident Slot B01</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={() => handleDemoPopup("visitor")}><Text style={styles.bookAgainText}>Demo Visitor Slot B06</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={handleDemoVisitorJ01}><Text style={styles.bookAgainText}>Demo Visitor Slot J01</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF5252', marginTop: 10 }]} onPress={showParkingProblemDemo}><Text style={styles.bookAgainText}>Demo: Parking Slot Unavailable</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF5252', marginTop: 10 }]} onPress={showParkingProblemDemo}><Text style={styles.bookAgainText}>Demo: Parking Slot Unavailable (Move)</Text></TouchableOpacity>
 
       </ScrollView>
 
