@@ -93,9 +93,8 @@ const MyParkingScreen = ({ route, navigation }) => {
 
   // Demo popup สำหรับ Parking Slot Unavailable
   const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
-  const [autoSelectCoupon, setAutoSelectCoupon] = useState(false);
 
-  const showParkingProblemDemo = async (couponOption = false) => {
+  const showParkingProblemDemo = async () => {
     const now = new Date();
     const newNotif = {
       username: username,
@@ -113,15 +112,7 @@ const MyParkingScreen = ({ route, navigation }) => {
     const sent = await sendNotification(newNotif);
     if (sent) setUnreadCount(prev => prev + 1);
 
-    setAutoSelectCoupon(couponOption);
     setShowParkingProblemModal(true);
-    
-    // ถ้าเป็น coupon demo ให้เลือกตัวเลือกคูปองอัตโนมัติหลังจากแสดง modal
-    if (couponOption) {
-      setTimeout(() => {
-        handleDeclineRelocation();
-      }, 500);
-    }
   };
 
    // ฟังก์ชัน relocate สำหรับผู้ใช้เลือกเอง
@@ -335,14 +326,71 @@ await update(ref(db), updates);
 };
 
 
-  //ปฏิเสธ (รับคูปอง)
-  const handleDeclineRelocation = () => {
+  
+ //ปฏิเสธ (รับคูปอง)
+ const handleDeclineRelocation = async () => {
+  try {
+    // ดึงข้อมูล booking ของ slot A02
+    const bookingsSnapshot = await get(child(ref(db), "bookings"));
+    const data = bookingsSnapshot.val() || {};
+
+    const currentBooking = Object.values(data).find(
+      (b) => b.username === username && b.slotId === "A02" && b.status !== "cancelled"
+    );
+
+    if (!currentBooking) {
+      Alert.alert("Error", "No booking found for coupon generation.");
+      return;
+    }
+
+    // สร้างคูปองตาม rateType ของ booking
+    const newCoupon = {
+      username: username,
+      createdDate: new Date().toISOString(),
+      expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 วันจากนี้
+      reason: "The previous vehicle exceeded parking time, causing your slot to be unavailable",
+      discountType: currentBooking.rateType || 'hourly', // ใช้ rateType จาก booking จริง
+      used: false,
+      bookingId: currentBooking.id,
+      originalSlot: currentBooking.slotId
+    };
+
+    // บันทึกคูปองลง Firebase
+    const couponRef = ref(db, "coupons");
+    await push(couponRef, newCoupon);
+
+    // อัปเดตสถานะ booking เป็น cancelled
+    const bookingEntry = Object.entries(data).find(
+      ([id, b]) => b.username === username && b.slotId === "A02" && b.status !== "cancelled"
+    );
+
+    if (bookingEntry) {
+      const [bookingId] = bookingEntry;
+      await update(ref(db, `bookings/${bookingId}`), { 
+        status: "cancelled",
+        cancelReason: "Slot unavailable - Compensation issued"
+      });
+    }
+
+    // อัปเดต coupon count
+    setCouponCount(prev => prev + 1);
+
     Alert.alert(
       "Compensation Coupon Received", 
-      "You have received a 10% discount coupon for your next booking. The refund will be processed to your account within 3-5 business days.",
-      [{ text: "OK", onPress: () => setShowParkingProblemModal(false) }]
+      `You have received a ${currentBooking.rateType === 'hourly' ? '10%' : currentBooking.rateType === 'daily' ? '20%' : '30%'} discount coupon for your next ${currentBooking.rateType} booking. The refund will be processed to your account within 3-5 business days.`,
+      [{ 
+        text: "OK", 
+        onPress: () => {
+          setShowParkingProblemModal(false);
+          fetchBookings(); // รีเฟรชข้อมูล booking
+        }
+      }]
     );
-  };
+  } catch (error) {
+    console.error("Error creating coupon:", error);
+    Alert.alert("Error", "Failed to create coupon: " + error.message);
+  }
+};
 
 
   
@@ -492,21 +540,23 @@ await update(ref(db), updates);
       Alert.alert("Error", "Unable to fetch visitor booking J01.");
     }
   };
-
   const fetchCoupons = async () => {
     try {
-      const demoCoupons = [
-        { id: '1', createdDate: new Date().toISOString(), expiryDate: new Date(Date.now() + 30*24*60*60*1000).toISOString(), reason: "The previous vehicle exceeded parking time", discountType: 'hourly', used: false },
-        { id: '2', createdDate: new Date(Date.now() - 5*24*60*60*1000).toISOString(), expiryDate: new Date(Date.now() + 25*24*60*60*1000).toISOString(), reason: "Compensation for maintenance delay", discountType: 'daily', used: false },
-        { id: '3', createdDate: new Date(Date.now() - 2*24*60*60*1000).toISOString(), expiryDate: new Date(Date.now() + 28*24*60*60*1000).toISOString(), reason: "Apology for system error", discountType: 'monthly', used: false }
-      ];
-
-      const activeCoupons = demoCoupons.filter(coupon => {
-        const expiryDate = new Date(coupon.expiryDate);
-        return expiryDate > new Date() && !coupon.used;
-      });
-
-      setCouponCount(activeCoupons.length);
+      const snapshot = await get(child(ref(db), "coupons"));
+      const data = snapshot.val() || {};
+  
+      // กรองเฉพาะคูปองของ user นี้และยังไม่หมดอายุ
+      const userCoupons = Object.entries(data)
+        .map(([id, coupon]) => ({
+          id,
+          ...coupon
+        }))
+        .filter(coupon => {
+          const expiryDate = new Date(coupon.expiryDate);
+          return coupon.username === username && expiryDate > new Date() && !coupon.used;
+        });
+  
+      setCouponCount(userCoupons.length);
     } catch (error) {
       console.error("Error fetching coupons:", error);
       setCouponCount(0);
@@ -732,8 +782,8 @@ await update(ref(db), updates);
         <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={() => handleDemoPopup("resident")}><Text style={styles.bookAgainText}>Demo Resident Slot B01</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={() => handleDemoPopup("visitor")}><Text style={styles.bookAgainText}>Demo Visitor Slot B06</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={handleDemoVisitorJ01}><Text style={styles.bookAgainText}>Demo Visitor Slot J01</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF5252', marginTop: 10 }]} onPress={() => showParkingProblemDemo(false)}><Text style={styles.bookAgainText}>Demo: Parking Slot Unavailable (Move)</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#2196F3', marginTop: 10 }]} onPress={() => showParkingProblemDemo(true)}><Text style={styles.bookAgainText}>Demo: Parking Slot Unavailable (Coupon)</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF5252', marginTop: 10 }]} onPress={showParkingProblemDemo}><Text style={styles.bookAgainText}>Demo: Parking Slot Unavailable (Move)</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#2196F3', marginTop: 10 }]} onPress={showParkingProblemDemo}><Text style={styles.bookAgainText}>Demo: Parking Slot Unavailable (Coupon)</Text></TouchableOpacity>
 
       </ScrollView>
 
