@@ -343,16 +343,27 @@ await update(ref(db), updates);
       return;
     }
 
+    // สร้างวันที่และเวลา
+    const now = new Date();
+    const createdDate = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    const createdTime = now.toTimeString().split(' ')[0].slice(0, 5); // HH:MM
+    
+    // คำนวณ expiryDate (createdDate + 1 เดือน)
+    const expiryDate = new Date(now);
+    expiryDate.setMonth(expiryDate.getMonth() + 1);
+    const expiryDateStr = expiryDate.toISOString().split('T')[0]; // YYYY-MM-DD
+
     // สร้างคูปองตาม rateType ของ booking
     const newCoupon = {
       username: username,
-      createdDate: new Date().toISOString(),
-      expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 วันจากนี้
+      createdDate: createdDate,
+      createdTime: createdTime,
+      expiryDate: expiryDateStr, // ไม่มีเวลา
       reason: "The previous vehicle exceeded parking time, causing your slot to be unavailable",
       discountType: currentBooking.rateType || 'hourly', // ใช้ rateType จาก booking จริง
       used: false,
       bookingId: currentBooking.id,
-      originalSlot: currentBooking.slotId
+      
     };
 
     // บันทึกคูปองลง Firebase
@@ -377,7 +388,7 @@ await update(ref(db), updates);
 
     Alert.alert(
       "Compensation Coupon Received", 
-      `You have received a ${currentBooking.rateType === 'hourly' ? '10%' : currentBooking.rateType === 'daily' ? '20%' : '30%'} discount coupon for your next ${currentBooking.rateType} booking. The refund will be processed to your account within 3-5 business days.`,
+      `You have received a ${currentBooking.rateType === 'hourly' ? '10%' : currentBooking.rateType === 'daily' ? '20%' : '30%'} discount coupon for your next ${currentBooking.rateType} booking. The coupon is valid until ${expiryDateStr}.`,
       [{ 
         text: "OK", 
         onPress: () => {

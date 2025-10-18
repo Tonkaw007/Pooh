@@ -491,17 +491,17 @@ const MyCouponScreen = ({ route, navigation }) => {
           ...coupon
         }))
         .filter(coupon => {
-          // แปลง expiryDate เป็น Date object เพื่อเปรียบเทียบ
-          const expiryDate = new Date(coupon.expiryDate + 'T23:59:59');
+          // ตรวจสอบ expiryDate (ไม่มีเวลา)
+          const expiryDate = new Date(coupon.expiryDate + 'T23:59:59'); // ตั้งเวลาเป็นสิ้นวัน
           const today = new Date();
           today.setHours(0, 0, 0, 0); // ตั้งเวลาเป็น 00:00:00 เพื่อเปรียบเทียบวันที่
           
           return coupon.username === username && expiryDate >= today && !coupon.used;
         })
         .sort((a, b) => {
-          // เรียงจากใหม่สุดไปเก่าสุดโดยใช้ทั้งวันที่และเวลา
-          const dateTimeA = new Date(a.createdDate + 'T' + a.createdTime);
-          const dateTimeB = new Date(b.createdDate + 'T' + b.createdTime);
+          // เรียงจากใหม่สุดไปเก่าสุดโดยใช้ createdDate และ createdTime
+          const dateTimeA = new Date(a.createdDate + 'T' + (a.createdTime || '00:00'));
+          const dateTimeB = new Date(b.createdDate + 'T' + (b.createdTime || '00:00'));
           return dateTimeB - dateTimeA;
         });
 
@@ -556,7 +556,7 @@ const MyCouponScreen = ({ route, navigation }) => {
 
   const calculateDaysLeft = (expiryDate) => {
     const now = new Date();
-    const expiry = new Date(expiryDate);
+    const expiry = new Date(expiryDate + 'T23:59:59'); // ตั้งเวลาเป็นสิ้นวัน
     const diffTime = expiry - now;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
@@ -588,9 +588,7 @@ const MyCouponScreen = ({ route, navigation }) => {
             </View>
           </View>
 
-          {/* ลบ icon coupon ออกจาก header นี้ */}
           <View style={styles.headerIcons}>
-            {/* เว้นว่างไว้เพื่อความสมดุลของ layout */}
             <View style={styles.placeholderIcon} />
           </View>
         </View>
@@ -629,9 +627,7 @@ const MyCouponScreen = ({ route, navigation }) => {
                     <Text style={styles.discountText}>
                       {getDiscountText(coupon.discountType)}
                     </Text>
-                    <Text style={styles.reasonText}>
-                      {coupon.reason}
-                    </Text>
+                    {/* ลบ reason ออกจากส่วนหัว */}
                   </View>
                 </View>
 
@@ -639,7 +635,7 @@ const MyCouponScreen = ({ route, navigation }) => {
                   <View style={styles.detailRow}>
                     <Ionicons name="calendar-outline" size={16} color="#666" />
                     <Text style={styles.detailText}>
-                      Created: {formatDate(coupon.createdDate)} at {coupon.createdTime}
+                      Created: {formatDate(coupon.createdDate)} {coupon.createdTime ? `at ${coupon.createdTime}` : ''}
                     </Text>
                   </View>
                   
@@ -711,6 +707,7 @@ const MyCouponScreen = ({ route, navigation }) => {
   );
 };
 
+// Styles เหมือนเดิม...
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
@@ -761,7 +758,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   placeholderIcon: {
-    width: 40, // ความกว้างเท่ากับ icon อื่นๆ เพื่อความสมดุล
+    width: 40,
   },
   header: { 
     alignItems: 'center', 
@@ -831,11 +828,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2D3748',
     marginBottom: 5,
-  },
-  reasonText: {
-    fontSize: 14,
-    color: '#718096',
-    fontStyle: 'italic',
   },
   couponDetails: {
     borderTopWidth: 1,
