@@ -15,6 +15,11 @@ const MyParkingScreen = ({ route, navigation }) => {
   const bookingsRef = useRef([]);
   const activeReminderBookings = useRef(new Set());
 
+ // State ใหม่
+  const [relocationSlot, setRelocationSlot] = useState(null);
+  const [originalBooking, setOriginalBooking] = useState(null);
+  const [handledOverstaySlot, setHandledOverstaySlot] = useState(null); // <-- State ป้องกัน Modal เด้งซ้ำ
+
   // ฟังก์ชัน push notification โดยตรง (ไม่มีการเช็คซ้ำ)
   const sendNotification = async (newNotif) => {
     try {
@@ -63,7 +68,7 @@ const MyParkingScreen = ({ route, navigation }) => {
             item.message === newNotif.message &&
             item.slotId === newNotif.slotId &&
             item.username === newNotif.username &&
-            Math.abs(now - (item.timestamp || 0)) < 10 * 60 * 1000
+            Math.abs(now - (item.timestamp || 0)) < 10 * 60 * 1000 // 10 นาที
           ) {
             duplicate = true;
           }
@@ -91,257 +96,283 @@ const MyParkingScreen = ({ route, navigation }) => {
     }
   };
 
-  // Demo popup สำหรับ Parking Slot Unavailable
+
+  // 2. สร้างฟังก์ชันใหม่สำหรับค้นหาช่องจอด
+  const findRandomAvailableSlot = async (bookingToMove) => {
+    try {
+      const allSlotsSnap = await get(ref(db, 'parkingSlots'));
+      const allBookingsSnap = await get(ref(db, 'bookings'));
+      const allSlots = allSlotsSnap.val() || {};
+      const allBookings = allBookingsSnap.val() || {};
+
+      // 1. ดึงข้อมูลเวลาของ booking ที่มีปัญหา
+      const checkEntry = new Date(`${bookingToMove.entryDate}T${bookingToMove.entryTime || '00:00'}`);
+      const checkExit = new Date(`${bookingToMove.exitDate}T${bookingToMove.exitTime || '23:59'}`);
+      const checkEntryDate = bookingToMove.entryDate;
+      const checkExitDate = bookingToMove.exitDate;
+      const checkRateType = bookingToMove.rateType;
+
+      const availableSlots = [];
+
+      // 2. วนลูปทุกชั้น ทุกช่องจอด
+      for (const floor in allSlots) {
+        for (const slotId in allSlots[floor]) {
+          // ข้ามช่องจอดเดิม (ช่องที่มีปัญหา)
+          if (floor === bookingToMove.floor && slotId === bookingToMove.slotId) {
+            continue;
+          }
+
+          let isAvailable = true;
+
+          // 3. วนลูปเช็ก booking ทั้งหมด
+          for (const booking of Object.values(allBookings)) {
+            // ถ้า booking นี้ถูกยกเลิก หรือ ไม่ใช่ช่องจอดนี้ -> ข้าม
+            if (booking.status === 'cancelled' || booking.floor !== floor || booking.slotId !== slotId) {
+              continue;
+            }
+
+            // 4. เช็กเวลาซ้อนทับ (Logic เดียวกับหน้า ReservationScreen)
+            const bookingEntry = new Date(`${booking.entryDate}T${booking.entryTime || '00:00'}`);
+            const bookingExit = new Date(`${booking.exitDate}T${booking.exitTime || '23:59'}`);
+
+            let overlap = false;
+            if (checkRateType === 'hourly') {
+              if (checkEntry < bookingExit && checkExit > bookingEntry) overlap = true;
+            } else {
+              if (checkEntryDate <= booking.exitDate && checkExitDate >= booking.entryDate) overlap = true;
+            }
+
+            if (overlap) {
+              isAvailable = false;
+              break; // ช่องนี้ไม่ว่าง, หยุดเช็ก
+            }
+          }
+
+          if (isAvailable) {
+            availableSlots.push({ floor, slotId });
+          }
+        }
+      }
+
+      // 5. จัดลำดับและสุ่ม
+      const sameFloorSlots = availableSlots.filter(s => s.floor === bookingToMove.floor);
+      const otherFloorSlots = availableSlots.filter(s => s.floor !== bookingToMove.floor);
+
+      if (sameFloorSlots.length > 0) {
+        // มีช่องว่างในชั้นเดียวกัน
+        return sameFloorSlots[Math.floor(Math.random() * sameFloorSlots.length)];
+      } else if (otherFloorSlots.length > 0) {
+        // ไม่มี, ไปสุ่มจากชั้นอื่น
+        return otherFloorSlots[Math.floor(Math.random() * otherFloorSlots.length)];
+      } else {
+        // ไม่มีช่องว่างเหลือเลย
+        return null;
+      }
+
+    } catch (error) {
+      console.error("Error finding available slot:", error);
+      return null;
+    }
+  };
+
+
+  //  3. `showParkingProblemDemo` (ฟังก์ชัน Demo นี้เหมือนเดิม)
   const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
 
   const showParkingProblemDemo = async () => {
+    // 1. (Demo) ค้นหา booking "A02"
+    const bookingsSnapshot = await get(child(ref(db), "bookings"));
+    const data = bookingsSnapshot.val() || {};
+    const bookingToMoveEntry = Object.entries(data).find(
+      ([id, b]) => b.username === username && b.slotId === "A02" && b.status !== "cancelled"
+    );
+
+    if (!bookingToMoveEntry) {
+      Alert.alert("Demo Error", "Cannot find active booking for Slot A02 to start demo.");
+      return;
+    }
+    
+    const [bookingId, bookingData] = bookingToMoveEntry;
+    const bookingToMove = { ...bookingData, id: bookingId }; // <-- ข้อมูล booking A02
+    setOriginalBooking(bookingToMove); // เก็บไว้ใน state
+
+    // 2. ค้นหาช่องจอดใหม่
+    const newSlot = await findRandomAvailableSlot(bookingToMove);
+
+    if (!newSlot) {
+      Alert.alert("System Alert", "No available slots found for relocation. Please contact admin.");
+      return;
+    }
+
+    // 3. เก็บช่องจอดใหม่ไว้ใน state
+    setRelocationSlot(newSlot); // e.g., { floor: '1st Floor', slotId: 'C05' }
+
+    // 4. ส่งแจ้งเตือน (เหมือนเดิม)
     const now = new Date();
     const newNotif = {
       username: username,
       bookingType: userType || "resident",
-      slotId: "A02",
-      floor: "1",
-      licensePlate: "bt77",
+      slotId: "A02", // แจ้งเตือนเรื่อง A02
+      floor: bookingToMove.floor || "1st Floor",
+      licensePlate: bookingToMove.licensePlate || "bt77",
       date: now.toISOString().split('T')[0],
       time: now.toTimeString().slice(0,5),
       read: false,
       type: "Parking Slot Unavailable",
-      message: `Your booked parking slot A02 is currently unavailable. Please choose relocation or receive compensation.`
+      message: `Your booked parking slot A02 is currently unavailable. We found a new slot for you: ${newSlot.slotId} (${newSlot.floor}). Please choose relocation or receive compensation.`
     };
 
     const sent = await sendNotification(newNotif);
     if (sent) setUnreadCount(prev => prev + 1);
 
+    // 5. แสดง Modal
     setShowParkingProblemModal(true);
   };
 
-   // ฟังก์ชัน relocate สำหรับผู้ใช้เลือกเอง
-const handleAcceptRelocation = async () => {
-  try {
-    const bookingsSnapshot = await get(child(ref(db), "bookings"));
-    const data = bookingsSnapshot.val() || {};
-
-    const oldBookingEntry = Object.entries(data).find(
-      ([id, b]) => b.username === username && b.slotId === "A02" && b.status !== "cancelled"
-    );
-
-    if (!oldBookingEntry) {
-      Alert.alert("Error", "No booking found for relocation.");
+   
+  // 4. `handleAcceptRelocation` (ฟังก์ชันนี้เหมือนเดิม)
+  const handleAcceptRelocation = async () => {
+    
+    // ตรวจสอบว่ามีข้อมูลจาก state หรือไม่
+    if (!originalBooking || !relocationSlot) {
+      Alert.alert("Error", "Relocation data is missing. Please try again.");
+      setShowParkingProblemModal(false);
       return;
     }
 
-    const [oldBookingId, oldBooking] = oldBookingEntry;
+    try {
+      const oldBooking = originalBooking;
+      const oldBookingId = originalBooking.id;
+      const newSlot = relocationSlot; // e.g., { floor: '1st Floor', slotId: 'C05' }
+  
+      // --- 1. สร้าง TimeRange ที่ถูกต้อง ---
+      const bookingTimeRange = `${oldBooking.entryTime}-${oldBooking.exitTime}`;
 
-    // ยกเลิก booking เดิม
-    await update(ref(db, `bookings/${oldBookingId}`), { status: "cancelled" });
-
-    // ลบข้อมูลใน slot เดิม
-    const oldSlotRef = ref(db, `parkingSlots/1st Floor/A02`);
-    const oldSlotSnap = await get(oldSlotRef);
-    if (oldSlotSnap.exists()) {
-      const oldSlotData = oldSlotSnap.val();
-      for (const key in oldSlotData) {
-        if (
-          oldSlotData[key]?.date === oldBooking.date &&
-          oldSlotData[key]?.timeRange === oldBooking.timeRange &&
-          oldSlotData[key]?.username === oldBooking.username
-        ) {
-          await update(ref(db, `parkingSlots/1st Floor/A02/${key}`), null);
-        }
-      }
-    }
-
-    // สร้าง booking ใหม่
-    const newBookingData = {
-      ...oldBooking,
-      slotId: "A04",
-      status: "confirmed",
-      date: oldBooking.entryDate,
-      timeRange: oldBooking.exitTime,
-    };
-
-    delete newBookingData.id;
-    delete newBookingData.sessionKey;
-    delete newBookingData.notifiedHour;
-    delete newBookingData.notifiedDaily;
-    delete newBookingData.notifiedMonthly;
-
-    const newBookingRef = await push(ref(db, "bookings"), newBookingData);
-    const newBookingId = newBookingRef.key;
-
-    await update(ref(db, `bookings/${newBookingId}`), {
-      id: newBookingId,
-      sessionKey: newBookingId,
-    });
-
-    // ---------- บันทึกลง parkingSlots แบบ array-like ----------
-    const selectedFloor = "1st Floor";
-    const selectedSlot = "A04";
-    const slotRef = ref(db, `parkingSlots/${selectedFloor}/${selectedSlot}`);
-    const slotSnap = await get(slotRef);
-
-    const newSlotBooking = {
-      date: newBookingData.date,
-      timeRange: newBookingData.timeRange,
-      available: false,
-      status: "moved",
-      username: newBookingData.username,
-    };
-
-    let updatedSlotData = [];
-    if (!slotSnap.exists()) {
-      updatedSlotData = [newSlotBooking];
-    } else {
-      const val = slotSnap.val();
-      const existingBookings = Object.values(val);
-      const isDuplicate = existingBookings.some(
-        (b) => b.date === newSlotBooking.date && b.timeRange === newSlotBooking.timeRange
-      );
-      updatedSlotData = isDuplicate ? existingBookings : [...existingBookings, newSlotBooking];
-    }
-
-    // 🔥 ลบ status "available" เดิมก่อนอัปเดต
-await update(ref(db, `parkingSlots/${selectedFloor}/${selectedSlot}`), { available: null });
-
-// ✅ เขียน array ใหม่ลง slot
-const updates = {};
-updates[`parkingSlots/${selectedFloor}/${selectedSlot}`] = updatedSlotData;
-await update(ref(db), updates);
-
-    Alert.alert("Parking Relocated Successfully", "Your booking has been moved to Slot A04");
-    fetchBookings();
-  } catch (error) {
-    console.error("Error relocating booking:", error);
-    Alert.alert("Error", "Failed to relocate booking: " + error.message);
-  }
-};
-
-
-
-
-
- // ฟังก์ชันสำหรับ auto relocate Jinbts
-   const autoRelocateJinbts = async () => {
-  try {
-    const snapshot = await get(child(ref(db), "bookings"));
-    const data = snapshot.val() || {};
-
-    const khemikaBooking = Object.values(data).find(
-      (b) => b.username === "Khemika Meepin" && b.slotId === "A02" && b.status !== "cancelled"
-    );
-
-    const jinbtsBookingEntry = Object.entries(data).find(
-      ([id, b]) => b.username === "jinbts" && b.slotId === "A02" && b.status !== "cancelled"
-    );
-
-    if (!khemikaBooking || !jinbtsBookingEntry) return;
-
-    const [jinbtsBookingId, jinbtsBooking] = jinbtsBookingEntry;
-
-    const now = new Date();
-    const bookingDate = new Date(khemikaBooking.entryDate);
-
-    if (
-      bookingDate.getFullYear() === 2025 &&
-      bookingDate.getMonth() === 9 &&
-      bookingDate.getDate() === 16 &&
-      now.getHours() >= 19
-    ) {
-      // ยกเลิก booking เดิม
-      await update(ref(db, `bookings/${jinbtsBookingId}`), { status: "cancelled" });
-
-      // ลบข้อมูลใน slot เดิม
-      const oldSlotRef = ref(db, `parkingSlots/1st Floor/A02`);
+      // สร้าง Object 'updates' ว่างๆ เพื่อรวบรวมทุกอย่างที่จะทำ
+      const updates = {};
+  
+      // --- 2. เพิ่มคำสั่ง "ยกเลิก booking เดิม" ---
+      updates[`bookings/${oldBookingId}/status`] = "cancelled";
+  
+      // --- 3. (Logic เดิม) จัดการ "ลบข้อมูลใน slot เดิม" ---
+      const oldSlotRef = ref(db, `parkingSlots/${oldBooking.floor}/${oldBooking.slotId}`);
       const oldSlotSnap = await get(oldSlotRef);
+      
       if (oldSlotSnap.exists()) {
         const oldSlotData = oldSlotSnap.val();
+        let remainingBookings = []; 
+        let matchingKey = null;
+
         for (const key in oldSlotData) {
-          if (
-            oldSlotData[key]?.date === jinbtsBooking.date &&
-            oldSlotData[key]?.timeRange === jinbtsBooking.timeRange &&
-            oldSlotData[key]?.username === jinbtsBooking.username
-          ) {
-            await update(ref(db, `parkingSlots/1st Floor/A02/${key}`), null);
+          const parkedBooking = oldSlotData[key];
+          if (typeof parkedBooking === 'object' && parkedBooking !== null && parkedBooking.date) {
+            if (
+              parkedBooking.date === oldBooking.entryDate && 
+              parkedBooking.timeRange === bookingTimeRange && 
+              parkedBooking.username === oldBooking.username
+            ) {
+              matchingKey = key; 
+            } else {
+              remainingBookings.push(parkedBooking); 
+            }
+          }
+        }
+  
+        if (matchingKey) {
+          if (remainingBookings.length > 0) {
+            updates[`parkingSlots/${oldBooking.floor}/${oldBooking.slotId}`] = remainingBookings;
+          } else {
+            updates[`parkingSlots/${oldBooking.floor}/${oldBooking.slotId}`] = { status: "available" };
           }
         }
       }
-
-      const { id, sessionKey, notifiedHour, notifiedDaily, notifiedMonthly, ...bookingData } =
-        jinbtsBooking;
-
-      // สร้าง booking ใหม่
-      const newBookingRef = await push(ref(db, "bookings"), {
-        ...bookingData,
-        slotId: "A04",
+  
+      // --- 4. สร้าง booking ใหม่ (ที่ช่องจอดใหม่) ---
+      const newBookingData = {
+        ...oldBooking,
+        slotId: newSlot.slotId, //  ใช้ slotId ใหม่
+        floor: newSlot.floor,   //  ใช้ floor ใหม่
         status: "confirmed",
-      });
-      const newBookingId = newBookingRef.key;
-      await update(ref(db, `bookings/${newBookingId}`), {
-        id: newBookingId,
-        sessionKey: newBookingId,
-      });
-
-      // ---------- บันทึกลง parkingSlots แบบ array-like ----------
-      const selectedFloor = "1st Floor";
-      const selectedSlot = "A04";
-      const slotRef = ref(db, `parkingSlots/${selectedFloor}/${selectedSlot}`);
-      const slotSnap = await get(slotRef);
-
-      const newSlotBooking = {
-        date: bookingData.date,
-        timeRange: bookingData.timeRange,
-        available: false,
-        status: "moved",
-        username: bookingData.username,
+        date: oldBooking.entryDate,
+        timeRange: bookingTimeRange,
+        id: null, 
+        sessionKey: null,
+        notifiedHour: null,
+        notifiedDaily: null,
+        notifiedMonthly: null,
       };
 
+      const newBookingRef = push(child(ref(db), 'bookings'));
+      const newBookingId = newBookingRef.key;
+
+      newBookingData.id = newBookingId;
+      newBookingData.sessionKey = newBookingId;
+
+      updates[`bookings/${newBookingId}`] = newBookingData;
+  
+      // --- 5. เตรียมข้อมูลใหม่สำหรับ parkingSlots (ที่ช่องจอดใหม่) ---
+      const selectedFloor = newSlot.floor; //  ใช้ floor ใหม่
+      const selectedSlot = newSlot.slotId; //  ใช้ slotId ใหม่
+      const slotRef = ref(db, `parkingSlots/${selectedFloor}/${selectedSlot}`);
+      const slotSnap = await get(slotRef);
+  
+      const newSlotBooking = {
+        date: newBookingData.date,
+        timeRange: newBookingData.timeRange,
+        available: false,
+        status: "moved",
+        username: newBookingData.username,
+      };
+  
       let updatedSlotData = [];
-      if (!slotSnap.exists()) {
-        updatedSlotData = [newSlotBooking];
-      } else {
+      if (slotSnap.exists()) {
         const val = slotSnap.val();
-        const existingBookings = Object.values(val);
+        const existingBookings = (Array.isArray(val) || (typeof val === 'object' && val !== null && val.hasOwnProperty('0')))
+          ? Object.values(val).filter(item => typeof item === 'object' && item !== null && item.date)
+          : []; 
+        
         const isDuplicate = existingBookings.some(
           (b) => b.date === newSlotBooking.date && b.timeRange === newSlotBooking.timeRange
         );
         updatedSlotData = isDuplicate ? existingBookings : [...existingBookings, newSlotBooking];
+      } else {
+        updatedSlotData = [newSlotBooking];
       }
-
-      // 🔥 ลบ status "available" เดิมก่อนอัปเดต
-await update(ref(db, `parkingSlots/${selectedFloor}/${selectedSlot}`), { available: null });
-
-// ✅ เขียน array ใหม่ลง slot
-const updates = {};
-updates[`parkingSlots/${selectedFloor}/${selectedSlot}`] = updatedSlotData;
-await update(ref(db), updates);
-
-      setShowParkingProblemModal(false);
-      Alert.alert("Parking Relocated", "Your booking has been moved to Slot A04 (Floor 1)");
-      fetchBookings();
-    }
-  } catch (error) {
-    console.error("Error relocating Jinbts:", error);
-    Alert.alert("Error", "Failed to relocate booking.");
-  }
-};
-
-
   
- //ปฏิเสธ (รับคูปอง)
- const handleDeclineRelocation = async () => {
-  try {
-    // ดึงข้อมูล booking ของ slot A02
-    const bookingsSnapshot = await get(child(ref(db), "bookings"));
-    const data = bookingsSnapshot.val() || {};
+      updates[`parkingSlots/${selectedFloor}/${selectedSlot}`] = updatedSlotData;
+  
+      // --- 6. สั่งทำงาน 'updates' ทั้งหมดในครั้งเดียว ---
+      await update(ref(db), updates);
+  
+      Alert.alert(
+        "Parking Relocated Successfully", 
+        `Your booking has been moved to Slot ${newSlot.slotId} (${newSlot.floor})` //  แสดง slot ใหม่
+      );
+      
+      setShowParkingProblemModal(false); // ปิด Modal
+      setOriginalBooking(null); // ล้าง state
+      setRelocationSlot(null); // ล้าง state
+      fetchBookings(); // รีเฟรชหน้าจอ
 
-    const currentBooking = Object.values(data).find(
-      (b) => b.username === username && b.slotId === "A02" && b.status !== "cancelled"
-    );
-
-    if (!currentBooking) {
-      Alert.alert("Error", "No booking found for coupon generation.");
+    } catch (error) {
+      console.error("Error relocating booking:", error);
+      Alert.alert("Error", "Failed to relocate booking: " + error.message);
+    }
+  };
+  
+ // ฟังก์ชันรับคูปอง (แก้บั๊ก A02 แล้ว)
+  const handleDeclineRelocation = async () => {
+   
+    //  ตรวจสอบว่ามีข้อมูลจาก state หรือไม่
+    if (!originalBooking) {
+      Alert.alert("Error", "Booking data is missing. Please try again.");
+      setShowParkingProblemModal(false);
       return;
     }
+
+  try {
+    //  ใช้ข้อมูลจาก state (originalBooking)
+    const currentBooking = originalBooking;
 
     // สร้างวันที่และเวลา
     const now = new Date();
@@ -355,15 +386,14 @@ await update(ref(db), updates);
 
     // สร้างคูปองตาม rateType ของ booking
     const newCoupon = {
-      username: username,
+      username: currentBooking.username, // ใช้ username ของเจ้าของ booking ที่มีปัญหา
       createdDate: createdDate,
       createdTime: createdTime,
       expiryDate: expiryDateStr, // ไม่มีเวลา
-      reason: "The previous vehicle exceeded parking time, causing your slot to be unavailable",
+      reason: `Slot ${currentBooking.slotId} unavailable due to overstay`,
       discountType: currentBooking.rateType || 'hourly', // ใช้ rateType จาก booking จริง
       used: false,
       bookingId: currentBooking.id,
-      
     };
 
     // บันทึกคูปองลง Firebase
@@ -371,20 +401,16 @@ await update(ref(db), updates);
     await push(couponRef, newCoupon);
 
     // อัปเดตสถานะ booking เป็น cancelled
-    const bookingEntry = Object.entries(data).find(
-      ([id, b]) => b.username === username && b.slotId === "A02" && b.status !== "cancelled"
-    );
+    await update(ref(db, `bookings/${currentBooking.id}`), { 
+      status: "cancelled",
+      cancelReason: "Slot unavailable - Compensation issued"
+    });
 
-    if (bookingEntry) {
-      const [bookingId] = bookingEntry;
-      await update(ref(db, `bookings/${bookingId}`), { 
-        status: "cancelled",
-        cancelReason: "Slot unavailable - Compensation issued"
-      });
+    // อัปเดต coupon count (ถ้า username ตรงกัน)
+    if (currentBooking.username === username) {
+        setCouponCount(prev => prev + 1);
     }
 
-    // อัปเดต coupon count
-    setCouponCount(prev => prev + 1);
 
     Alert.alert(
       "Compensation Coupon Received", 
@@ -393,6 +419,9 @@ await update(ref(db), updates);
         text: "OK", 
         onPress: () => {
           setShowParkingProblemModal(false);
+          setOriginalBooking(null); // ล้าง state
+          setRelocationSlot(null); // ล้าง state
+          setHandledOverstaySlot(null); // เคลียร์ flag ป้องกันเด้งซ้ำ
           fetchBookings(); // รีเฟรชข้อมูล booking
         }
       }]
@@ -402,7 +431,6 @@ await update(ref(db), updates);
     Alert.alert("Error", "Failed to create coupon: " + error.message);
   }
 };
-
 
   
 
@@ -574,33 +602,240 @@ await update(ref(db), updates);
     }
   };
 
+
+  // ===== 📍 ฟังก์ชัน `checkOverstayAndTriggerRelocation` (แก้ไข Logic Barrier) 📍 =====
+// =================================================================
+const checkOverstayAndTriggerRelocation = async () => {
+    // ถ้า Modal เปิดอยู่แล้ว หรือ กำลังจัดการปัญหา Slot อื่นอยู่ -> ออก
+    if (showParkingProblemModal || handledOverstaySlot) return;
+
+    const now = new Date();
+    const activeBookings = bookingsRef.current; // Booking ของ User ปัจจุบัน
+
+    for (const myBooking of activeBookings) {
+        // ตรวจสอบเฉพาะ Booking ที่กำลังจะเริ่ม หรือ เพิ่งเริ่ม
+        if (!myBooking.entryDate || !myBooking.entryTime) continue;
+
+        const entryDateTime = new Date(`${myBooking.entryDate}T${myBooking.entryTime}`);
+        const timeDiffMinutes = (entryDateTime - now) / (1000 * 60);
+
+        // เช็กเฉพาะช่วงเวลา -5 ถึง +15 นาที จากเวลาเข้าจอด
+        if (timeDiffMinutes > 5 || timeDiffMinutes < -15) continue;
+
+        // --- ถ้าใกล้ถึงเวลาจอดของ myBooking ---
+        try {
+            // Query หา Booking *ทั้งหมด* ของ Slot เดียวกัน
+            const bookingsQuery = query(
+                ref(db, 'bookings'),
+                orderByChild('slotId'),
+                equalTo(myBooking.slotId)
+            );
+            const snapshot = await get(bookingsQuery);
+            if (!snapshot.exists()) continue; // ไม่มี Booking อื่นในช่องนี้
+
+            const slotBookings = snapshot.val();
+            let isOverstayConflict = false;
+            let overstayingBooking = null;
+            let lastBarrierStatusReasoning = 'No conflicting booking found'; // สำหรับ Debug
+
+            // วนลูปหา Booking อื่นๆ ที่อาจจอดทับ
+            for (const otherBookingId in slotBookings) {
+                const otherBooking = { ...slotBookings[otherBookingId], id: otherBookingId };
+
+                // ข้าม Booking ของตัวเอง และ Booking ที่ Cancelled
+                if (otherBooking.id === myBooking.id || otherBooking.status === 'cancelled') continue;
+
+                // เช็กว่าเป็น Booking ที่อยู่ *ก่อนหน้า* myBooking
+                if (!otherBooking.exitDate || !otherBooking.exitTime) continue;
+                const otherExitDateTime = new Date(`${otherBooking.exitDate}T${otherBooking.exitTime}`);
+
+                // --- 1. เช็กเวลาจอดเกิน (เหมือนเดิม) ---
+                if (otherExitDateTime < entryDateTime && now > otherExitDateTime) {
+
+                    // --- 2. เช็ก Barrier Logs (Logic ใหม่) ---
+                    const barrierLogsRef = ref(db, `bookings/${otherBooking.id}/barrierLogs`);
+                    const barrierSnapshot = await get(barrierLogsRef); // ดึง Log ทั้งหมด
+
+                    let conflictBasedOnBarrier = false; // Flag สำหรับตัดสินจาก Barrier
+
+                    if (!barrierSnapshot.exists()) {
+                        // กรณี 1: ไม่มี Log เลย -> ถือว่าจอดเกิน
+                        conflictBasedOnBarrier = true;
+                        lastBarrierStatusReasoning = 'No barrier logs found';
+                    } else {
+                        const logs = barrierSnapshot.val();
+                        const logEntries = Object.values(logs).map(log => ({
+                            ...log,
+                            datetime: new Date(`${log.date}T${log.time || '00:00'}`)
+                        }));
+                        logEntries.sort((a, b) => a.datetime - b.datetime); // เรียง เก่า -> ใหม่
+
+                        if (logEntries.length === 0) {
+                             // (เผื่อกรณี log เป็น object ว่าง)
+                            conflictBasedOnBarrier = true;
+                             lastBarrierStatusReasoning = 'Log object was empty';
+                        } else {
+                            const lastLog = logEntries[logEntries.length - 1];
+                            
+                            if (lastLog.status === 'lifted') {
+                                // กรณี 2: Log สุดท้ายคือ lifted -> จอดเกิน
+                                conflictBasedOnBarrier = true;
+                                lastBarrierStatusReasoning = `Last log was 'lifted' at ${lastLog.time}`;
+                            } else if (lastLog.status === 'lowered') {
+                                if (logEntries.length === 1) {
+                                    // กรณี 1 (ซ้ำ): มีแค่ Log เดียว และเป็น lowered -> จอดเกิน
+                                    conflictBasedOnBarrier = true;
+                                     lastBarrierStatusReasoning = `Only one log found: 'lowered' at ${lastLog.time}`;
+                                } else {
+                                    // กรณี 3 & 4: Log สุดท้ายคือ lowered, ดูรองสุดท้าย
+                                    const secondLastLog = logEntries[logEntries.length - 2];
+                                    if (secondLastLog.status === 'lifted') {
+                                        // กรณี 3: รองสุดท้าย lifted -> ออกแล้ว ✅
+                                        conflictBasedOnBarrier = false; // ไม่ใช่ Conflict
+                                        lastBarrierStatusReasoning = `Exited: Sequence 'lifted' then 'lowered' (last at ${lastLog.time})`;
+                                    } else {
+                                        // กรณี 4: รองสุดท้ายไม่ใช่ lifted -> จอดเกิน
+                                        conflictBasedOnBarrier = true;
+                                        lastBarrierStatusReasoning = `Incorrect sequence: Last was 'lowered' at ${lastLog.time}, previous was '${secondLastLog.status}'`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // --- 3. สรุปผล ---
+                    if (conflictBasedOnBarrier) {
+                        isOverstayConflict = true;
+                        overstayingBooking = otherBooking;
+                        break; // เจอ Conflict แล้ว หยุดหา
+                    }
+                } // จบเช็กเวลาจอดเกิน
+            } // จบ loop otherBooking
+
+            // --- 4. ถ้าเจอ Conflict จริงๆ ---
+            if (isOverstayConflict) {
+                console.log(`Conflict detected: Slot ${myBooking.slotId} occupied by user ${overstayingBooking?.username}. Reasoning: ${lastBarrierStatusReasoning}.`);
+
+                // ตั้งค่า state เพื่อเริ่มกระบวนการย้ายที่
+                setOriginalBooking(myBooking);
+                setHandledOverstaySlot(myBooking.slotId); // ตั้ง Flag ว่ากำลังจัดการ Slot นี้
+
+                const newSlot = await findRandomAvailableSlot(myBooking);
+                if (!newSlot) {
+                    Alert.alert(
+                        "Critical Error",
+                        `Your slot ${myBooking.slotId} is unavailable due to overstay, and no free slots were found.`
+                    );
+                    setRelocationSlot(null);
+                } else {
+                    setRelocationSlot(newSlot);
+                }
+
+                // แสดง Modal
+                setShowParkingProblemModal(true);
+                break; // เจอ Conflict แล้ว หยุดเช็ก Booking อื่นของ User นี้
+            }
+
+        } catch (error) {
+            console.error("Error checking for overstay conflict:", error);
+        }
+    } // end for loop myBooking
+};
+
+  // ===== 📍 2. เพิ่มฟังก์ชัน `checkUnavailableSlotNotifications` 📍 =====
+  // =================================================================
+  const checkUnavailableSlotNotifications = async (activeBookings, userNotifications) => {
+    // ถ้า Modal เปิดอยู่แล้ว (จาก Demo หรือจาก Noti รอบก่อน) ให้ข้ามไป
+    if (showParkingProblemModal) {
+      return;
+    }
+
+    // ค้นหา notification "Parking Slot Unavailable" ที่ยังไม่ถูกจัดการ
+    const problemNotification = userNotifications.find(
+      n => n.type === "Parking Slot Unavailable" && !n.handled
+    );
+
+    if (!problemNotification) {
+      return; // ไม่มีปัญหา
+    }
+
+    // ถ้าเจอ, ค้นหา booking ที่ active อยู่ซึ่งตรงกับ notification
+    const bookingToMove = activeBookings.find(
+      b => b.slotId === problemNotification.slotId && b.floor === problemNotification.floor
+    );
+
+    // ถ้าไม่เจอ booking (เช่น user กดยกเลิกไปแล้ว)
+    if (!bookingToMove) {
+      // มาร์คว่าจัดการแล้ว จะได้ไม่เด้งอีก
+      await update(ref(db, `notifications/${problemNotification.id}`), { handled: true });
+      return;
+    }
+
+    // ถ้าเจอ booking:
+    // 1. เก็บ booking ที่มีปัญหาไว้ใน state
+    setOriginalBooking(bookingToMove);
+
+    // 2. ค้นหาช่องจอดใหม่ (ใช้ฟังก์ชันเดียวกับ Demo)
+    const newSlot = await findRandomAvailableSlot(bookingToMove);
+
+    if (!newSlot) {
+      // กรณีฉุกเฉิน: ไม่มีที่จอดเหลือเลย
+      Alert.alert(
+        "Critical Error", 
+        `Your slot ${bookingToMove.slotId} is unavailable, and we could not find any free slots to relocate you. Please decline and accept a coupon.`
+      );
+      setRelocationSlot(null); // ตั้งเป็น null
+    } else {
+      // 3. เก็บช่องจอดใหม่ไว้ใน state
+      setRelocationSlot(newSlot);
+    }
+
+    // 4. มาร์ค notification นี้ว่า "จัดการแล้ว"
+    await update(ref(db, `notifications/${problemNotification.id}`), { handled: true });
+    
+    // 5. แสดง Modal
+    setShowParkingProblemModal(true);
+  };
+
+
+
+  // ฟังก์ชัน fetchBookings (แก้ให้เก็บ Notifications)
   const fetchBookings = async () => {
     try {
-      const snapshot = await get(child(ref(db), "bookings"));
-      const data = snapshot.val() || {};
+      const bookingsSnapshot = await get(child(ref(db), "bookings"));
+      const bookingsData = bookingsSnapshot.val() || {};
 
-      const activeBookings = Object.values(data).filter(
+      const activeBookings = Object.values(bookingsData).filter(
         (b) => (b.username === username || (userType === "visitor" && b.visitorInfo?.visitorUsername === username)) && b.slotId && b.status !== "cancelled"
       );
 
       activeBookings.forEach(b => b.showingModal = false);
 
       setBookings(activeBookings);
-      bookingsRef.current = activeBookings;
+      bookingsRef.current = activeBookings; // อัปเดต ref ด้วย
       setLoading(false);
-      checkBookingReminders();
+      checkBookingReminders(); // เช็ก Reminder ปกติ
 
+      // ดึง notifications ทั้งหมด (รวม ID)
       const notifSnapshot = await get(child(ref(db), `notifications`));
       const notifData = notifSnapshot.val() || {};
       
-      const userNotifications = Object.values(notifData).filter(n => {
-        return n.username === username || n.visitorUsername === username;
-      });
+      const userNotifications = Object.entries(notifData) // เอา [id, data]
+        .filter(([id, n]) => n.username === username || n.visitorUsername === username)
+        .map(([id, n]) => ({ id, ...n })); // เราต้องการ 'id' เพื่ออัปเดต 'handled'
       
       const unread = userNotifications.filter(n => !n.read).length;
       setUnreadCount(unread);
 
       await fetchCoupons();
+
+      // เช็ก Notification Unavailable ก่อน (ระบบจริงแบบเดิม)
+      await checkUnavailableSlotNotifications(activeBookings, userNotifications);
+      
+      // ถ้า Modal ยังไม่เปิดจาก Noti, ให้ลองเช็ก Overstay (ระบบใหม่)
+      // (เราต้อง await fetchBookings เสร็จก่อน ถึงจะมี activeBookings ให้เช็ก)
+      // การเช็ก Overstay จะถูกเรียกจาก Interval ใน useEffect แทน
+
     } catch (error) {
       console.error(error);
       Alert.alert("Error", "Unable to fetch bookings.");
@@ -691,37 +926,47 @@ await update(ref(db), updates);
     }
   };
 
-  // LOGIC เพิ่ม: ตรวจสอบและ relocate Jinbts อัตโนมัติ
-  const checkAutomaticRelocationForJinbts = async () => {
-    await autoRelocateJinbts();
-  };
 
   // useEffect
   useEffect(() => {
-    fetchBookings();
-    const unsubscribeFocus = navigation.addListener("focus", () => fetchBookings());
-    const reminderInterval = setInterval(() => {
-      checkBookingReminders();
-      checkAutomaticRelocationForJinbts();
-    }, 30000);
+    fetchBookings(); // Fetch ครั้งแรกเมื่อเข้าหน้าจอ
+    
+    // เมื่อกลับเข้าหน้าจอ ให้ fetch ใหม่
+    const unsubscribeFocus = navigation.addListener("focus", fetchBookings); 
 
+    // ตั้งเวลาเช็ก Reminder และ Overstay ทุก 30 วินาที
+    const intervalId = setInterval(() => {
+      checkBookingReminders();
+      checkOverstayAndTriggerRelocation(); // <-- เรียกใช้ฟังก์ชันใหม่
+    }, 30000); // 30 วินาที
+
+    // Cleanup function: หยุด interval และ listener เมื่อออกจากหน้าจอ
     return () => {
       unsubscribeFocus();
-      clearInterval(reminderInterval);
+      clearInterval(intervalId);
     };
-  }, [navigation, username]);
+  }, [navigation, username]); // Dependency array
 
-  const handleBack = () => navigation.navigate("BookingType", { username });
-  const handleCardPress = (bookingData) => navigation.navigate("MyParkingInfo", { username, bookingData, userType });
+  // ... (Handlers: handleBack, handleCardPress, handleNotificationPress, handleCouponPress) ...
+  const handleBack = () => {
+  navigation.reset({
+    index: 0,
+    routes: [{ name: "BookingType", params: { username } }],
+  });
+};
+
+ const handleCardPress = (bookingData) => navigation.navigate("MyParkingInfo", { username, bookingData, userType });
   const handleNotificationPress = () => {
     setShowReminderModal(false);
     navigation.navigate("Notifications", { username, userType });
   };
   const handleCouponPress = () => navigation.navigate("MyCoupon", { username });
 
+  // ... (Formatters: formatBookingType, getBookingTypeColor, getUserTypeColor) ...
   const formatBookingType = (type) => type === "hourly" ? "Hourly" : type === "daily" ? "Daily" : type === "monthly" ? "Monthly" : type;
   const getBookingTypeColor = (type) => type === "hourly" ? "#bb489cff" : type === "daily" ? "#4e67cdff" : type === "monthly" ? "#45B7D1" : "#B19CD8";
   const getUserTypeColor = (type) => type === "resident" ? "#4CAF50" : type === "visitor" ? "#FF9800" : "#B19CD8";
+
 
   if (loading) return <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}><ActivityIndicator size="large" color="#fff" /></View>;
 
@@ -813,35 +1058,61 @@ await update(ref(db), updates);
         </View>
       </Modal>
 
+      {/* ===== 📍 4. แก้ไข `Modal` (ให้แสดงข้อมูลจริง) 📍 ===== */}
+      {/* ================================================================= */}
       <Modal visible={showParkingProblemModal} transparent animationType="fade" onRequestClose={() => setShowParkingProblemModal(false)}>
-  <View style={styles.modalOverlay}>
-    <View style={[styles.modalContainer, { width: '85%' }]}>
-      
-      {/* ปุ่มปิดมุมขวาบน */}
-      <TouchableOpacity 
-        style={styles.closeButton} 
-        onPress={() => setShowParkingProblemModal(false)}
-      >
-        <Ionicons name="close" size={24} color="#fff" />
-      </TouchableOpacity>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { width: '85%' }]}>
+            
+            {/* ปุ่มปิดมุมขวาบน */}
+            <TouchableOpacity 
+              style={styles.closeButton} 
+              onPress={() => {
+                  setShowParkingProblemModal(false);
+                  setOriginalBooking(null); // ล้าง state เมื่อปิด
+                  setRelocationSlot(null); // ล้าง state เมื่อปิด
+              }}
+            >
+              <Ionicons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
 
-      <View style={styles.warningIconContainer}><Ionicons name="warning" size={50} color="#FF9800" /></View>
-      <Text style={styles.modalTitle}>Parking Slot Unavailable</Text>
-      <Text style={styles.modalMessage}>The parking slot A02 you booked is currently unavailable because the previous vehicle exceeded the parking time.</Text>
-      <Text style={styles.modalMessage}>We apologize for the inconvenience. Please choose one of the following options:</Text>
-      <View style={styles.optionsContainer}>
-        <TouchableOpacity style={[styles.optionButton, { backgroundColor: '#4CAF50' }]} onPress={handleAcceptRelocation}>
-          <Text style={styles.optionButtonText}>Accept Relocation</Text>
-          <Text style={styles.optionSubtext}>Move to Slot A04</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.optionButton, { backgroundColor: '#2196F3' }]} onPress={handleDeclineRelocation}>
-          <Text style={styles.optionButtonText}>Decline & Receive Coupon</Text>
-          <Text style={styles.optionSubtext}>10% off next booking</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  </View>
-</Modal>
+            <View style={styles.warningIconContainer}><Ionicons name="warning" size={50} color="#FF9800" /></View>
+            <Text style={styles.modalTitle}>Parking Slot Unavailable</Text>
+            
+            {/* --- ส่วนที่แก้ไข --- */}
+            <Text style={styles.modalMessage}>
+              The parking slot {originalBooking?.slotId || '...'} ({originalBooking?.floor || '...'}) 
+              you booked is currently unavailable.
+            </Text>
+            {/* --- จบส่วนที่แก้ไข --- */}
+
+            <Text style={styles.modalMessage}>We apologize for the inconvenience. Please choose one of the following options:</Text>
+            <View style={styles.optionsContainer}>
+              <TouchableOpacity 
+                style={[styles.optionButton, { backgroundColor: '#4CAF50' }]} 
+                onPress={handleAcceptRelocation}
+                // ปิดปุ่มถ้าระบบหาที่ใหม่ไม่เจอ
+                disabled={!relocationSlot} 
+              >
+                <Text style={styles.optionButtonText}>Accept Relocation</Text>
+                {/* แสดงช่องจอดใหม่ที่สุ่มได้จาก state */}
+                {relocationSlot ? (
+                  <Text style={styles.optionSubtext}>
+                    Move to Slot {relocationSlot.slotId} ({relocationSlot.floor})
+                  </Text>
+                ) : (
+                  <Text style={styles.optionSubtext}>Finding new slot...</Text>
+                )}
+
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.optionButton, { backgroundColor: '#2196F3' }]} onPress={handleDeclineRelocation}>
+                <Text style={styles.optionButtonText}>Decline & Receive Coupon</Text>
+                <Text style={styles.optionSubtext}>10% off next booking</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
 
     </View>

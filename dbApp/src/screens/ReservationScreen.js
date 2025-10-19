@@ -66,9 +66,19 @@ const ReservationScreen = ({ navigation, route }) => {
 
       Object.keys(updatedSlots).forEach((floor) => {
         Object.keys(updatedSlots[floor]).forEach((slotId) => {
+          // 1. ตั้งค่าเริ่มต้นให้ทุกช่องเป็น 'available'
           updatedSlots[floor][slotId].status = 'available';
 
+          // 2. วนลูปเช็ค booking ทั้งหมดเพื่อหาช่องที่ 'unavailable'
           Object.values(allBookings).forEach((booking) => {
+
+            // ======================================================
+            // ===== 📍 จุดที่แก้ไข: ถ้า booking ถูกยกเลิก ให้ข้ามไปเลย =====
+            if (booking.status === 'cancelled') {
+              return; 
+            }
+            // ======================================================
+
             if (booking.slotId === slotId && booking.floor === floor) {
               const bookingEntry = new Date(`${booking.entryDate}T${booking.entryTime || '00:00'}`);
               const bookingExit = new Date(`${booking.exitDate}T${booking.exitTime || '23:59'}`);
@@ -127,7 +137,8 @@ const ReservationScreen = ({ navigation, route }) => {
         if (
           booking.username === username &&
           booking.rateType === 'hourly' &&
-          booking.entryDate === today
+          booking.entryDate === today &&
+          booking.status !== 'cancelled' // <--- เพิ่มเช็คตรงนี้ด้วยก็ดีครับ
         ) {
           todayHourlyCount++;
         }

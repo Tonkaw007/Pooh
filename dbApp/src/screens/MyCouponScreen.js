@@ -679,13 +679,6 @@ const MyCouponScreen = ({ route, navigation }) => {
           </View>
         )}
 
-        <TouchableOpacity 
-          style={styles.bookButton}
-          onPress={() => navigation.navigate("BookingType", { username })}
-        >
-          <Text style={styles.bookButtonText}>Book Parking with Discount</Text>
-        </TouchableOpacity>
-
         {/* Section อธิบายส่วนลด */}
         <View style={styles.discountInfo}>
           <Text style={styles.discountInfoTitle}>Discount Information</Text>

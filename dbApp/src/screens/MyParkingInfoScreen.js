@@ -168,24 +168,75 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
             });
     };
 
-    // Cancel Booking Function
-    const confirmCancelBooking = () => {
+    // ===== 📍 นี่คือฟังก์ชันที่แก้ไขใหม่ทั้งหมด 📍 =====
+    // =================================================================
+    const confirmCancelBooking = async () => {
         setShowCancelModal(false);
 
-        const updates = {};
-        updates[`bookings/${bookingData.id}/status`] = 'cancelled';
-        updates[`parkingSlots/${bookingData.floor}/${bookingData.slotId}/status`] = 'available';
+        // 1. สร้าง Path ไปยังช่องจอดนี้
+        const slotBookingsRef = ref(db, `parkingSlots/${bookingData.floor}/${bookingData.slotId}`);
 
-        update(ref(db), updates)
-            .then(() => {
-                Alert.alert("Success", "Your booking has been cancelled.", [
-                    { text: "OK", onPress: () => navigation.navigate('MyParking', { username }) }
-                ]);
-            })
-            .catch((error) => {
-                Alert.alert("Error", "Failed to cancel booking.");
-                console.error(error);
-            });
+        try {
+            // 2. ดึงข้อมูล *ปัจจุบัน* ของช่องจอดนี้มาก่อน
+            const snapshot = await get(slotBookingsRef);
+            if (!snapshot.exists()) {
+                // ถ้าไม่มีข้อมูลช่องจอด (ไม่น่าเกิดขึ้น)
+                throw new Error("Slot data not found.");
+            }
+
+            const slotData = snapshot.val();
+            let matchingKey = null; // นี่คือ key ที่เราจะลบ (เช่น "0", "1")
+
+            // 3. สร้าง timeRange จาก bookingData เพื่อใช้เทียบ
+            // (ต้องมั่นใจว่า format ตรงกับใน DB เช่น "19:00-21:00")
+            const bookingTimeRange = `${bookingData.entryTime}-${bookingData.exitTime}`;
+
+            // 4. วนลูปหา key ที่ข้อมูลตรงกัน
+            for (const key in slotData) {
+                const parkedBooking = slotData[key];
+
+                // เช็กให้มั่นใจว่าข้อมูลเป็น Object (ไม่ใช่ "status: available")
+                if (typeof parkedBooking === 'object' && parkedBooking !== null) {
+                    
+                    // เทียบข้อมูลเพื่อหา booking ที่ตรงกัน
+                    if (
+                        parkedBooking.date === bookingData.entryDate &&
+                        parkedBooking.username === bookingData.username &&
+                        parkedBooking.timeRange === bookingTimeRange
+                    ) {
+                        matchingKey = key; // เจอแล้ว! key นี้คือ "0"
+                        break;
+                    }
+                }
+            }
+
+            // 5. เตรียม path ที่จะอัปเดต
+            const updates = {};
+            // 5.1 อัปเดต 'bookings' node (เหมือนเดิม)
+            updates[`bookings/${bookingData.id}/status`] = 'cancelled';
+
+            if (matchingKey) {
+                // 5.2 ถ้าเจอ key ที่ตรงกัน (เช่น "0") สั่งลบโดยการตั้งค่าเป็น null
+                // Firebase จะเลื่อน index ที่เหลือให้ (เช่น "1" -> "0")
+                updates[`parkingSlots/${bookingData.floor}/${bookingData.slotId}/${matchingKey}`] = null;
+            } else {
+                // 5.3 ถ้าหาไม่เจอ (ข้อมูลไม่ตรงกัน?) ให้ fallback ไปใช้วิธีเดิม
+                // เพื่ออย่างน้อยก็เคลียร์ status
+                console.warn("Could not find matching booking in parkingSlots. Using fallback.");
+                updates[`parkingSlots/${bookingData.floor}/${bookingData.slotId}/status`] = 'available';
+            }
+
+            // 6. สั่งอัปเดตทั้งหมด
+            await update(ref(db), updates);
+
+            Alert.alert("Success", "Your booking has been cancelled.", [
+                { text: "OK", onPress: () => navigation.navigate('MyParking', { username }) }
+            ]);
+
+        } catch (error) {
+            Alert.alert("Error", "Failed to cancel booking.");
+            console.error(error);
+        }
     };
 
     const cancelAction = () => {
