@@ -10,8 +10,27 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [payFineStatus, setPayFineStatus] = useState(null);
     const [showPayFineButton, setShowPayFineButton] = useState(false);
+    const [couponDetails, setCouponDetails] = useState(null);
 
     const now = new Date();
+
+    // Fetch coupon details if couponUsed exists
+    useEffect(() => {
+        const fetchCouponDetails = async () => {
+            if (bookingData.couponUsed) {
+                try {
+                    const couponRef = ref(db, `coupons/${bookingData.couponUsed}`);
+                    const snapshot = await get(couponRef);
+                    if (snapshot.exists()) {
+                        setCouponDetails(snapshot.val());
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch coupon details:', error);
+                }
+            }
+        };
+        fetchCouponDetails();
+    }, [bookingData.couponUsed]);
 
     // เช็ก payFineStatus จาก Firebase
     useEffect(() => {
@@ -41,64 +60,60 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         }
 
         const checkPayFineHourly = async () => {
-    if (bookingData.rateType === 'hourly' && bookingData.exitDate && bookingData.exitTime) {
-        const exitDateTime = new Date(`${bookingData.exitDate}T${bookingData.exitTime}`);
+            if (bookingData.rateType === 'hourly' && bookingData.exitDate && bookingData.exitTime) {
+                const exitDateTime = new Date(`${bookingData.exitDate}T${bookingData.exitTime}`);
 
-        // ถ้าเวลาปัจจุบันยังไม่เลย exitDateTime → ไม่ต้องแสดงปุ่ม
-        if (now < exitDateTime) {
-            setShowPayFineButton(false);
-            return;
-        }
+                if (now < exitDateTime) {
+                    setShowPayFineButton(false);
+                    return;
+                }
 
-        const barrierRef = ref(db, `bookings/${bookingData.id}/barrierLogs`);
-        try {
-            const snapshot = await get(barrierRef);
-            const logs = snapshot.exists() ? snapshot.val() : null;
+                const barrierRef = ref(db, `bookings/${bookingData.id}/barrierLogs`);
+                try {
+                    const snapshot = await get(barrierRef);
+                    const logs = snapshot.exists() ? snapshot.val() : null;
 
-            if (!logs) {
-                setShowPayFineButton(true);
-                return;
-            }
+                    if (!logs) {
+                        setShowPayFineButton(true);
+                        return;
+                    }
 
-            const sortedLogs = Object.values(logs)
-                .map(l => ({ ...l, datetime: new Date(`${l.date}T${l.time}`) }))
-                .sort((a, b) => a.datetime - b.datetime);
+                    const sortedLogs = Object.values(logs)
+                        .map(l => ({ ...l, datetime: new Date(`${l.date}T${l.time}`) }))
+                        .sort((a, b) => a.datetime - b.datetime);
 
-            let lastLowered = null;
-            let lastLifted = null;
+                    let lastLowered = null;
+                    let lastLifted = null;
 
-            for (const log of sortedLogs) {
-                if (log.status === 'lowered') lastLowered = log.datetime;
-                else if (log.status === 'lifted') lastLifted = log.datetime;
-            }
+                    for (const log of sortedLogs) {
+                        if (log.status === 'lowered') lastLowered = log.datetime;
+                        else if (log.status === 'lifted') lastLifted = log.datetime;
+                    }
 
-            let needPayFine = false;
+                    let needPayFine = false;
 
-            if (!lastLowered) {
-                needPayFine = true;
-            } else if (lastLowered <= exitDateTime) {
-                if (!lastLifted || lastLowered < lastLifted) {
-                    needPayFine = true;
+                    if (!lastLowered) {
+                        needPayFine = true;
+                    } else if (lastLowered <= exitDateTime) {
+                        if (!lastLifted || lastLowered < lastLifted) {
+                            needPayFine = true;
+                        }
+                    }
+
+                    setShowPayFineButton(needPayFine);
+
+                } catch (err) {
+                    console.error('Failed to fetch barrierLogs:', err);
+                    setShowPayFineButton(false);
                 }
             }
-
-            setShowPayFineButton(needPayFine);
-
-        } catch (err) {
-            console.error('Failed to fetch barrierLogs:', err);
-            setShowPayFineButton(false);
-        }
-    }
-};
-
+        };
 
         const checkPayFineDailyMonthly = () => {
             if ((bookingData.rateType === 'daily' || bookingData.rateType === 'monthly') && bookingData.exitDate) {
-                // สำหรับรายวันและรายเดือน: ใช้เวลา 23:59 ของวัน exitDate
                 const [year, month, day] = bookingData.exitDate.split('-').map(Number);
-                const exitDateTime = new Date(year, month - 1, day, 23, 59, 0); // 23:59 ของวัน exitDate
+                const exitDateTime = new Date(year, month - 1, day, 23, 59, 0);
                 
-                // ถ้าเวลาปัจจุบันเลยกว่า 23:59 ของวัน exitDate ให้แสดงปุ่ม Pay Fine
                 if (now > exitDateTime) {
                     setShowPayFineButton(true);
                 }
@@ -108,6 +123,26 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         checkPayFineHourly();
         checkPayFineDailyMonthly();
     }, [bookingData, isPaidFine, now]);
+
+    // Helper function to get discount percentage
+    const getDiscountPercentage = (discountType) => {
+        switch (discountType) {
+            case 'hourly': return 10;
+            case 'daily': return 20;
+            case 'monthly': return 30;
+            default: return 0;
+        }
+    };
+
+    // Helper function to get discount color
+    const getDiscountColor = (discountType) => {
+        switch (discountType) {
+            case 'hourly': return '#bb489cff';
+            case 'daily': return '#4e67cdff';
+            case 'monthly': return '#45B7D1';
+            default: return '#B19CD8';
+        }
+    };
 
     // Navigation Handlers
     const handleBack = () => navigation.goBack();
@@ -124,12 +159,10 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
     const handleCancelBooking = () => setShowCancelModal(true);
     
     const handlePayFine = () => {
-        // เตรียมข้อมูล bookingData ให้ครบถ้วน
         const payFineBookingData = {
             ...bookingData,
-            // ตรวจสอบว่ามี exitDate และ exitTime หรือไม่
             exitDate: bookingData.exitDate || bookingData.bookingDate,
-            exitTime: bookingData.exitTime || '23:59', // ตั้งค่า default สำหรับรายวัน/รายเดือน
+            exitTime: bookingData.exitTime || '23:59',
             price: bookingData.price || 0,
         };
 
@@ -168,65 +201,44 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
             });
     };
 
-    // ===== 📍 นี่คือฟังก์ชันที่แก้ไขใหม่ทั้งหมด 📍 =====
-    // =================================================================
     const confirmCancelBooking = async () => {
         setShowCancelModal(false);
-
-        // 1. สร้าง Path ไปยังช่องจอดนี้
         const slotBookingsRef = ref(db, `parkingSlots/${bookingData.floor}/${bookingData.slotId}`);
 
         try {
-            // 2. ดึงข้อมูล *ปัจจุบัน* ของช่องจอดนี้มาก่อน
             const snapshot = await get(slotBookingsRef);
             if (!snapshot.exists()) {
-                // ถ้าไม่มีข้อมูลช่องจอด (ไม่น่าเกิดขึ้น)
                 throw new Error("Slot data not found.");
             }
 
             const slotData = snapshot.val();
-            let matchingKey = null; // นี่คือ key ที่เราจะลบ (เช่น "0", "1")
-
-            // 3. สร้าง timeRange จาก bookingData เพื่อใช้เทียบ
-            // (ต้องมั่นใจว่า format ตรงกับใน DB เช่น "19:00-21:00")
+            let matchingKey = null;
             const bookingTimeRange = `${bookingData.entryTime}-${bookingData.exitTime}`;
 
-            // 4. วนลูปหา key ที่ข้อมูลตรงกัน
             for (const key in slotData) {
                 const parkedBooking = slotData[key];
-
-                // เช็กให้มั่นใจว่าข้อมูลเป็น Object (ไม่ใช่ "status: available")
                 if (typeof parkedBooking === 'object' && parkedBooking !== null) {
-                    
-                    // เทียบข้อมูลเพื่อหา booking ที่ตรงกัน
                     if (
                         parkedBooking.date === bookingData.entryDate &&
                         parkedBooking.username === bookingData.username &&
                         parkedBooking.timeRange === bookingTimeRange
                     ) {
-                        matchingKey = key; // เจอแล้ว! key นี้คือ "0"
+                        matchingKey = key;
                         break;
                     }
                 }
             }
 
-            // 5. เตรียม path ที่จะอัปเดต
             const updates = {};
-            // 5.1 อัปเดต 'bookings' node (เหมือนเดิม)
             updates[`bookings/${bookingData.id}/status`] = 'cancelled';
 
             if (matchingKey) {
-                // 5.2 ถ้าเจอ key ที่ตรงกัน (เช่น "0") สั่งลบโดยการตั้งค่าเป็น null
-                // Firebase จะเลื่อน index ที่เหลือให้ (เช่น "1" -> "0")
                 updates[`parkingSlots/${bookingData.floor}/${bookingData.slotId}/${matchingKey}`] = null;
             } else {
-                // 5.3 ถ้าหาไม่เจอ (ข้อมูลไม่ตรงกัน?) ให้ fallback ไปใช้วิธีเดิม
-                // เพื่ออย่างน้อยก็เคลียร์ status
                 console.warn("Could not find matching booking in parkingSlots. Using fallback.");
                 updates[`parkingSlots/${bookingData.floor}/${bookingData.slotId}/status`] = 'available';
             }
 
-            // 6. สั่งอัปเดตทั้งหมด
             await update(ref(db), updates);
 
             Alert.alert("Success", "Your booking has been cancelled.", [
@@ -399,12 +411,45 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                                 <Text style={styles.detailValue}>{formatDate(bookingData.paymentDate)}</Text>
                             </View>
                         )}
-                        {bookingData.price && (
+                        
+                        {/* Original Price (if discount applied) */}
+                        {bookingData.originalPrice && bookingData.discount > 0 && (
                             <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Total Price:</Text>
-                                <Text style={styles.detailValue}>{bookingData.price} baht</Text>
+                                <Text style={styles.detailLabel}>Original Price:</Text>
+                                <Text style={[styles.detailValue, styles.strikethrough]}>
+                                    {bookingData.originalPrice.toFixed(2)} baht
+                                </Text>
                             </View>
                         )}
+
+                        {/* Discount Information */}
+                        {bookingData.discount > 0 && couponDetails && (
+                            <View style={styles.discountInfoContainer}>
+                                <View style={styles.detailRow}>
+                                    <Text style={styles.detailLabel}>Discount Applied:</Text>
+                                    <Text style={styles.discountValue}>
+                                        -{bookingData.discount.toFixed(2)} baht ({getDiscountPercentage(couponDetails.discountType)}%)
+                                    </Text>
+                                </View>
+                                <View style={[styles.couponBadge, { backgroundColor: getDiscountColor(couponDetails.discountType) }]}>
+                                    <Ionicons name="ticket" size={16} color="white" />
+                                    <Text style={styles.couponBadgeText}>
+                                        Coupon Applied
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Final Price */}
+                        <View style={[styles.detailRow, styles.totalPriceRow]}>
+                            <Text style={styles.totalPriceLabel}>Total Price:</Text>
+                            <Text style={styles.totalPriceValue}>
+                                {bookingData.finalPrice 
+                                    ? bookingData.finalPrice.toFixed(2) 
+                                    : (bookingData.price || 0).toFixed(2)
+                                } baht
+                            </Text>
+                        </View>
                     </View>
 
                     {/* Action Buttons */}
@@ -581,6 +626,55 @@ const styles = StyleSheet.create({
         fontSize: 14,
         textAlign: 'right',
     },
+    strikethrough: {
+        textDecorationLine: 'line-through',
+        color: '#A0AEC0',
+    },
+    discountInfoContainer: {
+        backgroundColor: '#F0FDF4',
+        borderRadius: 8,
+        padding: 10,
+        marginVertical: 8,
+        borderWidth: 1,
+        borderColor: '#86EFAC',
+    },
+    discountValue: {
+        fontWeight: '700',
+        color: '#16A34A',
+        fontSize: 14,
+    },
+    couponBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 15,
+        marginTop: 8,
+        alignSelf: 'center',
+    },
+    couponBadgeText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 12,
+        marginLeft: 5,
+    },
+    totalPriceRow: {
+        backgroundColor: '#E8F5E9',
+        borderWidth: 2,
+        borderColor: '#4CAF50',
+        marginTop: 10,
+    },
+    totalPriceLabel: {
+        fontWeight: '700',
+        color: '#2D3748',
+        fontSize: 16,
+    },
+    totalPriceValue: {
+        fontWeight: '700',
+        color: '#4CAF50',
+        fontSize: 18,
+    },
     actionButtonsContainer: {
         width: '100%',
         marginTop: 10,
@@ -737,13 +831,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#A0AEC0', 
         alignSelf: 'center',
-    },
-    visitorInfo: {
-        marginTop: 5,
-    },
-    visitorText: {
-        fontSize: 12,
-        color: '#666',
     },
 });
 
