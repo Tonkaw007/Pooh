@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Image, Modal } from 'react-native';
 import { db } from '../firebaseConfig';
 import { ref, update, get, push, child, onValue } from 'firebase/database';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -8,6 +8,11 @@ const PaymentScreen = ({ navigation, route }) => {
   const { username, bookingData, selectedSlot, selectedFloor, bookingType } = route.params;
   const [residentLicense, setResidentLicense] = useState('');
   const [prompayStatus, setPrompayStatus] = useState('pending');
+  const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [selectedCoupon, setSelectedCoupon] = useState(null);
+  const [showCouponModal, setShowCouponModal] = useState(false);
+  const [originalPrice, setOriginalPrice] = useState(0);
+  const [discountedPrice, setDiscountedPrice] = useState(0);
 
   // ดึง license plate ของ resident
   const fetchUserBookings = async () => {
@@ -26,10 +31,73 @@ const PaymentScreen = ({ navigation, route }) => {
     }
   };
 
-  // เช็คสถานะ Prompay auto
+  // ดึงคูปองที่ตรงกับ rateType
+  const fetchMatchingCoupons = async () => {
+    try {
+      const snapshot = await get(child(ref(db), "coupons"));
+      const data = snapshot.val() || {};
+
+      const userCoupons = Object.entries(data)
+        .map(([id, coupon]) => ({
+          id,
+          ...coupon
+        }))
+        .filter(coupon => {
+          const expiryDate = new Date(coupon.expiryDate + 'T23:59:59');
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          
+          return (
+            coupon.username === username && 
+            expiryDate >= today && 
+            !coupon.used &&
+            coupon.discountType === bookingData.rateType
+          );
+        })
+        .sort((a, b) => {
+          const dateTimeA = new Date(a.createdDate + 'T' + (a.createdTime || '00:00'));
+          const dateTimeB = new Date(b.createdDate + 'T' + (b.createdTime || '00:00'));
+          return dateTimeB - dateTimeA;
+        });
+
+      setAvailableCoupons(userCoupons);
+    } catch (error) {
+      console.error("Error fetching coupons:", error);
+      setAvailableCoupons([]);
+    }
+  };
+
+  // คำนวณราคา
+  const calculatePrice = () => {
+    let price = 0;
+    switch (bookingData.rateType) {
+      case 'hourly':
+        price = bookingData.price || 0;
+        break;
+      case 'daily':
+        price = bookingData.price || 0;
+        break;
+      case 'monthly':
+        price = (bookingData.durationMonths || 1) * 3000;
+        break;
+      default:
+        price = 0;
+    }
+    setOriginalPrice(price);
+    
+    if (selectedCoupon) {
+      const discountPercent = getDiscountPercentage(selectedCoupon.discountType);
+      const discount = price * (discountPercent / 100);
+      setDiscountedPrice(price - discount);
+    } else {
+      setDiscountedPrice(price);
+    }
+  };
+
   useEffect(() => {
     fetchUserBookings();
-
+    fetchMatchingCoupons();
+    
     const bookingId = bookingData.id;
     if (!bookingId) return;
 
@@ -43,148 +111,174 @@ const PaymentScreen = ({ navigation, route }) => {
     return () => unsubscribe();
   }, []);
 
-  // handle Payment button เดิม
-  const handlePaymentSuccess = async () => {
-  try {
-    const updates = {};
+  useEffect(() => {
+    calculatePrice();
+  }, [selectedCoupon, bookingData]);
+
+  const getDiscountPercentage = (discountType) => {
+    switch (discountType) {
+      case 'hourly': return 10;
+      case 'daily': return 20;
+      case 'monthly': return 30;
+      default: return 0;
+    }
+  };
+
+  const getDiscountText = (discountType) => {
+    switch (discountType) {
+      case 'hourly': return '10% off Hourly Booking';
+      case 'daily': return '20% off Daily Booking';
+      case 'monthly': return '30% off Monthly Booking';
+      default: return 'Discount Coupon';
+    }
+  };
+
+  const getDiscountColor = (discountType) => {
+    switch (discountType) {
+      case 'hourly': return '#bb489cff';
+      case 'daily': return '#4e67cdff';
+      case 'monthly': return '#45B7D1';
+      default: return '#B19CD8';
+    }
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const calculateDaysLeft = (expiryDate) => {
     const now = new Date();
-    const bookingDate = now.toISOString().slice(0, 10);
+    const expiry = new Date(expiryDate + 'T23:59:59');
+    const diffTime = expiry - now;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
 
-    // กำหนด entry/exit ตามเงื่อนไข
-    let entryDate = bookingData.entryDate;
-    let exitDate = bookingData.exitDate;
+  const handleSelectCoupon = (coupon) => {
+    setSelectedCoupon(coupon);
+    setShowCouponModal(false);
+  };
 
-    if (bookingData.rateType === 'monthly') {
-      // รายเดือน
-      const entry = new Date(entryDate);
-      entry.setMonth(entry.getMonth() + (bookingData.durationMonths || 1));
-      exitDate = entry.toISOString().slice(0, 10);
-    }
+  const handleRemoveCoupon = () => {
+    setSelectedCoupon(null);
+  };
 
-    // กำหนด date และ timeRange สำหรับ slot
-    let slotDate;
-    let slotTimeRange;
-
-    if (bookingData.rateType === 'hourly') {
-      slotDate = bookingData.entryDate;
-      const startTime = bookingData.entryTime || '00:00';
-      const endTime = bookingData.exitTime || '23:59';
-      slotTimeRange = `${startTime}-${endTime}`;
-    } else if (bookingData.rateType === 'daily' || bookingData.rateType === 'monthly') {
-      slotDate = `${bookingData.entryDate} - ${bookingData.exitDate}`;
-      slotTimeRange = '00:00-23:59';
-    }
-
-    // เพิ่ม username เข้าไปใน slot
-    const usernameToSave =
-      bookingType === 'resident'
-        ? username
-        : bookingData.visitorInfo?.visitorUsername || username;
-
-    const newSlotBooking = {
-      date: slotDate,
-      timeRange: slotTimeRange,
-      available: false,
-      status: 'booked',
-      username: usernameToSave,
-    };
-
-    const slotRef = ref(db, `parkingSlots/${selectedFloor}/${selectedSlot}`);
-    const slotSnap = await get(slotRef);
-
-    let updatedSlotData = [];
-    if (!slotSnap.exists() || slotSnap.val().status === 'available') {
-      updatedSlotData = [newSlotBooking];
-    } else if (Array.isArray(slotSnap.val())) {
-      const existingBookings = slotSnap.val();
-      const isDuplicate = existingBookings.some(
-        (b) => b.date === newSlotBooking.date && b.timeRange === newSlotBooking.timeRange
-      );
-      updatedSlotData = isDuplicate ? existingBookings : [...existingBookings, newSlotBooking];
-    } else {
-      updatedSlotData = [newSlotBooking];
-    }
-
-    updates[`parkingSlots/${selectedFloor}/${selectedSlot}`] = updatedSlotData;
-
-    // สร้าง booking ใหม่
-    const newBookingRef = push(ref(db, 'bookings'));
-    const newBookingId = newBookingRef.key;
-
-    const licensePlateToSave =
-      bookingType === 'resident'
-        ? residentLicense || '-'
-        : bookingData.visitorInfo?.licensePlate || '-';
-
-    const newBooking = {
-      ...bookingData,
-      id: newBookingId,
-      username,
-      bookingType,
-      status: 'confirmed',
-      slotId: selectedSlot,
-      floor: selectedFloor,
-      entryDate,
-      exitDate,
-      bookingDate,
-      paymentStatus: 'paid',
-      paymentDate: bookingDate,
-      visitorInfo: bookingData.visitorInfo || null,
-      licensePlate: licensePlateToSave,
-    };
-
-    updates[`bookings/${newBookingId}`] = newBooking;
-
-    await update(ref(db), updates);
-
-    Alert.alert('Success', 'Payment successful and slot reserved!', [
-      {
-        text: 'OK',
-        onPress: () =>
-          navigation.navigate('MyParking', {
-            username,
-            userType: bookingType,
-          }),
-      },
-    ]);
-  } catch (error) {
-    console.error(error);
-    Alert.alert('Error', 'Payment failed. Please try again.');
-  }
-};
-
-
-  // handle Prompay auto update
-  const handlePrompayPayment = async (payerPhone, amount) => {
+  const handlePaymentSuccess = async () => {
     try {
-      const bookingId = bookingData.id;
-      if (!bookingId) return;
+      const updates = {};
+      const now = new Date();
+      const bookingDate = now.toISOString().slice(0, 10);
 
-      const bookingSnap = await get(ref(db, `bookings/${bookingId}`));
-      if (!bookingSnap.exists()) return;
+      let entryDate = bookingData.entryDate;
+      let exitDate = bookingData.exitDate;
 
-      const bookingInfo = bookingSnap.val();
+      if (bookingData.rateType === 'monthly') {
+        const entry = new Date(entryDate);
+        entry.setMonth(entry.getMonth() + (bookingData.durationMonths || 1));
+        exitDate = entry.toISOString().slice(0, 10);
+      }
 
-      // อัปเดต booking
-      await update(ref(db, `bookings/${bookingId}`), {
+      let slotDate;
+      let slotTimeRange;
+
+      if (bookingData.rateType === 'hourly') {
+        slotDate = bookingData.entryDate;
+        const startTime = bookingData.entryTime || '00:00';
+        const endTime = bookingData.exitTime || '23:59';
+        slotTimeRange = `${startTime}-${endTime}`;
+      } else if (bookingData.rateType === 'daily' || bookingData.rateType === 'monthly') {
+        slotDate = `${bookingData.entryDate} - ${bookingData.exitDate}`;
+        slotTimeRange = '00:00-23:59';
+      }
+
+      const usernameToSave =
+        bookingType === 'resident'
+          ? username
+          : bookingData.visitorInfo?.visitorUsername || username;
+
+      const newSlotBooking = {
+        date: slotDate,
+        timeRange: slotTimeRange,
+        available: false,
+        status: 'booked',
+        username: usernameToSave,
+      };
+
+      const slotRef = ref(db, `parkingSlots/${selectedFloor}/${selectedSlot}`);
+      const slotSnap = await get(slotRef);
+
+      let updatedSlotData = [];
+      if (!slotSnap.exists() || slotSnap.val().status === 'available') {
+        updatedSlotData = [newSlotBooking];
+      } else if (Array.isArray(slotSnap.val())) {
+        const existingBookings = slotSnap.val();
+        const isDuplicate = existingBookings.some(
+          (b) => b.date === newSlotBooking.date && b.timeRange === newSlotBooking.timeRange
+        );
+        updatedSlotData = isDuplicate ? existingBookings : [...existingBookings, newSlotBooking];
+      } else {
+        updatedSlotData = [newSlotBooking];
+      }
+
+      updates[`parkingSlots/${selectedFloor}/${selectedSlot}`] = updatedSlotData;
+
+      const newBookingRef = push(ref(db, 'bookings'));
+      const newBookingId = newBookingRef.key;
+
+      const licensePlateToSave =
+        bookingType === 'resident'
+          ? residentLicense || '-'
+          : bookingData.visitorInfo?.licensePlate || '-';
+
+      const newBooking = {
+        ...bookingData,
+        id: newBookingId,
+        username,
+        bookingType,
+        status: 'confirmed',
+        slotId: selectedSlot,
+        floor: selectedFloor,
+        entryDate,
+        exitDate,
+        bookingDate,
         paymentStatus: 'paid',
-        paymentDate: new Date().toISOString(),
-        paymentMethod: 'Prompay',
-      });
+        paymentDate: bookingDate,
+        visitorInfo: bookingData.visitorInfo || null,
+        licensePlate: licensePlateToSave,
+        originalPrice: originalPrice,
+        finalPrice: discountedPrice,
+        couponUsed: selectedCoupon ? selectedCoupon.id : null,
+        discount: selectedCoupon ? originalPrice - discountedPrice : 0,
+      };
 
-      // อัปเดต Prompay payment
-      await update(ref(db, `prompayPayments/${bookingId}`), {
-        status: 'paid',
-        timestamp: new Date().toISOString(),
-        amount,
-        payerPhone,
-        payerUsername: bookingInfo.bookingType === 'resident' ? bookingInfo.username : '',
-        visitorUsername: bookingInfo.bookingType === 'visitor' ? bookingInfo.visitorInfo?.visitorUsername : ''
-      });
+      updates[`bookings/${newBookingId}`] = newBooking;
 
-      console.log('Prompay payment recorded successfully');
-    } catch (err) {
-      console.error('Error handling Prompay payment:', err);
+      if (selectedCoupon) {
+        updates[`coupons/${selectedCoupon.id}/used`] = true;
+        updates[`coupons/${selectedCoupon.id}/usedDate`] = bookingDate;
+        updates[`coupons/${selectedCoupon.id}/usedBookingId`] = newBookingId;
+      }
+
+      await update(ref(db), updates);
+
+      Alert.alert('Success', 'Payment successful and slot reserved!', [
+        {
+          text: 'OK',
+          onPress: () =>
+            navigation.navigate('MyParking', {
+              username,
+              userType: bookingType,
+            }),
+        },
+      ]);
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Payment failed. Please try again.');
     }
   };
 
@@ -206,19 +300,6 @@ const PaymentScreen = ({ navigation, route }) => {
     if (type === 'daily') return 'Daily';
     if (type === 'monthly') return 'Monthly';
     return String(type);
-  };
-
-  const formatPrice = () => {
-    switch (bookingData.rateType) {
-      case 'hourly':
-        return `${bookingData.price || 'calculated hourly'} baht`;
-      case 'daily':
-        return `${bookingData.price || 'calculated daily'} baht`;
-      case 'monthly':
-        return `${bookingData.durationMonths * 3000} baht`;
-      default:
-        return '-';
-    }
   };
 
   const renderBookedBy = () => {
@@ -274,6 +355,42 @@ const PaymentScreen = ({ navigation, route }) => {
             </View>
           )}
 
+          <View style={styles.couponSection}>
+            <Text style={styles.sectionTitle}>Discount Coupon</Text>
+            {selectedCoupon ? (
+              <View style={styles.selectedCouponContainer}>
+                <View style={styles.selectedCouponInfo}>
+                  <Ionicons name="ticket" size={24} color={getDiscountColor(selectedCoupon.discountType)} />
+                  <View style={styles.selectedCouponText}>
+                    <Text style={styles.selectedCouponTitle}>
+                      {getDiscountText(selectedCoupon.discountType)}
+                    </Text>
+                    <Text style={styles.selectedCouponExpiry}>
+                      Expires: {formatDate(selectedCoupon.expiryDate)}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity onPress={handleRemoveCoupon} style={styles.removeCouponButton}>
+                  <Ionicons name="close-circle" size={24} color="#FF6B6B" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                style={styles.selectCouponButton}
+                onPress={() => setShowCouponModal(true)}
+                disabled={availableCoupons.length === 0}
+              >
+                <Ionicons name="ticket-outline" size={20} color={availableCoupons.length > 0 ? "#B19CD8" : "#CCC"} />
+                <Text style={[styles.selectCouponText, availableCoupons.length === 0 && styles.disabledText]}>
+                  {availableCoupons.length > 0 
+                    ? `Select Coupon (${availableCoupons.length} available)` 
+                    : 'No coupons available'}
+                </Text>
+                {availableCoupons.length > 0 && <Ionicons name="chevron-forward" size={20} color="#B19CD8" />}
+              </TouchableOpacity>
+            )}
+          </View>
+
           <View style={styles.qrContainer}>
             <Image
               source={require('../../assets/images/demo-qr.png')}
@@ -282,19 +399,44 @@ const PaymentScreen = ({ navigation, route }) => {
             />
           </View>
 
-          <View style={styles.totalContainer}>
-            <Text style={styles.totalLabel}>Total Amount:</Text>
-            <Text style={styles.totalAmount}>{formatPrice()}</Text>
+          <View style={styles.priceSection}>
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Original Price:</Text>
+              <Text style={[styles.priceValue, selectedCoupon && styles.strikethrough]}>
+                {originalPrice.toFixed(2)} baht
+              </Text>
+            </View>
+            
+            {selectedCoupon && (
+              <>
+                <View style={styles.priceRow}>
+                  <Text style={styles.discountLabel}>
+                    Discount ({getDiscountPercentage(selectedCoupon.discountType)}%):
+                  </Text>
+                  <Text style={styles.discountValue}>
+                    -{(originalPrice - discountedPrice).toFixed(2)} baht
+                  </Text>
+                </View>
+                <View style={styles.divider} />
+              </>
+            )}
+            
+            <View style={styles.totalContainer}>
+              <Text style={styles.totalLabel}>Total Amount:</Text>
+              <Text style={styles.totalAmount}>{discountedPrice.toFixed(2)} baht</Text>
+            </View>
           </View>
 
-          {/* ===== Prompay Section ===== */}
           <View style={styles.prompaySection}>
             <Text style={styles.sectionTitle}>Pay Prompay</Text>
             <Text>Scan the QR code to pay</Text>
 
             <View style={styles.prompayStatusRow}>
               <Text>Status:</Text>
-              <Text style={{ fontWeight: '700', color:  prompayStatus === 'paid'? 'green' : prompayStatus === 'pending'? 'orange': 'red', }}>
+              <Text style={{ 
+                fontWeight: '700', 
+                color: prompayStatus === 'paid' ? 'green' : prompayStatus === 'pending' ? 'orange' : 'red',
+              }}>
                 {prompayStatus === 'pending' ? 'Waiting for payment' : prompayStatus === 'paid' ? 'Paid' : 'Failed'}
               </Text>
             </View>
@@ -311,6 +453,78 @@ const PaymentScreen = ({ navigation, route }) => {
           <Text style={styles.payButtonText}>Pay & Confirm</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <Modal
+        visible={showCouponModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCouponModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Coupon</Text>
+              <TouchableOpacity onPress={() => setShowCouponModal(false)}>
+                <Ionicons name="close" size={28} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.couponList}>
+              {availableCoupons.length > 0 ? (
+                availableCoupons.map((coupon) => {
+                  const daysLeft = calculateDaysLeft(coupon.expiryDate);
+                  const isExpiringSoon = daysLeft <= 7;
+                  
+                  return (
+                    <TouchableOpacity
+                      key={coupon.id}
+                      style={[
+                        styles.couponItem,
+                        isExpiringSoon && styles.expiringSoonBorder
+                      ]}
+                      onPress={() => handleSelectCoupon(coupon)}
+                    >
+                      {isExpiringSoon && (
+                        <View style={styles.expiringBadge}>
+                          <Ionicons name="time" size={12} color="white" />
+                          <Text style={styles.expiringText}>Expiring in {daysLeft} days</Text>
+                        </View>
+                      )}
+                      
+                      <View style={styles.couponItemHeader}>
+                        <Ionicons name="ticket" size={32} color={getDiscountColor(coupon.discountType)} />
+                        <View style={styles.couponItemInfo}>
+                          <Text style={styles.couponItemTitle}>
+                            {getDiscountText(coupon.discountType)}
+                          </Text>
+                          <Text style={styles.couponItemExpiry}>
+                            Expires: {formatDate(coupon.expiryDate)}
+                          </Text>
+                        </View>
+                        <View style={[styles.couponBadge, { backgroundColor: getDiscountColor(coupon.discountType) }]}>
+                          <Text style={styles.couponBadgeText}>
+                            {getDiscountPercentage(coupon.discountType)}% OFF
+                          </Text>
+                        </View>
+                      </View>
+                      
+                      <Text style={styles.couponReason}>{coupon.reason}</Text>
+                    </TouchableOpacity>
+                  );
+                })
+              ) : (
+                <View style={styles.noCouponsContainer}>
+                  <Ionicons name="ticket-outline" size={64} color="#CCC" />
+                  <Text style={styles.noCouponsText}>No coupons available</Text>
+                  <Text style={styles.noCouponsSubtext}>
+                    No matching coupons for {formatBookingType(bookingData.rateType)} booking
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -331,7 +545,6 @@ const styles = StyleSheet.create({
     left: 20,
     zIndex: 1,
     padding: 8,
-    shadowColor: '#000',
   },
   header: {
     alignItems: 'center',
@@ -396,6 +609,65 @@ const styles = StyleSheet.create({
     color: '#2D3748',
     marginBottom: 15,
   },
+  couponSection: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  selectCouponButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 15,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
+  selectCouponText: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 14,
+    color: '#4A5568',
+    fontWeight: '500',
+  },
+  disabledText: {
+    color: '#CCC',
+  },
+  selectedCouponContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 15,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  selectedCouponInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  selectedCouponText: {
+    marginLeft: 10,
+    flex: 1,
+  },
+  selectedCouponTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#166534',
+  },
+  selectedCouponExpiry: {
+    fontSize: 12,
+    color: '#15803D',
+    marginTop: 2,
+  },
+  removeCouponButton: {
+    padding: 5,
+  },
   qrContainer: {
     alignItems: 'center',
     marginVertical: 20,
@@ -404,18 +676,56 @@ const styles = StyleSheet.create({
     width: 170,
     height: 170,
   },
-  totalContainer: {
-    marginTop: 20,
+  priceSection: {
+    marginTop: 15,
     paddingTop: 15,
-    borderTopWidth: 2,
+    borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
+  },
+  priceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
+  },
+  priceLabel: {
+    fontSize: 14,
+    color: '#4A5568',
+  },
+  priceValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  strikethrough: {
+    textDecorationLine: 'line-through',
+    color: '#A0AEC0',
+  },
+  discountLabel: {
+    fontSize: 14,
+    color: '#16A34A',
+    fontWeight: '600',
+  },
+  discountValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#16A34A',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 10,
+  },
+  totalContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 10,
   },
   totalLabel: {
     fontSize: 18,
     fontWeight: '600',
     color: '#4A5568',
-    marginBottom: 5,
   },
   totalAmount: {
     fontSize: 24,
@@ -450,6 +760,123 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#2D3748',
+  },
+  couponList: {
+    padding: 15,
+  },
+  couponItem: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+    position: 'relative',
+  },
+  expiringSoonBorder: {
+    borderColor: '#FF6B6B',
+    borderWidth: 2,
+  },
+  expiringBadge: {
+    position: 'absolute',
+    top: -10,
+    left: 15,
+    backgroundColor: '#FF6B6B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    zIndex: 1,
+  },
+  expiringText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginLeft: 4,
+  },
+  couponItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  couponItemInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  couponItemTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  couponItemExpiry: {
+    fontSize: 12,
+    color: '#718096',
+    marginTop: 4,
+  },
+  couponBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  couponBadgeText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 11,
+  },
+  couponReason: {
+    fontSize: 13,
+    color: '#4A5568',
+    fontStyle: 'italic',
+    marginTop: 5,
+  },
+  noCouponsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  noCouponsText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#4A5568',
+    marginTop: 15,
+  },
+  noCouponsSubtext: {
+    fontSize: 14,
+    color: '#718096',
+    marginTop: 8,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
 });
 
