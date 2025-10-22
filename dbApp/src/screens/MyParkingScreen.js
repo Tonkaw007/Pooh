@@ -651,7 +651,7 @@ const MyParkingScreen = ({ route, navigation }) => {
   };
 
 
-// Demo: แสดง Pop-up "No-Show Warning" (แก้ไข: ให้ส่ง Noti และอัปเดตกระดิ่งด้วย)
+// Demo: แสดง Pop-up "No-Show Warning"
   const handleDemoNoShowWarningModal = async () => {
     setLoading(true);
     
@@ -676,7 +676,7 @@ const MyParkingScreen = ({ route, navigation }) => {
     const cancelTime = new Date(entryDateTime.getTime() + 30 * 60 * 1000);
     const cancelTimeStr = cancelTime.toTimeString().slice(0, 5); // เช่น "10:30"
 
-    // [!! เพิ่ม !!] 3. สร้าง Notification
+    // 3. สร้าง Notification
     const newNotif = {
       username: demoBooking.username,
       visitorUsername: demoBooking.visitorInfo?.visitorUsername,
@@ -691,16 +691,14 @@ const MyParkingScreen = ({ route, navigation }) => {
       message: `Your booking for ${demoBooking.slotId} will be automatically cancelled at ${cancelTimeStr}(30 mins after entrytime)`
     };
 
-    // [!! เพิ่ม !!] 4. "เรียกใช้ฟังก์ชันจริง" (ส่ง Noti)
+    //4. "เรียกใช้ฟังก์ชันจริง" (ส่ง Noti)
     const sent = await sendNotificationOnce(newNotif);
     if (sent) {
-       setUnreadCount(prev => prev + 1); // <-- นี่คือตัวเพิ่มเลขในกระดิ่ง
+       setUnreadCount(prev => prev + 1);
     }
 
-    // [!! เพิ่ม !!] 5. มาร์คว่าแจ้งเตือนแล้ว (ใน Firebase)
+    // 5. มาร์คว่าแจ้งเตือนแล้ว (ใน Firebase)
     await update(ref(db, `bookings/${demoBooking.id}`), { notifiedNoShowWarning: true });
-    // --- [ จบส่วนที่คัดลอกมา ] ---
-
 
     // 6. "เรียกใช้ฟังก์ชันจริง" (ตั้งค่า State)
     setCurrentNoShowBooking({
@@ -719,7 +717,7 @@ const MyParkingScreen = ({ route, navigation }) => {
 
 
 
-  // ฟังก์ชัน checkOverstayAndTriggerRelocation (แก้ไข Logic Barrier) 
+  // ฟังก์ชัน checkOverstayAndTriggerRelocation 
 const checkOverstayAndTriggerRelocation = async () => {
     // ถ้า Modal เปิดอยู่แล้ว หรือ กำลังจัดการปัญหา Slot อื่นอยู่ -> ออก
     if (showParkingProblemModal || handledOverstaySlot) return;
@@ -763,10 +761,10 @@ const checkOverstayAndTriggerRelocation = async () => {
                 if (!otherBooking.exitDate || !otherBooking.exitTime) continue;
                 const otherExitDateTime = new Date(`${otherBooking.exitDate}T${otherBooking.exitTime}`);
 
-                // 1. เช็กเวลาจอดเกิน (เหมือนเดิม) 
+                // 1. เช็กเวลาจอดเกิน 
                 if (otherExitDateTime < entryDateTime && now > otherExitDateTime) {
 
-                    // 2. เช็ก Barrier Logs (Logic ใหม่) 
+                    // 2. เช็ก Barrier Logs 
                     const barrierLogsRef = ref(db, `bookings/${otherBooking.id}/barrierLogs`);
                     const barrierSnapshot = await get(barrierLogsRef); // ดึง Log ทั้งหมด
 
@@ -804,7 +802,7 @@ const checkOverstayAndTriggerRelocation = async () => {
                                     // กรณี 3 & 4: Log สุดท้ายคือ lowered, ดูรองสุดท้าย
                                     const secondLastLog = logEntries[logEntries.length - 2];
                                     if (secondLastLog.status === 'lifted') {
-                                        // กรณี 3: รองสุดท้าย lifted -> ออกแล้ว ✅
+                                        // กรณี 3: รองสุดท้าย lifted -> ออกแล้ว 
                                         conflictBasedOnBarrier = false; // ไม่ใช่ Conflict
                                         lastBarrierStatusReasoning = `Exited: Sequence 'lifted' then 'lowered' (last at ${lastLog.time})`;
                                     } else {
@@ -816,17 +814,15 @@ const checkOverstayAndTriggerRelocation = async () => {
                             }
                         }
                     }
-
-                    // 3. สรุปผล 
                     if (conflictBasedOnBarrier) {
                         isOverstayConflict = true;
                         overstayingBooking = otherBooking;
                         break; // เจอ Conflict แล้ว หยุดหา
                     }
-                } // จบเช็กเวลาจอดเกิน
-            } // จบ loop otherBooking
+                }
+            } 
 
-            // 4. ถ้าเจอ Conflict จริงๆ
+            // ถ้าเจอ Conflict จริงๆ
             if (isOverstayConflict) {
                 console.log(`Conflict detected: Slot ${myBooking.slotId} occupied by user ${overstayingBooking?.username}. Reasoning: ${lastBarrierStatusReasoning}.`);
 
@@ -853,7 +849,7 @@ const checkOverstayAndTriggerRelocation = async () => {
         } catch (error) {
             console.error("Error checking for overstay conflict:", error);
         }
-    } // end for loop myBooking
+    } 
 };
 
 //เพิ่ม 2.
@@ -863,26 +859,42 @@ const checkOverstayAndTriggerRelocation = async () => {
     const activeBookings = bookingsRef.current; // Booking ของ User ปัจจุบัน
 
     for (const booking of activeBookings) {
-      // เช็กเฉพาะการจอง 'รายชั่วโมง' และ 'confirmed' เท่านั้น
-      if (booking.rateType !== 'hourly' || booking.status !== 'confirmed') {
+      
+      //เช็กแค่ status (จะเช็ก rateType ข้างใน)
+      if (booking.status !== 'confirmed') {
         continue;
       }
 
-      // 1. คำนวณเวลา
-      const entryDateTime = new Date(`${booking.entryDate}T${booking.entryTime}`);
+      // กำหนดเวลาเข้าจอด (entryDateTime) ตามประเภทการจอง
+      let entryDateTime;
+      let entryTimeStr; // สำหรับใช้ใน Message ตอนยกเลิก
 
+      if (booking.rateType === 'hourly') {
+        if (!booking.entryTime) continue; // ข้ามถ้าข้อมูลไม่ครบ
+        entryDateTime = new Date(`${booking.entryDate}T${booking.entryTime}`);
+        entryTimeStr = booking.entryTime; // เช่น "10:00"
+      } else if (booking.rateType === 'daily' || booking.rateType === 'monthly') {
+        if (!booking.entryDate) continue; // ข้ามถ้าข้อมูลไม่ครบ
+        entryDateTime = new Date(`${booking.entryDate}T00:00:00`); // บังคับเป็นเที่ยงคืน
+        entryTimeStr = '00:00';
+      } else {
+        continue; // ไม่ใช่ประเภทที่รองรับ No-Show
+      }
+
+
+      // คำนวณเวลา
       if (now < entryDateTime) {
         continue;
       }
 
       const minutesSinceEntry = (now - entryDateTime) / (1000 * 60);
 
-      // (แก้ไข) ถ้ายังไม่ถึง 10 นาที (เวลาเตือน) หรือเลย 35 นาที -> ข้าม
+      //ถ้ายังไม่ถึง 10 นาที (เวลาเตือน) หรือเลย 35 นาที -> ข้าม
       if (minutesSinceEntry < 10 || minutesSinceEntry > 35) {
         continue;
       }
 
-      // --- ถ้าอยู่ในช่วง (>= 10 นาที) ให้เช็ก Barrier Logs ---
+      // ถ้าอยู่ในช่วง (>= 10 นาที) ให้เช็ก Barrier Logs 
       let hasEntered = false;
       try {
         const barrierRef = ref(db, `bookings/${booking.id}/barrierLogs`);
@@ -893,7 +905,7 @@ const checkOverstayAndTriggerRelocation = async () => {
           // วนหาแค่ 'lowered' อันแรกก็พอ
           for (const key in logs) {
             if (logs[key].status === 'lowered') {
-              hasEntered = true; // เจอแล้ว = เข้ารถแล้ว
+              hasEntered = true; // เจอแล้ว = เข้าจอดรถแล้ว
               break;
             }
           }
@@ -903,17 +915,16 @@ const checkOverstayAndTriggerRelocation = async () => {
         continue; // ถ้า error ให้ข้ามไปก่อน
       }
 
-      // 3. ตรรกะการแจ้งเตือน (แก้ไขเป็น 10-30 นาที)
+      // การแจ้งเตือน 
       const warningKey = 'notifiedNoShowWarning';
       
-      // [!!] แก้ไข Logic: เปลี่ยน >= 20 (ในไฟล์) เป็น >= 10 ให้ตรงกับ 10:10
       if (minutesSinceEntry >= 10 && minutesSinceEntry < 30 && !hasEntered && !booking[warningKey]) {
         
         console.log(`Sending no-show warning for ${booking.id}`);
 
-        // [!!] เพิ่ม: คำนวณเวลาที่จะยกเลิก (Entry + 30 นาที)
+        // คำนวณเวลาที่จะยกเลิก (Entry + 30 นาที)
         const cancelTime = new Date(entryDateTime.getTime() + 30 * 60 * 1000);
-        const cancelTimeStr = cancelTime.toTimeString().slice(0, 5); // เช่น "10:30"
+        const cancelTimeStr = cancelTime.toTimeString().slice(0, 5); // เช่น "10:30" หรือ "00:30"
 
         const newNotif = {
           username: booking.username,
@@ -935,12 +946,11 @@ const checkOverstayAndTriggerRelocation = async () => {
           slotId: booking.slotId || 'N/A',
           floor: booking.floor || 'N/A',
           licensePlate: booking.visitorInfo?.licensePlate || booking.licensePlate || 'N/A',
-          cancelTime: cancelTimeStr, // เช่น "10:30"
+          cancelTime: cancelTimeStr, // เช่น "10:30" หรือ "00:30"
         });
 
         // 2. แสดง Modal
         setShowNoShowWarningModal(true);
-        // --- [ จบส่วนที่เพิ่ม ] ---
 
         // ส่งแจ้งเตือน (แบบเช็กซ้ำ)
         const sent = await sendNotificationOnce(newNotif);
@@ -953,7 +963,7 @@ const checkOverstayAndTriggerRelocation = async () => {
         booking[warningKey] = true; // อัปเดตใน state ชั่วคราวด้วย
       }
 
-      // 4. ตรรกะการยกเลิก (ที่ 30 นาที) (Logic นี้เหมือนเดิม)
+      // การยกเลิก 
       if (minutesSinceEntry >= 30 && !hasEntered) {
         console.log(`Auto-cancelling ${booking.id} for no-show.`);
 
@@ -972,14 +982,15 @@ const checkOverstayAndTriggerRelocation = async () => {
           time: now.toTimeString().slice(0, 5),
           read: false,
           type: "Booking Auto-Cancelled",
-          message: `Your booking for ${booking.slotId} at ${booking.entryTime} was automatically cancelled due to your no-show at the parking.`
+          //ใช้ entryTimeStr เพื่อให้ message ถูกต้อง
+          message: `Your booking for ${booking.slotId} at ${entryTimeStr} was automatically cancelled due to your no-show at the parking.`
         };
         const sent = await sendNotification(cancelNotif); // ส่งเลย ไม่ต้องเช็กซ้ำ
          if (sent) {
            setUnreadCount(prev => prev + 1);
         }
 
-        // สั่งโหลดข้อมูลใหม่ทั้งหมด -> การ์ด B03 จะหายไป
+        // สั่งโหลดข้อมูลใหม่ทั้งหมด
         fetchBookings();
         break; // หยุด loop เพราะ booking list เปลี่ยนแล้ว
       }
