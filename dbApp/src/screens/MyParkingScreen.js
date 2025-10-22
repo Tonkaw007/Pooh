@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { db } from '../firebaseConfig';
-import { ref, get, child, push, update } from 'firebase/database';
+import { ref, get, child, push, update, query, orderByChild, equalTo } from 'firebase/database';
 
 const MyParkingScreen = ({ route, navigation }) => {
   const { username, userType } = route.params;
@@ -176,6 +176,7 @@ const MyParkingScreen = ({ route, navigation }) => {
   };
 
 
+  //  3. `showParkingProblemDemo` (ฟังก์ชัน Demo นี้เหมือนเดิม)
   const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
 
   const showParkingProblemDemo = async () => {
@@ -204,9 +205,9 @@ const MyParkingScreen = ({ route, navigation }) => {
     }
 
     // 3. เก็บช่องจอดใหม่ไว้ใน state
-    setRelocationSlot(newSlot);
+    setRelocationSlot(newSlot); // e.g., { floor: '1st Floor', slotId: 'C05' }
 
-    // 4. ส่งแจ้งเตือน
+    // 4. ส่งแจ้งเตือน (เหมือนเดิม)
     const now = new Date();
     const newNotif = {
       username: username,
@@ -229,8 +230,9 @@ const MyParkingScreen = ({ route, navigation }) => {
   };
 
    
+  // 4. `handleAcceptRelocation`
   const handleAcceptRelocation = async () => {
-
+    
     // ตรวจสอบว่ามีข้อมูลจาก state หรือไม่
     if (!originalBooking || !relocationSlot) {
       Alert.alert("Error", "Relocation data is missing. Please try again.");
@@ -249,10 +251,10 @@ const MyParkingScreen = ({ route, navigation }) => {
       // สร้าง Object 'updates' ว่างๆ เพื่อรวบรวมทุกอย่างที่จะทำ
       const updates = {};
   
-      // 2. คำสั่ง "ยกเลิก booking เดิม" 
+      // 2. เพิ่มคำสั่ง "ยกเลิก booking เดิม" 
       updates[`bookings/${oldBookingId}/status`] = "cancelled";
   
-      //  3. จัดการ "ลบข้อมูลใน slot เดิม" 
+      //  3. (Logic เดิม) จัดการ "ลบข้อมูลใน slot เดิม" 
       const oldSlotRef = ref(db, `parkingSlots/${oldBooking.floor}/${oldBooking.slotId}`);
       const oldSlotSnap = await get(oldSlotRef);
       
@@ -350,7 +352,7 @@ const MyParkingScreen = ({ route, navigation }) => {
       setShowParkingProblemModal(false); // ปิด Modal
       setOriginalBooking(null); // ล้าง state
       setRelocationSlot(null); // ล้าง state
-      fetchBookings();
+      fetchBookings(); // รีเฟรชหน้าจอ
 
     } catch (error) {
       console.error("Error relocating booking:", error);
@@ -420,7 +422,7 @@ const MyParkingScreen = ({ route, navigation }) => {
           setOriginalBooking(null); // ล้าง state
           setRelocationSlot(null); // ล้าง state
           setHandledOverstaySlot(null); // เคลียร์ flag ป้องกันเด้งซ้ำ
-          fetchBookings();
+          fetchBookings(); // รีเฟรชข้อมูล booking
         }
       }]
     );
