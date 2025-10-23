@@ -368,8 +368,8 @@ const styles = StyleSheet.create({
   },
   ratesContainer: { 
     flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginHorizontal: 10 
+    justifyContent: 'space-around', 
+    marginHorizontal: 1
   },
   rateButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',

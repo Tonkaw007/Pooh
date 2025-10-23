@@ -5,7 +5,39 @@ import SearchBox from "../component/SearchBox";
 import { MaterialIcons } from "@expo/vector-icons";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { db } from "../firebaseConfig";
-import { ref, push, set, get, child } from "firebase/database";
+import { ref, push, set, get, child } from "firebase/database"; 
+
+// (ฟังก์ชัน isUsernameAvailable เหมือนเดิม)
+const isUsernameAvailable = async (name) => {
+  if (!name || name.trim() === "") return true;
+  const searchName = name.toLowerCase();
+
+  try {
+    const usersSnapshot = await get(child(ref(db), "users"));
+    if (usersSnapshot.exists()) {
+      const usersData = usersSnapshot.val();
+      const userExists = Object.values(usersData).some(
+        (user) => user.username && user.username.toLowerCase() === searchName
+      );
+      if (userExists) return false;
+    }
+
+    const visitorsSnapshot = await get(child(ref(db), "visitors"));
+    if (visitorsSnapshot.exists()) {
+      const visitorsData = visitorsSnapshot.val();
+      const visitorExists = Object.values(visitorsData).some(
+        (visitor) => visitor.visitorUsername && visitor.visitorUsername.toLowerCase() === searchName
+      );
+      if (visitorExists) return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error checking username:", error);
+    return false;
+  }
+};
+
 
 const VisitorRegisterScreen = ({ navigation, route }) => {
   const username = route.params?.username || "User";
@@ -14,22 +46,23 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
+  const [usernameError, setUsernameError] = useState("");
 
   const checkExistingVisitor = async (plate) => {
+    // (โค้ดเดิม)
     try {
       if (!plate) return;
-
       const snapshot = await get(child(ref(db), "visitors"));
       if (snapshot.exists()) {
         const data = snapshot.val();
         const existingVisitor = Object.values(data).find(
           (v) => v.licensePlate === plate
         );
-
         if (existingVisitor) {
           setVisitorUsername(existingVisitor.visitorUsername);
           setPhoneNumber(existingVisitor.phoneNumber);
           setEmail(existingVisitor.email);
+          setUsernameError(""); 
         }
       }
     } catch (error) {
@@ -37,33 +70,57 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
     }
   };
 
+  const validateUsername = async (text) => {
+    if (text.trim().length > 0) {
+      const available = await isUsernameAvailable(text);
+      if (!available) {
+        setUsernameError("Username taken. Please enter your username again.");
+      } else {
+        setUsernameError("");
+      }
+    } else {
+      setUsernameError("");
+    }
+  };
+
   const handleRegisterVisitor = async () => {
+    // (โค้ดส่วน handleRegisterVisitor ทั้งหมดเหมือนเดิม ไม่มีการเปลี่ยนแปลง Logic)
     try {
       if (!visitorUsername || !phoneNumber || !email || !licensePlate) {
         Alert.alert("Error", "Please fill in all fields");
         return;
       }
 
+      const available = await isUsernameAvailable(visitorUsername);
+      if (!available) {
+        const snapshot = await get(child(ref(db), "visitors"));
+        const data = snapshot.val();
+        const existingVisitor = Object.values(data).find(
+          (v) => v.visitorUsername.toLowerCase() === visitorUsername.toLowerCase()
+        );
+
+        if (!existingVisitor || existingVisitor.licensePlate !== licensePlate) {
+          setUsernameError("Username taken. Please enter your username again.");
+          Alert.alert("Error", "Username taken. Please enter your username again.");
+          return;
+        }
+      }
+      setUsernameError(""); 
+
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         Alert.alert("Error", "Invalid email format");
         return;
       }
-
       const phoneRegex = /^[0-9]{9,10}$/;
       if (!phoneRegex.test(phoneNumber)) {
         Alert.alert("Error", "Phone number must be 9-10 digits");
         return;
       }
-
-      // โหลด visitor ทั้งหมด
       const visitorsSnapshot = await get(child(ref(db), "visitors"));
       const allVisitors = visitorsSnapshot.exists() ? Object.values(visitorsSnapshot.val()) : [];
-
-      // ตรวจสอบว่า visitor นี้มีอยู่แล้ว
       const existingVisitor = allVisitors.find(v => v.licensePlate === licensePlate);
 
-      // ถ้า visitor ใหม่ ต้องตรวจสอบ 3 คนต่อ resident
       if (!existingVisitor) {
         const visitorCount = allVisitors.filter(v => v.createdBy === username).length;
         if (visitorCount >= 3) {
@@ -72,11 +129,9 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
         }
       }
 
-      // ตรวจสอบจำนวน booking ของ visitor ต่อวัน
       const bookingsSnapshot = await get(child(ref(db), "bookings"));
       const allBookings = bookingsSnapshot.exists() ? Object.values(bookingsSnapshot.val()) : [];
       const todayStr = new Date().toISOString().substring(0, 10);
-
       const todaysBookingsCount = allBookings.filter(b => 
         b.visitorInfo?.licensePlate === licensePlate &&
         b.bookingDate?.substring(0,10) === todayStr &&
@@ -88,7 +143,6 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
         return;
       }
 
-      // ถ้า visitor ใหม่ ให้บันทึกลง Firebase
       if (!existingVisitor) {
         const newVisitorRef = push(ref(db, "visitors"));
         await set(newVisitorRef, {
@@ -134,42 +188,56 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
         <Text style={styles.title}>Visitor Information</Text>
       </View>
 
-      <SearchBox
-        placeHolder="License Plate"
-        value={licensePlate}
-        onChangeText={(text) => {
-          setLicensePlate(text);
-          checkExistingVisitor(text);
-        }}
-        icon="directions-car"
-        containerStyle={styles.input}
-      />
+      <View style={styles.inputContainer}>
+        <SearchBox
+          placeHolder="License Plate"
+          value={licensePlate}
+          onChangeText={(text) => {
+            setLicensePlate(text);
+            checkExistingVisitor(text);
+          }}
+          icon="directions-car"
+          containerStyle={styles.input}
+        />
+      </View>
 
-      <SearchBox
-        placeHolder="Username"
-        value={visitorUsername}
-        onChangeText={setVisitorUsername}
-        icon="person"
-        containerStyle={styles.input}
-      />
+      <View style={styles.inputContainer}>
+        <SearchBox
+          placeHolder="Username"
+          value={visitorUsername}
+          onChangeText={(text) => {
+            setVisitorUsername(text);
+            if (usernameError) setUsernameError(""); 
+          }}
+          onBlur={() => validateUsername(visitorUsername)} 
+          icon="person"
+          containerStyle={styles.input}
+        />
+        {usernameError ? <Text style={styles.errorText}>{usernameError}</Text> : null}
+      </View>
+      
+      <View style={styles.inputContainer}>
+        <SearchBox
+          placeHolder="Phone Number"
+          value={phoneNumber}
+          onChangeText={setPhoneNumber}
+          icon="phone"
+          containerStyle={styles.input}
+          keyboardType="phone-pad"
+        />
+      </View>
 
-      <SearchBox
-        placeHolder="Phone Number"
-        value={phoneNumber}
-        onChangeText={setPhoneNumber}
-        icon="phone"
-        containerStyle={styles.input}
-        keyboardType="phone-pad"
-      />
+      <View style={styles.inputContainer}>
+        <SearchBox
+          placeHolder="Email"
+          value={email}
+          onChangeText={setEmail}
+          icon="email"
+          containerStyle={styles.input}
+          keyboardType="email-address"
+        />
+      </View>
 
-      <SearchBox
-        placeHolder="Email"
-        value={email}
-        onChangeText={setEmail}
-        icon="email"
-        containerStyle={styles.input}
-        keyboardType="email-address"
-      />
 
       <CustomButton
         title="Submit"
@@ -210,11 +278,19 @@ const styles = StyleSheet.create({
     color: "white",
     marginTop: 15,
   },
+  inputContainer: {
+    marginBottom: 10, 
+    width: '100%',
+  },
   input: {
     backgroundColor: "white",
     borderRadius: 10,
-    marginBottom: 20,
     width: "100%",
+  },
+  errorText: {
+    color: 'red',
+    marginTop: 5, 
+    marginLeft: 15,
   },
 });
 

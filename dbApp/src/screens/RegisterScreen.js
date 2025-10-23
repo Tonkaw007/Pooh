@@ -5,15 +5,48 @@ import SearchBox from "../component/SearchBox";
 import { MaterialIcons } from "@expo/vector-icons";
 import { auth, db } from "../firebaseConfig";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { ref, set } from "firebase/database";
+import { ref, set, get, child } from "firebase/database";
+
+// (ฟังก์ชัน isUsernameAvailable เหมือนเดิม)
+const isUsernameAvailable = async (name) => {
+  if (!name || name.trim() === "") return true; 
+  const searchName = name.toLowerCase();
+
+  try {
+    const usersSnapshot = await get(child(ref(db), "users"));
+    if (usersSnapshot.exists()) {
+      const usersData = usersSnapshot.val();
+      const userExists = Object.values(usersData).some(
+        (user) => user.username && user.username.toLowerCase() === searchName
+      );
+      if (userExists) return false;
+    }
+
+    const visitorsSnapshot = await get(child(ref(db), "visitors"));
+    if (visitorsSnapshot.exists()) {
+      const visitorsData = visitorsSnapshot.val();
+      const visitorExists = Object.values(visitorsData).some(
+        (visitor) => visitor.visitorUsername && visitor.visitorUsername.toLowerCase() === searchName
+      );
+      if (visitorExists) return false;
+    }
+
+    return true; 
+  } catch (error) {
+    console.error("Error checking username:", error);
+    return false; 
+  }
+};
+
 
 const RegisterScreen = ({ navigation }) => {
   const [username, setUsername] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState(""); 
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
+  const [usernameError, setUsernameError] = useState("");
 
   const handleRegister = async () => {
     try {
@@ -21,22 +54,28 @@ const RegisterScreen = ({ navigation }) => {
         Alert.alert("Error", "Please fill in all fields");
         return;
       }
-
       if (password !== confirmPassword) {
         Alert.alert("Error", "Passwords do not match");
         return;
       }
 
-      // สมัคร user ด้วย email + password
+      // ตรวจสอบ Username ตอน Submit
+      const available = await isUsernameAvailable(username);
+      if (!available) {
+        setUsernameError("Username taken. Please enter your username again.");
+        Alert.alert("Error", "Username taken. Please enter your username again.");
+        return;
+      }
+      setUsernameError(""); 
+
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const userId = userCredential.user.uid;
 
-      // บันทึกเพิ่มใน Realtime Database
-      await set(ref(db, "users/" + userId), {   //เก็บข้อมูลต่างๆ
-        username,     
-        phoneNumber,    
-        email,          
-        licensePlate,   
+      await set(ref(db, "users/" + userId), {  
+        username,
+        phoneNumber,
+        email,
+        licensePlate,
         createdAt: new Date().toISOString(),
       });
 
@@ -49,6 +88,20 @@ const RegisterScreen = ({ navigation }) => {
     }
   };
 
+  // เพิ่ม: ฟังก์ชันสำหรับตรวจสอบขณะพิมพ์/onBlur
+  const validateUsername = async (text) => {
+    if (text.trim().length > 0) {
+      const available = await isUsernameAvailable(text);
+      if (!available) {
+        setUsernameError("Username taken. Please enter your username again.");
+      } else {
+        setUsernameError("");
+      }
+    } else {
+      setUsernameError("");
+    }
+  };
+
   return (
     <KeyboardAvoidingView style={styles.container} behavior="padding">
       <View style={styles.header}>
@@ -56,55 +109,73 @@ const RegisterScreen = ({ navigation }) => {
         <Text style={styles.title}>Create Account</Text>
       </View>
 
-      <SearchBox
-        placeHolder="Username"
-        value={username}
-        onChangeText={setUsername}
-        icon="person"
-        containerStyle={styles.input}
-      />
+      <View style={styles.inputContainer}>
+        <SearchBox
+          placeHolder="Username"
+          value={username}
+          onChangeText={(text) => {
+            setUsername(text);
+            if (usernameError) setUsernameError(""); // ลบ Error ทันทีที่เริ่มพิมพ์ใหม่
+          }}
+          onBlur={() => validateUsername(username)} // ตรวจสอบเมื่อ focus ออก
+          icon="person"
+          containerStyle={styles.input} 
+        />
+        {usernameError ? <Text style={styles.errorText}>{usernameError}</Text> : null}
+      </View>
 
-      <SearchBox
-        placeHolder="Phone Number"
-        value={phoneNumber}
-        onChangeText={setPhoneNumber}
-        icon="phone"
-        containerStyle={styles.input}
-      />
+      <View style={styles.inputContainer}>
+        <SearchBox
+          placeHolder="Phone Number"
+          value={phoneNumber}
+          onChangeText={setPhoneNumber}
+          icon="phone"
+          containerStyle={styles.input}
+        />
+      </View>
 
-      <SearchBox
-        placeHolder="Email"
-        value={email}
-        onChangeText={setEmail}
-        icon="email"
-        containerStyle={styles.input}
-      />
+      <View style={styles.inputContainer}>
+        <SearchBox
+          placeHolder="Email"
+          value={email}
+          onChangeText={setEmail}
+          icon="email"
+          containerStyle={styles.input}
+        />
+      </View>
 
-      <SearchBox
-        placeHolder="Password"
-        secure={true}
-        value={password}
-        onChangeText={setPassword}
-        icon="lock"
-        containerStyle={styles.input}
-      />
+      <View style={styles.inputContainer}>
+        <SearchBox
+          placeHolder="Password"
+          secure={true}
+          value={password}
+          onChangeText={setPassword}
+          icon="lock"
+          containerStyle={styles.input}
+        />
+      </View>
 
-      <SearchBox
-        placeHolder="Confirm Password"
-        secure={true}
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-        icon="lock"
-        containerStyle={styles.input}
-      />
+      <View style={styles.inputContainer}>
+        <SearchBox
+          placeHolder="Confirm Password"
+          secure={true}
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          icon="lock"
+          containerStyle={styles.input}
+        />
+      </View>
 
-      <SearchBox
-        placeHolder="License Plate"
-        value={licensePlate}
-        onChangeText={setLicensePlate}
-        icon="directions-car"
-        containerStyle={styles.input}
-      />
+      <View style={styles.inputContainer}>
+        <SearchBox
+          placeHolder="License Plate"
+          value={licensePlate}
+          onChangeText={setLicensePlate}
+          icon="directions-car"
+          containerStyle={styles.input}
+        />
+      </View>
+
 
       <CustomButton
         title="Register"
@@ -143,11 +214,19 @@ const styles = StyleSheet.create({
     color: 'white',
     marginTop: 15,
   },
+  inputContainer: {
+    marginBottom: 10,
+    width: '100%',
+  },
   input: {
     backgroundColor: 'white',
     borderRadius: 10,
-    marginBottom: 20,
     width: '100%',
+  },
+  errorText: {
+    color: 'red',
+    marginTop: 5, 
+    marginLeft: 15,
   },
   loginLink: {
     marginTop: 25,
