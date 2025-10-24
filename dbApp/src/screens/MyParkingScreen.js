@@ -19,6 +19,8 @@ const MyParkingScreen = ({ route, navigation }) => {
   const [relocationSlot, setRelocationSlot] = useState(null);
   const [originalBooking, setOriginalBooking] = useState(null);
   const [handledOverstaySlot, setHandledOverstaySlot] = useState(null); // <-- State ป้องกัน Modal เด้งซ้ำ
+  const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
+
 
   // ฟังก์ชัน push notification โดยตรง (ไม่มีการเช็คซ้ำ)
   const sendNotification = async (newNotif) => {
@@ -175,59 +177,6 @@ const MyParkingScreen = ({ route, navigation }) => {
     }
   };
 
-
-  //  3. `showParkingProblemDemo` (ฟังก์ชัน Demo นี้เหมือนเดิม)
-  const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
-
-  const showParkingProblemDemo = async () => {
-    // 1. (Demo) ค้นหา booking "A02"
-    const bookingsSnapshot = await get(child(ref(db), "bookings"));
-    const data = bookingsSnapshot.val() || {};
-    const bookingToMoveEntry = Object.entries(data).find(
-      ([id, b]) => b.username === username && b.slotId === "A02" && b.status !== "cancelled"
-    );
-
-    if (!bookingToMoveEntry) {
-      Alert.alert("Demo Error", "Cannot find active booking for Slot A02 to start demo.");
-      return;
-    }
-    
-    const [bookingId, bookingData] = bookingToMoveEntry;
-    const bookingToMove = { ...bookingData, id: bookingId }; // <-- ข้อมูล booking A02
-    setOriginalBooking(bookingToMove); // เก็บไว้ใน state
-
-    // 2. ค้นหาช่องจอดใหม่
-    const newSlot = await findRandomAvailableSlot(bookingToMove);
-
-    if (!newSlot) {
-      Alert.alert("System Alert", "No available slots found for relocation. Please contact admin.");
-      return;
-    }
-
-    // 3. เก็บช่องจอดใหม่ไว้ใน state
-    setRelocationSlot(newSlot); // e.g., { floor: '1st Floor', slotId: 'C05' }
-
-    // 4. ส่งแจ้งเตือน (เหมือนเดิม)
-    const now = new Date();
-    const newNotif = {
-      username: username,
-      bookingType: userType || "resident",
-      slotId: "A02", // แจ้งเตือนเรื่อง A02
-      floor: bookingToMove.floor || "1st Floor",
-      licensePlate: bookingToMove.licensePlate || "bt77",
-      date: now.toISOString().split('T')[0],
-      time: now.toTimeString().slice(0,5),
-      read: false,
-      type: "Parking Slot Unavailable",
-      message: `Your booked parking slot A02 is currently unavailable. We found a new slot for you: ${newSlot.slotId} (${newSlot.floor}). Please choose relocation or receive compensation.`
-    };
-
-    const sent = await sendNotification(newNotif);
-    if (sent) setUnreadCount(prev => prev + 1);
-
-    // 5. แสดง Modal
-    setShowParkingProblemModal(true);
-  };
 
    
   // 4. `handleAcceptRelocation`
@@ -482,151 +431,6 @@ const MyParkingScreen = ({ route, navigation }) => {
   };
 
 
-
-  // Demo popup สำหรับ Resident/Visitor
-  const handleDemoPopup = async (type = "resident") => {
-    try {
-      const snapshot = await get(child(ref(db), "bookings"));
-      const data = snapshot.val() || {};
-
-      let demoBooking;
-      if (type === "resident") {
-        demoBooking = Object.values(data).find(
-          (b) => b.username === username && b.bookingType === "resident" && b.slotId === "B01"
-        );
-      } else if (type === "visitor") {
-        demoBooking = Object.values(data).find(
-          (b) => b.bookingType === "visitor" && b.slotId === "B06"
-        );
-      }
-
-      if (!demoBooking) {
-        Alert.alert("No booking found", `No ${type} booking found for demo slot.`);
-        return;
-      }
-
-      const now = new Date();
-      const dateStr = now.toISOString().split('T')[0];
-      const timeStr = now.toTimeString().slice(0,5);
-
-      const notifType =
-        demoBooking.rateType === 'hourly'
-          ? "Hourly reminder (10 minutes before end)"
-          : demoBooking.rateType === 'daily'
-          ? "Daily reminder (10 minutes before end)"
-          : demoBooking.rateType === 'monthly'
-          ? "Monthly reminder (10 minutes before end)"
-          : "General reminder";
-
-      let newNotif;
-      if (type === "resident") {
-        newNotif = {
-          bookingType: "resident",
-          username: demoBooking.username,
-          slotId: demoBooking.slotId,
-          floor: demoBooking.floor || "2",
-          licensePlate: demoBooking.licensePlate || "N/A",
-          date: dateStr,
-          time: timeStr,
-          read: false,
-          type: notifType,
-          message: `10 minutes left, please move your car immediately.`
-        };
-      } else if (type === "visitor") {
-        newNotif = {
-          bookingType: "visitor",
-          username: demoBooking.username,
-          visitorUsername: demoBooking.visitorInfo?.visitorUsername || "N/A",
-          slotId: demoBooking.slotId,
-          floor: demoBooking.floor || "2",
-          licensePlate: demoBooking.visitorInfo?.licensePlate || "N/A",
-          date: dateStr,
-          time: timeStr,
-          read: false,
-          type: notifType,
-          message: `10 minutes left, please move your car immediately.`
-        };
-      }
-
-      const sent = await sendNotification(newNotif);
-      if (sent) setUnreadCount(prev => prev + 1);
-
-      setCurrentReminder({
-        username: type === "visitor" ? demoBooking.visitorInfo?.visitorUsername || "N/A" : demoBooking.username || "N/A",
-        slotId: demoBooking.slotId,
-        floor: demoBooking.floor || "N/A",
-        licensePlate: demoBooking.visitorInfo?.licensePlate || demoBooking.licensePlate || "N/A",
-        endTime: demoBooking.exitTime || "N/A",
-      });
-
-      setShowReminderModal(true);
-      activeReminderBookings.current.add(demoBooking.id);
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Error", "Unable to fetch booking.");
-    }
-  };
-
-  // Demo สำหรับ Visitor J01
-  const handleDemoVisitorJ01 = async () => {
-    try {
-      const snapshot = await get(child(ref(db), "bookings"));
-      const data = snapshot.val() || {};
-
-      const demoBooking = Object.values(data).find(
-        (b) => b.bookingType === "visitor" && b.slotId === "J01"
-      );
-
-      if (!demoBooking) {
-        Alert.alert("No booking found", "No visitor booking found for J01.");
-        return;
-      }
-
-      const now = new Date();
-      const dateStr = now.toISOString().split('T')[0];
-      const timeStr = now.toTimeString().slice(0,5);
-
-      const notifType =
-        demoBooking.rateType === 'hourly'
-          ? "Hourly reminder (10 minutes before end)"
-          : demoBooking.rateType === 'daily'
-          ? "Daily reminder (10 minutes before end)"
-          : demoBooking.rateType === 'monthly'
-          ? "Monthly reminder (10 minutes before end)"
-          : "General reminder";
-
-      const newNotif = {
-        bookingType: "visitor",
-        username: demoBooking.username,
-        visitorUsername: demoBooking.visitorInfo?.visitorUsername || "N/A",
-        slotId: demoBooking.slotId,
-        floor: demoBooking.floor || "2",
-        licensePlate: demoBooking.visitorInfo?.licensePlate || "N/A",
-        date: dateStr,
-        time: timeStr,
-        read: false,
-        type: notifType,
-        message: `10 minutes left, please move your car immediately.`
-      };
-
-      const sent = await sendNotification(newNotif);
-      if (sent) setUnreadCount(prev => prev + 1);
-
-      setCurrentReminder({
-        username: demoBooking.visitorInfo?.visitorUsername || "N/A",
-        slotId: demoBooking.slotId,
-        floor: demoBooking.floor || "N/A",
-        licensePlate: demoBooking.visitorInfo?.licensePlate || "N/A",
-        endTime: demoBooking.exitTime || "N/A",
-      });
-      setShowReminderModal(true);
-      activeReminderBookings.current.add(demoBooking.id);
-
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Error", "Unable to fetch visitor booking J01.");
-    }
-  };
   const fetchCoupons = async () => {
     try {
       const snapshot = await get(child(ref(db), "coupons"));
@@ -649,72 +453,6 @@ const MyParkingScreen = ({ route, navigation }) => {
       setCouponCount(0);
     }
   };
-
-
-// Demo: แสดง Pop-up "No-Show Warning"
-  const handleDemoNoShowWarningModal = async () => {
-    setLoading(true);
-    
-    // 1. ค้นหา booking "B03"
-    const snapshot = await get(child(ref(db), "bookings"));
-    const data = snapshot.val() || {};
-    const demoBooking = Object.values(data).find(
-      (b) => b.username === username && b.bookingType === "resident" && b.slotId === "B03" && b.status !== 'cancelled'
-    );
-
-    if (!demoBooking) {
-      Alert.alert("Demo Error", "Cannot find active booking for Slot B03 to start demo.");
-      setLoading(false);
-      return;
-    }
-
-    
-    const now = new Date(); 
-    
-    // 2. คำนวณเวลา
-    const entryDateTime = new Date(`${demoBooking.entryDate}T${demoBooking.entryTime}`);
-    const cancelTime = new Date(entryDateTime.getTime() + 30 * 60 * 1000);
-    const cancelTimeStr = cancelTime.toTimeString().slice(0, 5); // เช่น "10:30"
-
-    // 3. สร้าง Notification
-    const newNotif = {
-      username: demoBooking.username,
-      visitorUsername: demoBooking.visitorInfo?.visitorUsername,
-      bookingType: demoBooking.bookingType,
-      slotId: demoBooking.slotId,
-      floor: demoBooking.floor,
-      licensePlate: demoBooking.visitorInfo?.licensePlate || demoBooking.licensePlate,
-      date: now.toISOString().split('T')[0],
-      time: now.toTimeString().slice(0, 5),
-      read: false,
-      type: "No-Show Warning",
-      message: `Your booking for ${demoBooking.slotId} will be automatically cancelled at ${cancelTimeStr}(30 mins after entrytime)`
-    };
-
-    //4. "เรียกใช้ฟังก์ชันจริง" (ส่ง Noti)
-    const sent = await sendNotificationOnce(newNotif);
-    if (sent) {
-       setUnreadCount(prev => prev + 1);
-    }
-
-    // 5. มาร์คว่าแจ้งเตือนแล้ว (ใน Firebase)
-    await update(ref(db, `bookings/${demoBooking.id}`), { notifiedNoShowWarning: true });
-
-    // 6. "เรียกใช้ฟังก์ชันจริง" (ตั้งค่า State)
-    setCurrentNoShowBooking({
-      username: demoBooking.bookingType === "visitor" ? demoBooking.visitorInfo?.visitorUsername || "N/A" : demoBooking.username || "N/A",
-      slotId: demoBooking.slotId || 'N/A',
-      floor: demoBooking.floor || 'N/A',
-      licensePlate: demoBooking.visitorInfo?.licensePlate || demoBooking.licensePlate || 'N/A',
-      cancelTime: cancelTimeStr,
-    });
-
-    // 7. "เรียกใช้ฟังก์ชันจริง" (แสดง Modal)
-    setShowNoShowWarningModal(true);
-    
-    setLoading(false);
-  };
-
 
 
   // ฟังก์ชัน checkOverstayAndTriggerRelocation 
@@ -1086,13 +824,9 @@ const checkOverstayAndTriggerRelocation = async () => {
 
       await fetchCoupons();
 
-      // เช็ก Notification Unavailable ก่อน (ระบบจริงแบบเดิม)
+      // เช็ก Notification Unavailable ก่อน
       await checkUnavailableSlotNotifications(activeBookings, userNotifications);
       
-      // ถ้า Modal ยังไม่เปิดจาก Noti, ให้ลองเช็ก Overstay (ระบบใหม่)
-      // (เราต้อง await fetchBookings เสร็จก่อน ถึงจะมี activeBookings ให้เช็ก)
-      // การเช็ก Overstay จะถูกเรียกจาก Interval ใน useEffect แทน
-
     } catch (error) {
       console.error(error);
       Alert.alert("Error", "Unable to fetch bookings.");
@@ -1219,7 +953,6 @@ const checkOverstayAndTriggerRelocation = async () => {
   };
   const handleCouponPress = () => navigation.navigate("MyCoupon", { username });
 
-  // (Formatters: formatBookingType, getBookingTypeColor, getUserTypeColor)
   const formatBookingType = (type) => type === "hourly" ? "Hourly" : type === "daily" ? "Daily" : type === "monthly" ? "Monthly" : type;
   const getBookingTypeColor = (type) => type === "hourly" ? "#bb489cff" : type === "daily" ? "#4e67cdff" : type === "monthly" ? "#45B7D1" : "#B19CD8";
   const getUserTypeColor = (type) => type === "resident" ? "#4CAF50" : type === "visitor" ? "#FF9800" : "#B19CD8";
@@ -1292,16 +1025,6 @@ const checkOverstayAndTriggerRelocation = async () => {
           </TouchableOpacity>
         )) : <Text style={styles.noBookingText}>No reservations yet</Text>}
 
-        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={() => handleDemoPopup("resident")}><Text style={styles.bookAgainText}>Demo Resident Slot B01</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={() => handleDemoPopup("visitor")}><Text style={styles.bookAgainText}>Demo Visitor Slot B06</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF9800', marginTop: 10 }]} onPress={handleDemoVisitorJ01}><Text style={styles.bookAgainText}>Demo Visitor Slot J01</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#FF5252', marginTop: 10 }]} onPress={showParkingProblemDemo}><Text style={styles.bookAgainText}>Demo: Parking Slot Unavailable (Move)</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#2196F3', marginTop: 10 }]} onPress={showParkingProblemDemo}><Text style={styles.bookAgainText}>Demo: Parking Slot Unavailable (Coupon)</Text></TouchableOpacity>
-
-        <TouchableOpacity style={[styles.bookAgainButton, { backgroundColor: '#056d26ff', marginTop: 10}]} onPress={handleDemoNoShowWarningModal}>
-          <Text style={styles.bookAgainText}>Demo: No-Show Warning</Text>
-        </TouchableOpacity>
-
       </ScrollView>
 
       <Modal visible={showReminderModal} transparent animationType="fade" onRequestClose={() => setShowReminderModal(false)}>
@@ -1319,7 +1042,7 @@ const checkOverstayAndTriggerRelocation = async () => {
         </View>
       </Modal>
 
-      {/* === [ Modal ใหม่สำหรับ No-Show Warning ] === */}
+      {/* Modal สำหรับ No-Show Warning */}
       <Modal visible={showNoShowWarningModal} transparent animationType="fade" onRequestClose={() => setShowNoShowWarningModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -1338,7 +1061,7 @@ const checkOverstayAndTriggerRelocation = async () => {
         </View>
       </Modal>
 
-      {/* 4. แก้ไข `Modal` (ให้แสดงข้อมูลจริง) */}
+      {/* 4. Modal (ให้แสดงข้อมูลจริง) */}
       <Modal visible={showParkingProblemModal} transparent animationType="fade" onRequestClose={() => setShowParkingProblemModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContainer, { width: '85%' }]}>
@@ -1624,7 +1347,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 14,
   },
-  // สไตล์ใหม่สำหรับ Modal ที่จอดรถไม่พร้อมใช้งาน
   warningIconContainer: {
     marginBottom: 15,
   },
