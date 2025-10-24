@@ -312,22 +312,56 @@ const BookParkingScreen = ({ navigation, route }) => {
           <Text style={styles.searchText}>Search</Text>
         </TouchableOpacity>
 
-        {showPicker && (
-          <DateTimePicker
-            value={
-              pickerMode === 'entryDate' ? entryDate
-                : pickerMode === 'entryTime' ? entryTime
-                : pickerMode === 'exitDate' ? exitDate
-                : pickerMode === 'exitTime' ? exitTime
-                : new Date()
+        {showPicker && (() => {
+          let minDate;
+          const today = new Date();
+
+          if (pickerMode === 'entryDate') {
+            if (selectedRate === 'daily' || selectedRate === 'monthly') {
+              // *** FIX: สำหรับรายวัน/รายเดือน วันขั้นต่ำคือวันพรุ่งนี้ ***
+              const tomorrow = new Date();
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              tomorrow.setHours(0, 0, 0, 0); // เริ่มเที่ยงคืนของวันพรุ่งนี้
+              minDate = tomorrow;
+            } else {
+              // Hourly (รายชั่วโมง) เริ่มวันนี้ได้
+              minDate = today; 
             }
-            mode={pickerMode?.includes('Date') ? 'date' : 'time'}
-            is24Hour={true}
-            display="default"
-            onChange={onChangeDateTime}
-            minimumDate={pickerMode === 'entryDate' || pickerMode === 'entryTime' ? new Date() : undefined}
-          />
-        )}
+          } else if (pickerMode === 'entryTime') {
+            // ถ้า entryDate เป็นวันปัจจุบัน, min time คือเวลาปัจจุบัน
+            // ถ้า entryDate เป็นวันในอนาคต, ไม่ต้องมี min time
+            if (entryDate.toDateString() === today.toDateString()) {
+              minDate = today;
+            } else {
+              minDate = undefined;
+            }
+          } else if (pickerMode === 'exitDate' && selectedRate === 'daily') {
+            // ตั้งค่า min exit date สำหรับรายวัน ให้เป็น 1 วันหลัง entryDate
+            const dayAfterEntry = new Date(entryDate);
+            dayAfterEntry.setDate(dayAfterEntry.getDate() + 1);
+            dayAfterEntry.setHours(0, 0, 0, 0);
+            minDate = dayAfterEntry;
+          } else {
+            minDate = undefined;
+          }
+          
+          return (
+            <DateTimePicker
+              value={
+                pickerMode === 'entryDate' ? entryDate
+                  : pickerMode === 'entryTime' ? entryTime
+                  : pickerMode === 'exitDate' ? exitDate
+                  : pickerMode === 'exitTime' ? exitTime
+                  : new Date()
+              }
+              mode={pickerMode?.includes('Date') ? 'date' : 'time'}
+              is24Hour={true}
+              display="default"
+              onChange={onChangeDateTime}
+              minimumDate={minDate}
+            />
+          );
+        })()}
       </ScrollView>
     </KeyboardAvoidingView>
   );
