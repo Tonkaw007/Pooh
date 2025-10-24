@@ -38,20 +38,7 @@ const InviteLinkScreen = ({ route, navigation }) => {
         }
     };
 
-    // เพิ่มฟังก์ชันสำหรับทดสอบ Deep Link
-    const testLink = async () => {
-        if (!inviteLink) return;
-        try {
-            const canOpen = await Linking.canOpenURL(inviteLink);
-            if (canOpen) {
-                await Linking.openURL(inviteLink);
-            } else {
-                Alert.alert('Error', 'Cannot open this URL scheme');
-            }
-        } catch (error) {
-            Alert.alert('Error', 'Cannot open the link: ' + error.message);
-        }
-    };
+    // (ลบฟังก์ชัน testLink ออกแล้ว)
 
     const copyLink = async () => {
         if (!inviteLink) return;
@@ -116,12 +103,6 @@ const InviteLinkScreen = ({ route, navigation }) => {
                         </TouchableOpacity>
                     </View>
 
-                    {/* เพิ่มปุ่มทดสอบ Deep Link */}
-                    <TouchableOpacity style={[styles.shareButton, {backgroundColor: '#FF9800', marginBottom: 10}]} onPress={testLink}>
-                        <Ionicons name="open" size={20} color="white" />
-                        <Text style={styles.shareButtonText}>Test Link</Text>
-                    </TouchableOpacity>
-
                     <TouchableOpacity style={styles.regenerateButton} onPress={regenerateLink}>
                         <Ionicons name="refresh" size={18} color="#666" />
                         <Text style={styles.regenerateButtonText}>Generate New Link</Text>
@@ -133,8 +114,7 @@ const InviteLinkScreen = ({ route, navigation }) => {
                     <Text style={styles.instructionTitle}>How to use:</Text>
                     <Text style={styles.instructionText}>1. Tap "Share Link" to send via messaging apps</Text>
                     <Text style={styles.instructionText}>2. Tap "Copy Link" to copy and paste anywhere</Text>
-                    <Text style={styles.instructionText}>3. Tap "Test Link" to test the deep link</Text>
-                    <Text style={styles.instructionText}>4. Visitor clicks the link to access parking control</Text>
+                    <Text style={styles.instructionText}>3. Visitor clicks the link to access parking control</Text>
                 </View>
             </ScrollView>
         </KeyboardAvoidingView>
