@@ -169,7 +169,6 @@ const MyCouponScreen = ({ route, navigation }) => {
                     <Text style={styles.discountText}>
                       {getDiscountText(coupon.discountType)}
                     </Text>
-                    {/* ลบ reason ออกจากส่วนหัว */}
                   </View>
                 </View>
 

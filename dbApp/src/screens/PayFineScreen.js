@@ -415,6 +415,7 @@ const styles = StyleSheet.create({
     },
     totalFineSection: {
         alignItems: 'center',
+         justifyContent: 'center',
         paddingVertical: 15,
         backgroundColor: '#FFF5F5',
         borderRadius: 10,
@@ -425,11 +426,13 @@ const styles = StyleSheet.create({
         color: '#FF6B6B',
         fontSize: 16,
         marginBottom: 5,
+        textAlign: 'center',
     },
     totalFineAmount: {
         fontWeight: 'bold',
         color: '#FF6B6B',
         fontSize: 28,
+        textAlign: 'center',
     },
     paymentSection: {
         marginTop: 10,

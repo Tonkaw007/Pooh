@@ -7,11 +7,9 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import { db } from "../firebaseConfig";
 import { ref, push, set, get, child } from "firebase/database"; 
 
-// (ฟังก์ชัน isUsernameAvailable เหมือนเดิม)
 const isUsernameAvailable = async (name) => {
   if (!name || name.trim() === "") return true;
   const searchName = name.toLowerCase();
-
   try {
     const usersSnapshot = await get(child(ref(db), "users"));
     if (usersSnapshot.exists()) {
@@ -49,7 +47,6 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
   const [usernameError, setUsernameError] = useState("");
 
   const checkExistingVisitor = async (plate) => {
-    // (โค้ดเดิม)
     try {
       if (!plate) return;
       const snapshot = await get(child(ref(db), "visitors"));
@@ -84,7 +81,6 @@ const VisitorRegisterScreen = ({ navigation, route }) => {
   };
 
   const handleRegisterVisitor = async () => {
-    // (โค้ดส่วน handleRegisterVisitor ทั้งหมดเหมือนเดิม ไม่มีการเปลี่ยนแปลง Logic)
     try {
       if (!visitorUsername || !phoneNumber || !email || !licensePlate) {
         Alert.alert("Error", "Please fill in all fields");

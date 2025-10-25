@@ -38,8 +38,6 @@ const InviteLinkScreen = ({ route, navigation }) => {
         }
     };
 
-    // (ลบฟังก์ชัน testLink ออกแล้ว)
-
     const copyLink = async () => {
         if (!inviteLink) return;
         await Clipboard.setStringAsync(inviteLink);

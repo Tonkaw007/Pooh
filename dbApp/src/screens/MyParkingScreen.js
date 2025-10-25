@@ -99,7 +99,7 @@ const MyParkingScreen = ({ route, navigation }) => {
   };
 
 
-  // 2. สร้างฟังก์ชันใหม่สำหรับค้นหาช่องจอด
+  // ฟังก์ชันสำหรับค้นหาช่องจอด
   const findRandomAvailableSlot = async (bookingToMove) => {
     try {
       const allSlotsSnap = await get(ref(db, 'parkingSlots'));
@@ -177,9 +177,7 @@ const MyParkingScreen = ({ route, navigation }) => {
     }
   };
 
-
-   
-  // 4. `handleAcceptRelocation`
+   //ฟังก์ชันการย้ายที่จอดรถ
   const handleAcceptRelocation = async () => {
     
     // ตรวจสอบว่ามีข้อมูลจาก state หรือไม่
@@ -200,10 +198,10 @@ const MyParkingScreen = ({ route, navigation }) => {
       // สร้าง Object 'updates' ว่างๆ เพื่อรวบรวมทุกอย่างที่จะทำ
       const updates = {};
   
-      // 2. เพิ่มคำสั่ง "ยกเลิก booking เดิม" 
+      // 2. คำสั่ง "ยกเลิก booking เดิม" 
       updates[`bookings/${oldBookingId}/status`] = "cancelled";
   
-      //  3. (Logic เดิม) จัดการ "ลบข้อมูลใน slot เดิม" 
+      //  3. จัดการ "ลบข้อมูลใน slot เดิม" 
       const oldSlotRef = ref(db, `parkingSlots/${oldBooking.floor}/${oldBooking.slotId}`);
       const oldSlotSnap = await get(oldSlotRef);
       
@@ -371,7 +369,7 @@ const MyParkingScreen = ({ route, navigation }) => {
           setOriginalBooking(null); // ล้าง state
           setRelocationSlot(null); // ล้าง state
           setHandledOverstaySlot(null); // เคลียร์ flag ป้องกันเด้งซ้ำ
-          fetchBookings(); // รีเฟรชข้อมูล booking
+          fetchBookings();
         }
       }]
     );
@@ -381,7 +379,7 @@ const MyParkingScreen = ({ route, navigation }) => {
   }
 };
 
-  //เพิ่ม 1.
+
 // Helper function สำหรับยกเลิกการจองอัตโนมัติ (No-Show)
   const autoCancelBooking = async (booking) => {
     try {
@@ -455,7 +453,7 @@ const MyParkingScreen = ({ route, navigation }) => {
   };
 
 
-  // ฟังก์ชัน checkOverstayAndTriggerRelocation 
+  // ฟังก์ชันเช็คเกินเวลา
 const checkOverstayAndTriggerRelocation = async () => {
     // ถ้า Modal เปิดอยู่แล้ว หรือ กำลังจัดการปัญหา Slot อื่นอยู่ -> ออก
     if (showParkingProblemModal || handledOverstaySlot) return;
@@ -590,8 +588,7 @@ const checkOverstayAndTriggerRelocation = async () => {
     } 
 };
 
-//เพิ่ม 2.
-// ฟังก์ชันใหม่สำหรับเช็ก No-Show และ Auto-Cancel
+// ฟังก์ชันสำหรับเช็ก No-Show และ Auto-Cancel
  const checkNoShowAndAutoCancel = async () => {
     const now = new Date();
     const activeBookings = bookingsRef.current; // Booking ของ User ปัจจุบัน
@@ -737,10 +734,8 @@ const checkOverstayAndTriggerRelocation = async () => {
 
 
 
-
-  //  2. เพิ่มฟังก์ชัน checkUnavailableSlotNotifications
   const checkUnavailableSlotNotifications = async (activeBookings, userNotifications) => {
-    // ถ้า Modal เปิดอยู่แล้ว (จาก Demo หรือจาก Noti รอบก่อน) ให้ข้ามไป
+    // ถ้า Modal เปิดอยู่แล้ว ให้ข้ามไป
     if (showParkingProblemModal) {
       return;
     }
@@ -793,8 +788,6 @@ const checkOverstayAndTriggerRelocation = async () => {
   };
 
 
-
-  // ฟังก์ชัน fetchBookings (แก้ให้เก็บ Notifications)
   const fetchBookings = async () => {
     try {
       const bookingsSnapshot = await get(child(ref(db), "bookings"));
@@ -918,9 +911,8 @@ const checkOverstayAndTriggerRelocation = async () => {
   };
 
 
-  // useEffect
   useEffect(() => {
-    fetchBookings(); // Fetch ครั้งแรกเมื่อเข้าหน้าจอ
+    fetchBookings();
     
     // เมื่อกลับเข้าหน้าจอ ให้ fetch ใหม่
     const unsubscribeFocus = navigation.addListener("focus", fetchBookings); 
@@ -928,7 +920,7 @@ const checkOverstayAndTriggerRelocation = async () => {
     // ตั้งเวลาเช็ก Reminder และ Overstay ทุก 30 วินาที
     const intervalId = setInterval(() => {
       checkBookingReminders();
-      checkOverstayAndTriggerRelocation(); // <-- เรียกใช้ฟังก์ชันใหม่
+      checkOverstayAndTriggerRelocation();
       checkNoShowAndAutoCancel();
     }, 30000); // 30 วินาที
 
@@ -1061,7 +1053,7 @@ const checkOverstayAndTriggerRelocation = async () => {
         </View>
       </Modal>
 
-      {/* 4. Modal (ให้แสดงข้อมูลจริง) */}
+      {/* Modal ให้แสดงข้อมูลจริง */}
       <Modal visible={showParkingProblemModal} transparent animationType="fade" onRequestClose={() => setShowParkingProblemModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContainer, { width: '85%' }]}>

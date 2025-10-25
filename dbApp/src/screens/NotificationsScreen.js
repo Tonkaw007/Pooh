@@ -11,7 +11,7 @@ const NotificationsScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // ฟังก์ชันดึง notification (แก้ไขให้อ่านจาก root level)
+  // ฟังก์ชันดึง notification
   const fetchNotifications = () => {
     try {
       // อ่านจาก root level และ filter ตาม username

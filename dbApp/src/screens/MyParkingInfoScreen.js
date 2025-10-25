@@ -14,7 +14,6 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
 
     const now = new Date();
 
-    // Fetch coupon details if couponUsed exists
     useEffect(() => {
         const fetchCouponDetails = async () => {
             if (bookingData.couponUsed) {
@@ -32,7 +31,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         fetchCouponDetails();
     }, [bookingData.couponUsed]);
 
-    // เช็ก payFineStatus จาก Firebase
+    // เช็ค payFineStatus จาก Firebase
     useEffect(() => {
         const payFineRef = ref(db, `payFine/${bookingData.id}`);
         get(payFineRef)

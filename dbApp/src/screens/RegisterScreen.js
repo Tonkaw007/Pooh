@@ -7,7 +7,6 @@ import { auth, db } from "../firebaseConfig";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { ref, set, get, child } from "firebase/database";
 
-// (ฟังก์ชัน isUsernameAvailable เหมือนเดิม)
 const isUsernameAvailable = async (name) => {
   if (!name || name.trim() === "") return true; 
   const searchName = name.toLowerCase();
@@ -88,7 +87,7 @@ const RegisterScreen = ({ navigation }) => {
     }
   };
 
-  // เพิ่ม: ฟังก์ชันสำหรับตรวจสอบขณะพิมพ์/onBlur
+  // ฟังก์ชันสำหรับตรวจสอบขณะพิมพ์ / onBlur
   const validateUsername = async (text) => {
     if (text.trim().length > 0) {
       const available = await isUsernameAvailable(text);
