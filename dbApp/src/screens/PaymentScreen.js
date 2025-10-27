@@ -245,6 +245,12 @@ const PaymentScreen = ({ navigation, route }) => {
         floor: selectedFloor,
         entryDate,
         exitDate,
+        entryTime: (bookingData.rateType === 'daily' || bookingData.rateType === 'monthly') 
+          ? "00:00" 
+          : bookingData.entryTime, // รายชั่วโมงใช้ entry เวลาตามการจอง
+        exitTime: (bookingData.rateType === 'daily' || bookingData.rateType === 'monthly') 
+          ? "23:59" 
+          : bookingData.exitTime, // รายชั่วโมงใช้ exit เวลาตามการจอง
         bookingDate,
         paymentStatus: 'paid',
         paymentDate: bookingDate,
@@ -400,13 +406,6 @@ const PaymentScreen = ({ navigation, route }) => {
           </View>
 
           <View style={styles.priceSection}>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Original Price:</Text>
-              <Text style={[styles.priceValue, selectedCoupon && styles.strikethrough]}>
-                {originalPrice.toFixed(2)} baht
-              </Text>
-            </View>
-            
             {selectedCoupon && (
               <>
                 <View style={styles.priceRow}>
