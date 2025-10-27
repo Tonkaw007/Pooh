@@ -173,9 +173,9 @@ const BookParkingScreen = ({ navigation, route }) => {
       rateType: selectedRate,
       createdAt: new Date().toISOString(),
       price,
-      entryDate: toLocalISOString(entryDate), // <--- แก้ไขแล้ว
-      exitDate: toLocalISOString(exitDateTime), // <--- แก้ไขแล้ว
-      bookingDate: toLocalISOString(new Date()), // <--- แก้ไขแล้ว
+      entryDate: toLocalISOString(entryDate),
+      exitDate: toLocalISOString(exitDateTime),
+      bookingDate: toLocalISOString(new Date()),
       licensePlate: bookingType === 'resident' ? residentLicensePlate : undefined,
     };
 
@@ -325,7 +325,7 @@ const BookParkingScreen = ({ navigation, route }) => {
 
           if (pickerMode === 'entryDate') {
             if (selectedRate === 'daily' || selectedRate === 'monthly') {
-              // *** FIX: สำหรับรายวัน/รายเดือน วันขั้นต่ำคือวันพรุ่งนี้ ***
+              // สำหรับรายวัน/รายเดือน วันขั้นต่ำคือวันพรุ่งนี้ 
               const tomorrow = new Date();
               tomorrow.setDate(tomorrow.getDate() + 1);
               tomorrow.setHours(0, 0, 0, 0); // เริ่มเที่ยงคืนของวันพรุ่งนี้
