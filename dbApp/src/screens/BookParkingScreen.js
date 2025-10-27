@@ -3,6 +3,13 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, KeyboardAv
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
+const toLocalISOString = (date) => {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const BookParkingScreen = ({ navigation, route }) => {
   const { username, bookingType, visitorInfo, licensePlate } = route.params;
   const [selectedRate, setSelectedRate] = useState(null);
@@ -166,9 +173,9 @@ const BookParkingScreen = ({ navigation, route }) => {
       rateType: selectedRate,
       createdAt: new Date().toISOString(),
       price,
-      entryDate: entryDate.toISOString().split('T')[0],
-      exitDate: exitDateTime.toISOString().split('T')[0], // daily exitDate ตรงตาม user เลือก
-      bookingDate: new Date().toISOString().split('T')[0],
+      entryDate: toLocalISOString(entryDate), // <--- แก้ไขแล้ว
+      exitDate: toLocalISOString(exitDateTime), // <--- แก้ไขแล้ว
+      bookingDate: toLocalISOString(new Date()), // <--- แก้ไขแล้ว
       licensePlate: bookingType === 'resident' ? residentLicensePlate : undefined,
     };
 

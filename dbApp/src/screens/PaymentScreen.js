@@ -176,13 +176,6 @@ const PaymentScreen = ({ navigation, route }) => {
 
       let entryDate = bookingData.entryDate;
       let exitDate = bookingData.exitDate;
-
-      if (bookingData.rateType === 'monthly') {
-        const entry = new Date(entryDate);
-        entry.setMonth(entry.getMonth() + (bookingData.durationMonths || 1));
-        exitDate = entry.toISOString().slice(0, 10);
-      }
-
       let slotDate;
       let slotTimeRange;
 
@@ -244,13 +237,13 @@ const PaymentScreen = ({ navigation, route }) => {
         slotId: selectedSlot,
         floor: selectedFloor,
         entryDate,
-        exitDate,
+        exitDate, 
         entryTime: (bookingData.rateType === 'daily' || bookingData.rateType === 'monthly') 
           ? "00:00" 
-          : bookingData.entryTime, // รายชั่วโมงใช้ entry เวลาตามการจอง
+          : bookingData.entryTime, // รายชั่วโมงใช้ entryTime ตามการจอง
         exitTime: (bookingData.rateType === 'daily' || bookingData.rateType === 'monthly') 
           ? "23:59" 
-          : bookingData.exitTime, // รายชั่วโมงใช้ exit เวลาตามการจอง
+          : bookingData.exitTime, // รายชั่วโมงใช้ exitTime ตามการจอง
         bookingDate,
         paymentStatus: 'paid',
         paymentDate: bookingDate,

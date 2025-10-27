@@ -133,7 +133,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         }
     };
 
-    // Helper function to get discount color
+    // สีของคูปอง
     const getDiscountColor = (discountType) => {
         switch (discountType) {
             case 'hourly': return '#bb489cff';
@@ -143,7 +143,6 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
         }
     };
 
-    // Navigation Handlers
     const handleBack = () => navigation.goBack();
 
     const handleControlBarrier = () => {

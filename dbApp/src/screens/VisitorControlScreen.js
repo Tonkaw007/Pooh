@@ -93,19 +93,12 @@ const VisitorControlScreen = ({ route, navigation }) => {
         }
     };
 
-    const handleBack = () => navigation.goBack();
-
     return (
         <KeyboardAvoidingView 
             style={styles.container} 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
             <ScrollView contentContainerStyle={styles.scrollContainer}>
-                
-                {/* ปุ่ม Back */}
-                <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-                    <Ionicons name="arrow-back" size={24} color="white" />
-                </TouchableOpacity>
 
                 {/* Header */}
                 <View style={styles.header}>
@@ -198,13 +191,6 @@ const styles = StyleSheet.create({
         padding: 20,
         paddingTop: 60,
         alignItems: 'center',
-    },
-    backButton: {
-        position: 'absolute',
-        top: 40,
-        left: 20,
-        zIndex: 1,
-        padding: 8,
     },
     header: {
         alignItems: 'center',
