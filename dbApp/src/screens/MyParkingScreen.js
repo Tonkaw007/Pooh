@@ -336,6 +336,7 @@ const MyParkingScreen = ({ route, navigation }) => {
         "Parking Relocated Successfully",
         `Your booking has been moved to Slot ${newSlot.slotId} (${newSlot.floor})` //  แสดง slot ใหม่
       );
+      setHandledOverstaySlot(originalBooking.slotId);
       setShowParkingProblemModal(false);
       setOriginalBooking(null); 
       setRelocationSlot(null);
@@ -411,7 +412,7 @@ const MyParkingScreen = ({ route, navigation }) => {
               setShowParkingProblemModal(false);
               setOriginalBooking(null);
               setRelocationSlot(null); 
-              setHandledOverstaySlot(null); // เคลียร์ flag ป้องกันเด้งซ้ำ
+              setHandledOverstaySlot(originalBooking.slotId);
               fetchBookings();
             },
           },
@@ -867,8 +868,13 @@ const MyParkingScreen = ({ route, navigation }) => {
     setOriginalBooking(bookingToMove);
     // 2. ค้นหาช่องจอดใหม่ (ใช้ฟังก์ชันเดียวกับ Demo)
     const newSlot = await findRandomAvailableSlot(bookingToMove);
+
+    // [✅ FIXED] สร้างข้อความ Notification ใหม่ และเตรียมอัปเดต
+    let notificationMessage = "";
+
     if (!newSlot) {
       // กรณีฉุกเฉิน: ไม่มีที่จอดเหลือเลย
+      notificationMessage = `Your slot ${bookingToMove.slotId} is unavailable. We could not find a replacement. Please decline and accept a coupon.`;
       Alert.alert(
         "Critical Error",
         `Your slot ${bookingToMove.slotId} is unavailable, and we could not find any free slots to relocate you. Please decline and accept a coupon.`
@@ -876,15 +882,22 @@ const MyParkingScreen = ({ route, navigation }) => {
       setRelocationSlot(null); // ตั้งเป็น null
     } else {
       // 3. เก็บช่องจอดใหม่ไว้ใน state
+      notificationMessage = `Your booked parking slot ${bookingToMove.slotId} (${bookingToMove.floor}) is currently unavailable. We found a new slot for you: ${newSlot.slotId} (${newSlot.floor}). Please choose relocation or receive compensation.`;
       setRelocationSlot(newSlot);
     }
-    // 4. มาร์ค notification นี้ว่า "จัดการแล้ว"
+    
+    // 4. มาร์ค notification นี้ว่า "จัดการแล้ว", "อ่านแล้ว" และ "อัปเดตข้อความ"
     await update(ref(db, `notifications/${problemNotification.id}`), {
       handled: true,
+      read: true, // <-- เพิ่ม read: true เพื่อให้นับในกระดิ่ง
+      message: notificationMessage, // <-- อัปเดต message ใน Firebase
     });
+    
     // 5. แสดง Modal
     setShowParkingProblemModal(true);
   };
+
+
 
   // ดึงข้อมูลการจอง, Notifications และ Coupons ของผู้ใช้
   const fetchBookings = async () => {

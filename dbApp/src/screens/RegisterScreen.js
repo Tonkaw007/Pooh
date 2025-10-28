@@ -33,7 +33,10 @@ const isUsernameAvailable = async (name) => {
     return true; 
   } catch (error) {
     console.error("Error checking username:", error);
-    return false; 
+    // ⭐️⭐️⭐️ จุดที่แก้ไข ⭐️⭐️⭐️
+    // โยน Error ออกไปให้ handleRegister จัดการ
+    // แทนที่จะ return false (ซึ่งแปลว่าชื่อซ้ำ)
+    throw new Error("Could not verify username. Check database rules or network.");
   }
 };
 
@@ -70,6 +73,7 @@ const RegisterScreen = ({ navigation }) => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const userId = userCredential.user.uid;
 
+      // ส่วนนี้ยังคงบันทึกใน Node users เหมือนเดิมตามที่คุณต้องการครับ
       await set(ref(db, "users/" + userId), {  
         username,
         phoneNumber,
@@ -83,18 +87,27 @@ const RegisterScreen = ({ navigation }) => {
 
     } catch (error) {
       console.error(error);
-      Alert.alert("Register Failed", error.message);
+      // ถ้า Error มาจาก isUsernameAvailable (เช่น Permission Denied) 
+      // หรือมาจาก createUser... ก็จะแสดงที่นี่
+      Alert.alert("Register Failed", error.message); 
     }
   };
 
   // ฟังก์ชันสำหรับตรวจสอบขณะพิมพ์ / onBlur
   const validateUsername = async (text) => {
     if (text.trim().length > 0) {
-      const available = await isUsernameAvailable(text);
-      if (!available) {
-        setUsernameError("Username taken. Please enter your username again.");
-      } else {
-        setUsernameError("");
+      try {
+        const available = await isUsernameAvailable(text);
+        if (!available) {
+          setUsernameError("Username taken. Please enter your username again.");
+        } else {
+          setUsernameError("");
+        }
+      } catch (error) {
+        // ถ้าเช็คตอน onBlur แล้ว error (เช่น ไม่มีเน็ต)
+        // อาจจะเลือกแจ้งเตือนเบาๆ หรือไม่แจ้งก็ได้
+        console.warn("Could not validate username on blur:", error.message);
+        setUsernameError("Could not check username."); // หรือปล่อยว่าง
       }
     } else {
       setUsernameError("");
