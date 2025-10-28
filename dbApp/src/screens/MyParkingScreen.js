@@ -332,6 +332,27 @@ const MyParkingScreen = ({ route, navigation }) => {
 
       //6. สั่งทำงาน 'updates' ทั้งหมดในครั้งเดียว
       await update(ref(db), updates);
+
+      const notifMessage = `Your booking for slot ${oldBooking.slotId} has been successfully moved to Slot ${newSlot.slotId} (${newSlot.floor}).`;
+      
+      await sendNotification({
+        username: oldBooking.username,
+        visitorUsername: oldBooking.visitorInfo?.visitorUsername,
+        bookingType: oldBooking.bookingType,
+        slotId: newSlot.slotId, //  ใช้ slotId ใหม่
+        floor: newSlot.floor, //  ใช้ floor ใหม่
+        licensePlate: oldBooking.visitorInfo?.licensePlate || oldBooking.licensePlate, // ⬅️ เพิ่มบรรทัดนี้
+        date: createdDate,
+        time: createdTime,
+        read: false,
+        type: "Parking Slot Unavailable (Relocated)",
+        message: notifMessage,
+      });
+
+      if (oldBooking.username === username) {
+        setUnreadCount((prev) => prev + 1);
+      }
+
       Alert.alert(
         "Parking Relocated Successfully",
         `Your booking has been moved to Slot ${newSlot.slotId} (${newSlot.floor})` //  แสดง slot ใหม่
@@ -387,6 +408,22 @@ const MyParkingScreen = ({ route, navigation }) => {
       await update(ref(db, `bookings/${currentBooking.id}`), {
         status: "cancelled",
         cancelReason: "Slot unavailable - Compensation issued",
+      });
+
+      const notifMessage = `You received a compensation coupon because slot ${currentBooking.slotId} was unavailable.`;
+      
+      await sendNotification({
+        username: currentBooking.username,
+        visitorUsername: currentBooking.visitorInfo?.visitorUsername,
+        bookingType: currentBooking.bookingType,
+        slotId: currentBooking.slotId, // Slot เดิมที่มีปัญหา
+        floor: currentBooking.floor,
+        licensePlate: currentBooking.visitorInfo?.licensePlate || currentBooking.licensePlate, // ⬅️ เพิ่มบรรทัดนี้
+        date: createdDate, // ใช้ createdDate ที่มีอยู่แล้ว
+        time: createdTime, // ใช้ createdTime ที่มีอยู่แล้ว
+        read: false,
+        type: "Parking Slot Unavailable (Coupon Received)",
+        message: notifMessage,
       });
 
       // อัปเดต coupon count (ถ้า username ตรงกัน)
