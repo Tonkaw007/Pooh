@@ -29,7 +29,7 @@ const InviteLinkScreen = ({ route, navigation }) => {
         if (!inviteLink) return;
         try {
             await Share.share({
-                message: `คุณได้รับลิงก์สำหรับเข้าใช้บริการที่จอดรถ: ${inviteLink}`,
+                message: `You have received a link to access the parking service: ${inviteLink}`,
                 url: inviteLink, // สำหรับ iOS
                 title: 'Parking Access Link'
             });

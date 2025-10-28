@@ -141,8 +141,8 @@ const VisitorControlScreen = ({ route, navigation }) => {
                         >
                             <View style={styles.buttonContent}>
                                 <Ionicons name="arrow-up" size={32} color="white" />
-                                <Text style={styles.buttonText}>Open Barrier</Text>
-                                <Text style={styles.buttonSubtext}>Lift the barrier up</Text>
+                                <Text style={styles.buttonText}>Lift the barrier up</Text>
+                                
                             </View>
                         </TouchableOpacity>
 
@@ -158,8 +158,7 @@ const VisitorControlScreen = ({ route, navigation }) => {
                         >
                             <View style={styles.buttonContent}>
                                 <Ionicons name="arrow-down" size={32} color="white" />
-                                <Text style={styles.buttonText}>Close Barrier</Text>
-                                <Text style={styles.buttonSubtext}>Lower the barrier down</Text>
+                                <Text style={styles.buttonText}>Lower the barrier down</Text>
                             </View>
                         </TouchableOpacity>
                     </View>
@@ -171,8 +170,8 @@ const VisitorControlScreen = ({ route, navigation }) => {
                         <Ionicons name="information-circle" size={24} color="#6C757D" />
                         <Text style={styles.cardTitle}>Instructions</Text>
                     </View>
-                    <Text style={styles.instructionText}>• Use "Open Barrier" when arriving at the parking</Text>
-                    <Text style={styles.instructionText}>• Use "Close Barrier" after your vehicle has passed</Text>
+                    <Text style={styles.instructionText}>• Use "Lift the barrier up" when arriving at the parking</Text>
+                    <Text style={styles.instructionText}>• Use "Lower the barrier down" after your vehicle has passed</Text>
                     <Text style={styles.instructionText}>• Make sure the area is clear before operating</Text>
                     <Text style={styles.instructionText}>• This session will expire automatically</Text>
                 </View>
