@@ -18,7 +18,7 @@ const MyParkingScreen = ({ route, navigation }) => {
   const [currentNoShowBooking, setCurrentNoShowBooking] = useState(null);
   const [relocationSlot, setRelocationSlot] = useState(null);
   const [originalBooking, setOriginalBooking] = useState(null);
-  const [handledOverstaySlot, setHandledOverstaySlot] = useState(null); // <-- State ป้องกัน Modal เด้งซ้ำ
+  const [handledOverstayBookings, setHandledOverstayBookings] = useState(new Set()); // <-- State ป้องกัน Modal เด้งซ้ำ (ต่อการจอง)
   const [showParkingProblemModal, setShowParkingProblemModal] = useState(false);
 
   // ฟังก์ชัน push notification โดยตรง (ไม่มีการเช็กซ้ำ)
@@ -335,6 +335,10 @@ const MyParkingScreen = ({ route, navigation }) => {
 
       const notifMessage = `Your booking for slot ${oldBooking.slotId} has been successfully moved to Slot ${newSlot.slotId} (${newSlot.floor}).`;
       
+      const now = new Date();
+      const createdDate = now.toISOString().split("T")[0];
+      const createdTime = now.toTimeString().split(" ")[0].slice(0, 5);
+
       await sendNotification({
         username: oldBooking.username,
         visitorUsername: oldBooking.visitorInfo?.visitorUsername,
@@ -354,14 +358,14 @@ const MyParkingScreen = ({ route, navigation }) => {
       }
 
       Alert.alert(
-        "Parking Relocated Successfully",
-        `Your booking has been moved to Slot ${newSlot.slotId} (${newSlot.floor})` //  แสดง slot ใหม่
+         "Parking Relocated Successfully",
+          `Your booking has been moved to Slot ${newSlot.slotId} (${newSlot.floor})` //  แสดง slot ใหม่
       );
-      setHandledOverstaySlot(originalBooking.slotId);
-      setShowParkingProblemModal(false);
+      setShowParkingProblemModal(false); // <-- Modal ปิด
       setOriginalBooking(null); 
       setRelocationSlot(null);
-      fetchBookings();
+      fetchBookings(); // <-- โหลดข้อมูลใหม่
+
     } catch (error) {
       console.error("Error relocating booking:", error);
       Alert.alert("Error", "Failed to relocate booking: " + error.message);
@@ -449,7 +453,6 @@ const MyParkingScreen = ({ route, navigation }) => {
               setShowParkingProblemModal(false);
               setOriginalBooking(null);
               setRelocationSlot(null); 
-              setHandledOverstaySlot(originalBooking.slotId);
               fetchBookings();
             },
           },
@@ -554,12 +557,14 @@ const MyParkingScreen = ({ route, navigation }) => {
 
   // ฟังก์ชันเช็กเกินเวลา
   const checkOverstayAndTriggerRelocation = async () => {
-    if (showParkingProblemModal || handledOverstaySlot) return;
+    if (showParkingProblemModal) return; // <-- ตรวจสอบแค่ว่า Modal เปิดอยู่หรือไม่
 
     const now = new Date();
     const activeBookings = bookingsRef.current; // Booking ของ User ปัจจุบัน
 
     for (const myBooking of activeBookings) {
+      // ตรวจสอบว่าเคยแจ้งเตือน Booking ID นี้ไปหรือยัง
+      if (handledOverstayBookings.has(myBooking.id)) continue;
       // ตรวจสอบเฉพาะ Booking ที่กำลังจะเข้าจอด
       if (!myBooking.entryDate || !myBooking.entryTime) continue;
 
@@ -694,7 +699,8 @@ const MyParkingScreen = ({ route, navigation }) => {
 
           // ตั้งค่า state เพื่อเริ่มกระบวนการย้ายที่
           setOriginalBooking(myBooking);
-          setHandledOverstaySlot(myBooking.slotId); // ตั้ง Flag ว่ากำลังจัดการ Slot นี้
+          // เพิ่ม Booking ID นี้ไปยัง Set เพื่อป้องกันการแจ้งเตือนซ้ำ
+          setHandledOverstayBookings(prevSet => new Set(prevSet).add(myBooking.id));
 
           const newSlot = await findRandomAvailableSlot(myBooking);
           if (!newSlot) {
@@ -1228,18 +1234,7 @@ const MyParkingScreen = ({ route, navigation }) => {
       <Modal visible={showParkingProblemModal} transparent animationType="fade" onRequestClose={() => setShowParkingProblemModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContainer, { width: '85%' }]}>
-            
-            {/* ปุ่มปิดมุมขวาบน */}
-            <TouchableOpacity 
-              style={styles.closeButton} 
-              onPress={() => {
-                  setShowParkingProblemModal(false);
-                  setOriginalBooking(null); // ล้าง state เมื่อปิด
-                  setRelocationSlot(null); // ล้าง state เมื่อปิด
-              }}
-            >
-              <Ionicons name="close" size={24} color="#fff" />
-            </TouchableOpacity>
+          
 
             <View style={styles.warningIconContainer}><Ionicons name="warning" size={50} color="#FF9800" /></View>
             <Text style={styles.modalTitle}>Parking Slot Unavailable</Text>
@@ -1533,18 +1528,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 5,
     textAlign: "center",
-  },
-  closeButton: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    backgroundColor: "#B19CD8",
-    borderRadius: 15,
-    width: 30,
-    height: 30,
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 10,
   },
 });
 
