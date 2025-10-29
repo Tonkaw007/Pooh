@@ -14,8 +14,6 @@ const MyParkingScreen = ({ route, navigation }) => {
   const [couponCount, setCouponCount] = useState(0);
   const bookingsRef = useRef([]);
   const activeReminderBookings = useRef(new Set());
-  const [showNoShowWarningModal, setShowNoShowWarningModal] = useState(false);
-  const [currentNoShowBooking, setCurrentNoShowBooking] = useState(null);
   const [relocationSlot, setRelocationSlot] = useState(null);
   const [originalBooking, setOriginalBooking] = useState(null);
   const [handledOverstayBookings, setHandledOverstayBookings] = useState(new Set()); // <-- State ป้องกัน Modal เด้งซ้ำ (ต่อการจอง)
@@ -464,70 +462,6 @@ const MyParkingScreen = ({ route, navigation }) => {
     }
   };
 
-  // Auto-Cancellation 
-
-  // ฟังก์ชันสำหรับยกเลิกการจองอัตโนมัติ (No-Show)
-  const autoCancelBooking = async (booking) => {
-    try {
-      console.log(`Auto-cancelling booking: ${booking.id}`);
-      const updates = {};
-
-      // 1. อัปเดตสถานะ booking เป็น 'cancelled'
-      updates[`bookings/${booking.id}/status`] = "cancelled";
-      updates[`bookings/${booking.id}/cancelReason`] =
-        "Auto-cancelled (No-Show)";
-
-      // 2. ค้นหาและลบ booking ออกจาก parkingSlots
-      const slotRef = ref(
-        db,
-        `parkingSlots/${booking.floor}/${booking.slotId}`
-      );
-      const slotSnap = await get(slotRef);
-      const bookingTimeRange = `${booking.entryTime}-${booking.exitTime}`;
-
-      if (slotSnap.exists()) {
-        const val = slotSnap.val();
-        // ดึงข้อมูล booking ทั้งหมดใน slot (จาก Logic ของ handleAcceptRelocation)
-        const existingBookings =
-          Array.isArray(val) ||
-          (typeof val === "object" && val !== null && val.hasOwnProperty("0"))
-            ? Object.values(val).filter(
-                (item) =>
-                  typeof item === "object" && item !== null && item.date
-              )
-            : [];
-
-        // กรอง booking ที่ถูกยกเลิกนี้ออก
-        const updatedSlotData = existingBookings.filter(
-          (b) =>
-            !(
-              b.date === booking.entryDate &&
-              b.timeRange === bookingTimeRange &&
-              b.username === booking.username
-            )
-        );
-
-        if (updatedSlotData.length > 0) {
-          // ถ้ายังมี booking อื่นเหลือ -> อัปเดต array
-          updates[`parkingSlots/${booking.floor}/${booking.slotId}`] =
-            updatedSlotData;
-        } else {
-          // ถ้าไม่เหลือเลย -> ตั้งค่าเป็น available
-          updates[`parkingSlots/${booking.floor}/${booking.slotId}`] = {
-            status: "available",
-          };
-        }
-      }
-
-      // 3. สั่ง update ทั้งหมด
-      await update(ref(db), updates);
-      console.log(`Successfully auto-cancelled ${booking.id} and freed slot.`);
-    } catch (error) {
-      console.error(`Error during auto-cancel for ${booking.id}:`, error);
-      // ไม่ต้อง Alert เพราะเป็น background task
-    }
-  };
-
   const fetchCoupons = async () => {
     try {
       const snapshot = await get(child(ref(db), "coupons"));
@@ -719,155 +653,6 @@ const MyParkingScreen = ({ route, navigation }) => {
         }
       } catch (error) {
         console.error("Error checking for overstay conflict:", error);
-      }
-    }
-  };
-
-  // ฟังก์ชันสำหรับเช็ก No-Show และ Auto-Cancel
-  const checkNoShowAndAutoCancel = async () => {
-    const now = new Date();
-    const activeBookings = bookingsRef.current; // Booking ของ User ปัจจุบัน
-
-    for (const booking of activeBookings) {
-      //เช็กแค่ status (จะเช็ก rateType ข้างใน)
-      if (booking.status !== "confirmed") {
-        continue;
-      }
-
-      // กำหนดเวลาเข้าจอด (entryDateTime) ตามประเภทการจอง
-      let entryDateTime;
-      let entryTimeStr; // สำหรับใช้ใน Message ตอนยกเลิก
-
-      if (booking.rateType === "hourly") {
-        if (!booking.entryTime) continue; // ข้ามถ้าข้อมูลไม่ครบ
-        entryDateTime = new Date(`${booking.entryDate}T${booking.entryTime}`);
-        entryTimeStr = booking.entryTime; // เช่น "10:00"
-      } else if (
-        booking.rateType === "daily" ||
-        booking.rateType === "monthly"
-      ) {
-        if (!booking.entryDate) continue; // ข้ามถ้าข้อมูลไม่ครบ
-        entryDateTime = new Date(`${booking.entryDate}T00:00:00`); // บังคับเป็นเที่ยงคืน
-        entryTimeStr = "00:00";
-      } else {
-        continue; // ไม่ใช่ประเภทที่รองรับ No-Show
-      }
-      // คำนวณเวลา
-      if (now < entryDateTime) {
-        continue;
-      }
-
-      const minutesSinceEntry = (now - entryDateTime) / (1000 * 60);
-      //ถ้ายังไม่ถึง 10 นาที (เวลาเตือน) หรือเลย 35 นาที -> ข้าม
-      if (minutesSinceEntry < 10 || minutesSinceEntry > 35) {
-        continue;
-      }
-      // ถ้าอยู่ในช่วง (>= 10 นาที) ให้เช็ก Barrier Logs
-      let hasEntered = false;
-      try {
-        const barrierRef = ref(db, `bookings/${booking.id}/barrierLogs`);
-        const snapshot = await get(barrierRef);
-
-        if (snapshot.exists()) {
-          const logs = snapshot.val();
-          // วนหาแค่ 'lowered' อันแรกก็พอ
-          for (const key in logs) {
-            if (logs[key].status === "lowered") {
-              hasEntered = true; // เจอแล้ว = เข้าจอดรถแล้ว
-              break;
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Error checking barrier logs for no-show:", err);
-        continue; // ถ้า error ให้ข้ามไปก่อน
-      }
-
-      // การแจ้งเตือน (ขึ้น Pop up)
-      const warningKey = "notifiedNoShowWarning";
-
-      if (
-        minutesSinceEntry >= 10 &&
-        minutesSinceEntry < 30 &&
-        !hasEntered &&
-        !booking[warningKey]
-      ) {
-        console.log(`Sending no-show warning for ${booking.id}`);
-
-        // คำนวณเวลาที่จะยกเลิก (Entry + 30 นาที)
-        const cancelTime = new Date(entryDateTime.getTime() + 30 * 60 * 1000);
-        const cancelTimeStr = cancelTime.toTimeString().slice(0, 5); // เช่น "10:30" หรือ "00:30"
-
-        const newNotif = {
-          username: booking.username,
-          visitorUsername: booking.visitorInfo?.visitorUsername,
-          bookingType: booking.bookingType,
-          slotId: booking.slotId,
-          floor: booking.floor,
-          licensePlate:
-            booking.visitorInfo?.licensePlate || booking.licensePlate,
-          date: now.toISOString().split("T")[0],
-          time: now.toTimeString().slice(0, 5),
-          read: false,
-          type: "No-Show Warning",
-          message: `Your booking for ${booking.slotId} will be automatically cancelled at ${cancelTimeStr} (30 mins after entrytime)`,
-        };
-
-        // 1. ตั้งค่าข้อมูลสำหรับ Modal
-        setCurrentNoShowBooking({
-          username:
-            booking.bookingType === "visitor"
-              ? booking.visitorInfo?.visitorUsername || "N/A"
-              : booking.username || "N/A",
-          slotId: booking.slotId || "N/A",
-          floor: booking.floor || "N/A",
-          licensePlate:
-            booking.visitorInfo?.licensePlate || booking.licensePlate || "N/A",
-          cancelTime: cancelTimeStr, 
-        });
-
-        // 2. แสดง Modal
-        setShowNoShowWarningModal(true);
-        // ส่งแจ้งเตือน (แบบเช็กซ้ำ)
-        const sent = await sendNotificationOnce(newNotif);
-        if (sent) {
-          setUnreadCount((prev) => prev + 1);
-        }
-        // มาร์คว่าแจ้งเตือนแล้ว
-        await update(ref(db, `bookings/${booking.id}`), { [warningKey]: true });
-        booking[warningKey] = true; // อัปเดตใน state ชั่วคราวด้วย
-      }
-
-      // การยกเลิก
-      if (minutesSinceEntry >= 30 && !hasEntered) {
-        console.log(`Auto-cancelling ${booking.id} for no-show.`);
-
-        // เรียกใช้ฟังก์ชันยกเลิก
-        await autoCancelBooking(booking);
-        // ส่งแจ้งเตือนว่ายกเลิกแล้ว
-        const cancelNotif = {
-          username: booking.username,
-          visitorUsername: booking.visitorInfo?.visitorUsername,
-          bookingType: booking.bookingType,
-          slotId: booking.slotId,
-          floor: booking.floor,
-          licensePlate:
-            booking.visitorInfo?.licensePlate || booking.licensePlate,
-          date: now.toISOString().split("T")[0],
-          time: now.toTimeString().slice(0, 5),
-          read: false,
-          type: "Booking Auto-Cancelled",
-          //ใช้ entryTimeStr เพื่อให้ message ถูกต้อง
-          message: `Your booking for ${booking.slotId} at ${entryTimeStr} was automatically cancelled due to your no-show at the parking.`,
-        };
-        const sent = await sendNotification(cancelNotif); // ส่งเลย ไม่ต้องเช็กซ้ำ
-        if (sent) {
-          setUnreadCount((prev) => prev + 1);
-        }
-
-        // สั่งโหลดข้อมูลใหม่ทั้งหมด
-        fetchBookings();
-        break; // หยุด loop เพราะ booking list เปลี่ยนแล้ว
       }
     }
   };
@@ -1096,7 +881,6 @@ const MyParkingScreen = ({ route, navigation }) => {
     const intervalId = setInterval(() => {
       checkBookingReminders();
       checkOverstayAndTriggerRelocation();
-      checkNoShowAndAutoCancel();
     }, 30000); // 30 วินาที
 
     return () => {
@@ -1205,25 +989,6 @@ const MyParkingScreen = ({ route, navigation }) => {
               <Text style={styles.modalMessage}>Username: {currentReminder.username}{"\n"}Slot {currentReminder.slotId}, Floor: {currentReminder.floor }, License: {currentReminder.licensePlate }</Text>
             </>}
             <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#B19CD8' }]} onPress={() => setShowReminderModal(false)}>
-              <Text style={styles.modalButtonText}>OK</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Modal สำหรับ No-Show Warning */}
-      <Modal visible={showNoShowWarningModal} transparent animationType="fade" onRequestClose={() => setShowNoShowWarningModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            {currentNoShowBooking && <>
-              <Text style={styles.modalTitle}>⚠️ Didn't show up at the parkingslot </Text>
-              <Text style={styles.modalMessage}>
-                You have not yet parked, the reservation will be automatically canceled at time {currentNoShowBooking.cancelTime}
-              </Text>
-              <Text style={styles.modalMessage}>Username: {currentNoShowBooking.username}{"\n"}Slot {currentNoShowBooking.slotId}, Floor: {currentNoShowBooking.floor}, License: {currentNoShowBooking.licensePlate}
-              </Text>
-            </>}
-            <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#B19CD8' }]} onPress={() => setShowNoShowWarningModal(false)}>
               <Text style={styles.modalButtonText}>OK</Text>
             </TouchableOpacity>
           </View>

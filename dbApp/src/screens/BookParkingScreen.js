@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -18,7 +18,12 @@ const BookParkingScreen = ({ navigation, route }) => {
   const [exitDate, setExitDate] = useState(new Date());
   const [exitTime, setExitTime] = useState(new Date());
   const [residentLicensePlate] = useState(licensePlate || '');
+  
+  // State สำหรับการจองรายเดือน
   const [durationMonths, setDurationMonths] = useState(1);
+  // State สำหรับการจองรายชั่วโมง
+  const [durationHours, setDurationHours] = useState(1);
+
   const [pickerMode, setPickerMode] = useState(null); 
   const [showPicker, setShowPicker] = useState(false);
 
@@ -28,12 +33,38 @@ const BookParkingScreen = ({ navigation, route }) => {
     { id: 'monthly', label: 'Monthly', price: '3,000 baht/month' }
   ];
 
+  // --- Logic คำนวณเวลาออก (ใหม่) ---
+  useEffect(() => {
+    if (selectedRate === 'hourly') {
+      // 1. สร้างเวลาเริ่มต้นที่สมบูรณ์ (จาก Date และ Time)
+      const entryDateTime = new Date(entryDate);
+      entryDateTime.setHours(entryTime.getHours(), entryTime.getMinutes(), 0, 0);
+
+      // 2. คำนวณเวลาออก = เวลาเริ่มต้น + จำนวนชั่วโมง
+      const exitDateTime = new Date(entryDateTime.getTime() + durationHours * 60 * 60 * 1000);
+      
+      // 3. อัปเดต State ที่จะใช้แสดงผลและส่งต่อ
+      setExitDate(exitDateTime);
+      setExitTime(exitDateTime);
+
+    } else if (selectedRate === 'monthly') {
+      // คำนวณเวลาออกสำหรับรายเดือน
+      const newExit = new Date(entryDate);
+      newExit.setMonth(newExit.getMonth() + durationMonths);
+      setExitDate(newExit);
+    }
+    
+    // (สำหรับรายวัน, exitDate จะถูกตั้งค่าโดยตรงจาก Picker)
+
+  }, [entryDate, entryTime, durationHours, durationMonths, selectedRate]);
+
+
   const calculatePrice = () => {
     if (!selectedRate) return 0;
     switch (selectedRate) {
       case 'hourly': {
-        const hours = Math.ceil((exitTime - entryTime) / (1000 * 60 * 60));
-        return hours > 0 ? hours * 40 : 40;
+        // ใช้ durationHours ที่เลือกโดยตรง
+        return durationHours * 40;
       }
       case 'daily': {
         const days = Math.ceil((exitDate - entryDate) / (1000 * 60 * 60 * 24));
@@ -52,6 +83,7 @@ const BookParkingScreen = ({ navigation, route }) => {
   const formatTime = (time) =>
     time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 
+  // --- Logic การเลือก (ใหม่) ---
   const onChangeDateTime = (event, selectedValue) => {
     setShowPicker(false);
     if (!selectedValue) return;
@@ -59,61 +91,26 @@ const BookParkingScreen = ({ navigation, route }) => {
     switch (pickerMode) {
       case 'entryDate':
         setEntryDate(selectedValue);
-        if (selectedRate === 'hourly') setExitDate(selectedValue);
-        if (selectedRate === 'monthly') {
-          const newExit = new Date(selectedValue);
-          newExit.setMonth(newExit.getMonth() + durationMonths);
-          setExitDate(newExit);
+        // ถ้าเลือกรายวัน และวันเข้าใหม่ > วันออก, รีเซ็ตวันออก
+        if (selectedRate === 'daily' && selectedValue > exitDate) {
+            const nextDay = new Date(selectedValue);
+            nextDay.setDate(nextDay.getDate() + 1);
+            setExitDate(nextDay);
         }
         break;
-      case 'exitDate':
+      case 'exitDate': // ใช้สำหรับรายวันเท่านั้น
         if (selectedRate === 'daily') {
-          setExitDate(selectedValue); // อัพเดตตามที่ user เลือกจริง
+          setExitDate(selectedValue); 
         }
         break;
-      case 'entryTime':
+      case 'entryTime': // ใช้สำหรับรายชั่วโมงเท่านั้น
         setEntryTime(selectedValue);
-        if (selectedRate === 'hourly') {
-          const newExit = new Date(selectedValue);
-          newExit.setHours(selectedValue.getHours() + 1);
-          newExit.setMinutes(selectedValue.getMinutes());
-          setExitTime(newExit);
-          setExitDate(entryDate);
-        }
         break;
-      case 'exitTime':
-        if (selectedRate === 'hourly') {
-          const diffMs = selectedValue - entryTime;
-          const diffMinutes = diffMs / (1000 * 60);
-
-          if (diffMinutes < 60) {
-            const correctedExit = new Date(entryTime);
-            correctedExit.setHours(entryTime.getHours() + 1);
-            correctedExit.setMinutes(entryTime.getMinutes());
-            setExitTime(correctedExit);
-            Alert.alert('Error', 'Minimum booking is 1 hour!');
-            return;
-          }
-
-          const entryMinutes = entryTime.getMinutes();
-          const exitMinutes = selectedValue.getMinutes();
-
-          if (exitMinutes !== entryMinutes) {
-            Alert.alert(
-              'Error',
-              `The exit time must match the minutes of the entry time (${entryTime.getMinutes()} minutes).`
-            );
-            const correctedExit = new Date(selectedValue);
-            correctedExit.setMinutes(entryMinutes);
-            setExitTime(correctedExit);
-          } else {
-            setExitTime(selectedValue);
-          }
-        }
-        break;
+      // 'exitTime' ถูกลบออกไป เพราะคำนวณอัตโนมัติ
     }
   };
 
+  // --- Logic การค้นหา (ใหม่) ---
   const handleSearch = () => {
     if (!selectedRate) {
       Alert.alert('Error', 'Please select a parking rate');
@@ -121,6 +118,7 @@ const BookParkingScreen = ({ navigation, route }) => {
     }
 
     const now = new Date();
+    // สร้างเวลาเข้าจอดที่สมบูรณ์เพื่อเปรียบเทียบ
     const entryDateTime = new Date(
       entryDate.getFullYear(),
       entryDate.getMonth(),
@@ -129,41 +127,30 @@ const BookParkingScreen = ({ navigation, route }) => {
       entryTime.getMinutes()
     );
 
-    let exitDateTime;
-
-    if (selectedRate === 'hourly') {
-      exitDateTime = new Date(
-        exitDate.getFullYear(),
-        exitDate.getMonth(),
-        exitDate.getDate(),
-        exitTime.getHours(),
-        exitTime.getMinutes()
-      );
-      const diffMinutes = (exitDateTime - entryDateTime) / (1000 * 60);
-      if (diffMinutes < 60) {
-        Alert.alert('Error', 'Minimum booking is 1 hour!');
-        return;
-      }
-      if (exitTime.getMinutes() !== entryTime.getMinutes()) {
-        Alert.alert('Error', `The exit time must match the minutes of the entry time (${entryTime.getMinutes()} minutes).`);
-        return;
-      }
-    } else if (selectedRate === 'daily') {
-      exitDateTime = new Date(exitDate); // ใช้ exitDate ล่าสุดที่ user เลือก
-      if (exitDateTime <= entryDateTime) {
-        Alert.alert('Error', 'Exit date must be after entry date for daily booking.');
-        return;
-      }
-    } else if (selectedRate === 'monthly') {
-      exitDateTime = new Date(entryDate);
-      exitDateTime.setMonth(exitDateTime.getMonth() + durationMonths);
-      setExitDate(exitDateTime);
-    }
-
+    // เช็กว่าเวลาเข้าจอดเป็นอดีตหรือไม่
     if (entryDateTime < now) {
       Alert.alert('Error', 'Entry date/time cannot be in the past.');
       return;
     }
+
+    // ดึงเวลาออกจาก State (ที่ถูกคำนวณไว้แล้วโดย useEffect)
+    const exitDateTime = new Date(exitDate);
+    if (selectedRate === 'hourly') {
+      exitDateTime.setHours(exitTime.getHours(), exitTime.getMinutes(), 0, 0);
+    }
+
+    // Validation สำหรับรายวัน
+    if (selectedRate === 'daily') {
+      // ต้องมั่นใจว่า exitDate > entryDate
+      const entryDayOnly = new Date(entryDate.setHours(0,0,0,0));
+      const exitDayOnly = new Date(exitDate.setHours(0,0,0,0));
+
+      if (exitDayOnly <= entryDayOnly) {
+        Alert.alert('Error', 'Exit date must be after entry date for daily booking.');
+        return;
+      }
+    }
+    // ไม่ต้อง Validation สำหรับรายชั่วโมง (เพราะถูกบังคับโดย duration)
 
     const price = calculatePrice();
 
@@ -173,15 +160,16 @@ const BookParkingScreen = ({ navigation, route }) => {
       rateType: selectedRate,
       createdAt: new Date().toISOString(),
       price,
-      entryDate: toLocalISOString(entryDate), // <--- แก้ไขแล้ว
-      exitDate: toLocalISOString(exitDateTime), // <--- แก้ไขแล้ว
-      bookingDate: toLocalISOString(new Date()), // <--- แก้ไขแล้ว
+      entryDate: toLocalISOString(entryDate),
+      exitDate: toLocalISOString(exitDateTime), // ใช้วันที่ออกจาก State
+      bookingDate: toLocalISOString(new Date()), 
       licensePlate: bookingType === 'resident' ? residentLicensePlate : undefined,
     };
 
     if (selectedRate === 'hourly') {
       bookingData.entryTime = formatTime(entryTime);
-      bookingData.exitTime = formatTime(exitTime);
+      bookingData.exitTime = formatTime(exitTime); // ใช้เวลาออกจาก State
+      bookingData.durationHours = durationHours; // ส่งจำนวนชั่วโมงไปด้วย
     } else if (selectedRate === 'monthly') {
       bookingData.durationMonths = durationMonths;
     }
@@ -260,16 +248,46 @@ const BookParkingScreen = ({ navigation, route }) => {
                   </TouchableOpacity>
                 </View>
 
+                {/* --- UI ใหม่: เลือกจำนวนชั่วโมง --- */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Duration (hours)</Text>
+                  <View style={styles.durationContainer}>
+                    {[1, 2, 3, 4, 5].map((h) => (
+                      <TouchableOpacity
+                        key={h}
+                        style={[styles.durationButton, durationHours === h && styles.selectedDuration]}
+                        onPress={() => setDurationHours(h)}
+                      >
+                        <Text style={[styles.durationText, durationHours === h && styles.selectedDurationText]}>{h}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={[styles.durationContainer, { marginTop: 5 }]}>
+                    {[6, 7, 8, 9, 10].map((h) => (
+                      <TouchableOpacity
+                        key={h}
+                        style={[styles.durationButton, durationHours === h && styles.selectedDuration]}
+                        onPress={() => setDurationHours(h)}
+                      >
+                        <Text style={[styles.durationText, durationHours === h && styles.selectedDurationText]}>{h}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Exit Date</Text>
+                  <View style={styles.readOnlyBox}>
+                    <Text style={styles.dateTimeValue}>{formatDate(exitDate)}</Text>
+                  </View>
+                </View>
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Exit Time</Text>
-                  <TouchableOpacity
-                    style={styles.dateTimeBox}
-                    onPress={() => { setPickerMode('exitTime'); setShowPicker(true); }}
-                  >
+                  <View style={styles.readOnlyBox}>
                     <Text style={styles.dateTimeValue}>{formatTime(exitTime)}</Text>
-                    <Ionicons name="time" size={22} color="#B19CD8" style={{ marginLeft: 10 }} />
-                  </TouchableOpacity>
+                  </View>
                 </View>
+
               </>
             )}
 
@@ -322,6 +340,8 @@ const BookParkingScreen = ({ navigation, route }) => {
         {showPicker && (() => {
           let minDate;
           const today = new Date();
+          const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
 
           if (pickerMode === 'entryDate') {
             if (selectedRate === 'daily' || selectedRate === 'monthly') {
@@ -332,11 +352,10 @@ const BookParkingScreen = ({ navigation, route }) => {
               minDate = tomorrow;
             } else {
               // Hourly (รายชั่วโมง) เริ่มวันนี้ได้
-              minDate = today; 
+              minDate = todayDateOnly; // เทียบแค่วันที่
             }
           } else if (pickerMode === 'entryTime') {
             // ถ้า entryDate เป็นวันปัจจุบัน, min time คือเวลาปัจจุบัน
-            // ถ้า entryDate เป็นวันในอนาคต, ไม่ต้องมี min time
             if (entryDate.toDateString() === today.toDateString()) {
               minDate = today;
             } else {
@@ -357,8 +376,7 @@ const BookParkingScreen = ({ navigation, route }) => {
               value={
                 pickerMode === 'entryDate' ? entryDate
                   : pickerMode === 'entryTime' ? entryTime
-                  : pickerMode === 'exitDate' ? exitDate
-                  : pickerMode === 'exitTime' ? exitTime
+                  : pickerMode === 'exitDate' ? exitDate // (สำหรับ Daily)
                   : new Date()
               }
               mode={pickerMode?.includes('Date') ? 'date' : 'time'}
@@ -465,6 +483,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#aaa',   
   },
+  // --- Style ใหม่: กล่องแสดงผลแบบอ่านอย่างเดียว ---
+  readOnlyBox: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0', // สีเทา
+    borderRadius: 10,
+    padding: 15,
+    marginHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',   
+  },
   dateTimeValue: { 
     fontSize: 16, 
     fontWeight: 'bold', 
@@ -472,13 +502,14 @@ const styles = StyleSheet.create({
   durationContainer: { 
     flexDirection: 'row', 
     justifyContent: 'center', 
-    marginTop: 10 },
+    marginTop: 10 
+  },
   durationButton: {
     backgroundColor: 'rgba(255,255,255,0.3)',
     borderRadius: 10,
     paddingVertical: 10,
-    paddingHorizontal: 20,
-    marginHorizontal: 5,
+    paddingHorizontal: 15, // ปรับขนาดเล็กน้อย
+    marginHorizontal: 4,   // เพิ่มระยะห่าง
   },
   selectedDuration: { 
     backgroundColor: '#B19CD8' 

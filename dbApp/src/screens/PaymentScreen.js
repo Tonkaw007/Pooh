@@ -4,8 +4,27 @@ import { db } from '../firebaseConfig';
 import { ref, update, get, push, child, onValue } from 'firebase/database';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
+// --- Helper Functions (เพิ่มเข้ามา) ---
+const toLocalISOString = (date) => {
+  if (!date || isNaN(date.getTime())) return null;
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatTime = (time) => {
+  if (!time || isNaN(time.getTime())) return null;
+  return time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+};
+// --- สิ้นสุด Helper Functions ---
+
 const PaymentScreen = ({ navigation, route }) => {
   const { username, bookingData, selectedSlot, selectedFloor, bookingType } = route.params;
+  
+  // --- State ใหม่สำหรับเก็บข้อมูลที่คำนวณแล้ว ---
+  const [localBookingData, setLocalBookingData] = useState(bookingData);
+  
   const [residentLicense, setResidentLicense] = useState('');
   const [prompayStatus, setPrompayStatus] = useState('pending');
   const [availableCoupons, setAvailableCoupons] = useState([]);
@@ -13,6 +32,47 @@ const PaymentScreen = ({ navigation, route }) => {
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [originalPrice, setOriginalPrice] = useState(0);
   const [discountedPrice, setDiscountedPrice] = useState(0);
+
+  // --- [แก้ไข] เพิ่ม useEffect สำหรับคำนวณ ExitDate/Time ---
+  useEffect(() => {
+    // ตรวจสอบว่าเป็นการจองรายชั่วโมงและมีข้อมูลที่จำเป็น
+    if (
+      bookingData.rateType === 'hourly' &&
+      bookingData.durationHours &&
+      bookingData.entryDate &&
+      bookingData.entryTime
+    ) {
+      try {
+        // สร้างเวลาเข้าจอดที่สมบูรณ์
+        const entryDateTime = new Date(`${bookingData.entryDate}T${bookingData.entryTime}`);
+        
+        // คำนวณเวลาออก
+        const exitDateTime = new Date(
+          entryDateTime.getTime() + bookingData.durationHours * 60 * 60 * 1000
+        );
+
+        const newExitDate = toLocalISOString(exitDateTime);
+        const newExitTime = formatTime(exitDateTime);
+
+        // อัปเดตข้อมูลใน local state (ถ้าไม่ตรงกัน)
+        if (newExitDate !== localBookingData.exitDate || newExitTime !== localBookingData.exitTime) {
+          setLocalBookingData((prevData) => ({
+            ...prevData,
+            exitDate: newExitDate,
+            exitTime: newExitTime,
+          }));
+        }
+      } catch (error) {
+        console.error("Error recalculating exit time:", error);
+        // หาก Error ให้ใช้ข้อมูลเดิม
+        setLocalBookingData(bookingData);
+      }
+    } else {
+      // ถ้าไม่ใช่ Hourly ให้ใช้ข้อมูลเดิม
+      setLocalBookingData(bookingData);
+    }
+  }, [bookingData]); // ทำงานเมื่อ bookingData เริ่มต้นถูกส่งมา
+
 
   // ดึง license plate ของ resident
   const fetchUserBookings = async () => {
@@ -51,7 +111,7 @@ const PaymentScreen = ({ navigation, route }) => {
             coupon.username === username && 
             expiryDate >= today && 
             !coupon.used &&
-            coupon.discountType === bookingData.rateType
+            coupon.discountType === localBookingData.rateType // [แก้ไข] ใช้ localBookingData
           );
         })
         .sort((a, b) => {
@@ -70,15 +130,16 @@ const PaymentScreen = ({ navigation, route }) => {
   // คำนวณราคา
   const calculatePrice = () => {
     let price = 0;
-    switch (bookingData.rateType) {
+    // [แก้ไข] ใช้ localBookingData
+    switch (localBookingData.rateType) {
       case 'hourly':
-        price = bookingData.price || 0;
+        price = localBookingData.price || 0;
         break;
       case 'daily':
-        price = bookingData.price || 0;
+        price = localBookingData.price || 0;
         break;
       case 'monthly':
-        price = (bookingData.durationMonths || 1) * 3000;
+        price = (localBookingData.durationMonths || 1) * 3000;
         break;
       default:
         price = 0;
@@ -96,9 +157,9 @@ const PaymentScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     fetchUserBookings();
-    fetchMatchingCoupons();
     
-    const bookingId = bookingData.id;
+    // [แก้ไข] ใช้ localBookingData
+    const bookingId = localBookingData.id;
     if (!bookingId) return;
 
     const promRef = ref(db, `prompayPayments/${bookingId}`);
@@ -109,11 +170,15 @@ const PaymentScreen = ({ navigation, route }) => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [localBookingData.id]); // [แก้ไข]
 
   useEffect(() => {
+    // [แก้ไข] ต้องดึงคูปองหลังจาก localBookingData พร้อม
+    if (localBookingData.rateType) {
+      fetchMatchingCoupons();
+    }
     calculatePrice();
-  }, [selectedCoupon, bookingData]);
+  }, [selectedCoupon, localBookingData]); // [แก้ไข]
 
   const getDiscountPercentage = (discountType) => {
     switch (discountType) {
@@ -174,25 +239,26 @@ const PaymentScreen = ({ navigation, route }) => {
       const now = new Date();
       const bookingDate = now.toISOString().slice(0, 10);
 
-      let entryDate = bookingData.entryDate;
-      let exitDate = bookingData.exitDate;
+      // [แก้ไข] ใช้ localBookingData ทั้งหมด
+      let entryDate = localBookingData.entryDate;
+      let exitDate = localBookingData.exitDate;
       let slotDate;
       let slotTimeRange;
 
-      if (bookingData.rateType === 'hourly') {
-        slotDate = bookingData.entryDate;
-        const startTime = bookingData.entryTime || '00:00';
-        const endTime = bookingData.exitTime || '23:59';
+      if (localBookingData.rateType === 'hourly') {
+        slotDate = localBookingData.entryDate;
+        const startTime = localBookingData.entryTime || '00:00';
+        const endTime = localBookingData.exitTime || '23:59';
         slotTimeRange = `${startTime}-${endTime}`;
-      } else if (bookingData.rateType === 'daily' || bookingData.rateType === 'monthly') {
-        slotDate = `${bookingData.entryDate} - ${bookingData.exitDate}`;
+      } else if (localBookingData.rateType === 'daily' || localBookingData.rateType === 'monthly') {
+        slotDate = `${localBookingData.entryDate} - ${localBookingData.exitDate}`;
         slotTimeRange = '00:00-23:59';
       }
 
       const usernameToSave =
         bookingType === 'resident'
           ? username
-          : bookingData.visitorInfo?.visitorUsername || username;
+          : localBookingData.visitorInfo?.visitorUsername || username;
 
       const newSlotBooking = {
         date: slotDate,
@@ -226,28 +292,28 @@ const PaymentScreen = ({ navigation, route }) => {
       const licensePlateToSave =
         bookingType === 'resident'
           ? residentLicense || '-'
-          : bookingData.visitorInfo?.licensePlate || '-';
+          : localBookingData.visitorInfo?.licensePlate || '-';
 
       const newBooking = {
-        ...bookingData,
+        ...localBookingData, // [แก้ไข] ใช้ localBookingData
         id: newBookingId,
         username,
         bookingType,
         status: 'confirmed',
         slotId: selectedSlot,
         floor: selectedFloor,
-        entryDate,
-        exitDate, 
-        entryTime: (bookingData.rateType === 'daily' || bookingData.rateType === 'monthly') 
+        entryDate, // <--- ใช้ตัวแปรที่ดึงจาก localBookingData
+        exitDate,  // <--- ใช้ตัวแปรที่ดึงจาก localBookingData
+        entryTime: (localBookingData.rateType === 'daily' || localBookingData.rateType === 'monthly') 
           ? "00:00" 
-          : bookingData.entryTime, // รายชั่วโมงใช้ entryTime ตามการจอง
-        exitTime: (bookingData.rateType === 'daily' || bookingData.rateType === 'monthly') 
+          : localBookingData.entryTime, // [แก้ไข]
+        exitTime: (localBookingData.rateType === 'daily' || localBookingData.rateType === 'monthly') 
           ? "23:59" 
-          : bookingData.exitTime, // รายชั่วโมงใช้ exitTime ตามการจอง
+          : localBookingData.exitTime, // [แก้ไข]
         bookingDate,
         paymentStatus: 'paid',
         paymentDate: bookingDate,
-        visitorInfo: bookingData.visitorInfo || null,
+        visitorInfo: localBookingData.visitorInfo || null, // [แก้ไข]
         licensePlate: licensePlateToSave,
         originalPrice: originalPrice,
         finalPrice: discountedPrice,
@@ -304,12 +370,12 @@ const PaymentScreen = ({ navigation, route }) => {
   const renderBookedBy = () => {
     if (bookingType === 'resident') {
       return <Text style={styles.value}>{username}</Text>;
-    } else if (bookingType === 'visitor' && bookingData.visitorInfo) {
+    } else if (bookingType === 'visitor' && localBookingData.visitorInfo) { // [แก้ไข]
       return (
         <View style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
           <Text style={styles.value}>{username}</Text>
           <Text style={[styles.value, { fontSize: 13, color: '#718096' }]}>
-            (for {bookingData.visitorInfo.visitorUsername})
+            (for {localBookingData.visitorInfo.visitorUsername}) {/* [แก้ไข] */}
           </Text>
         </View>
       );
@@ -331,26 +397,31 @@ const PaymentScreen = ({ navigation, route }) => {
         <View style={styles.paymentCard}>
           <Text style={styles.cardTitle}>Booking Details</Text>
 
+          {/* [แก้ไข] ใช้ localBookingData ทั้งหมด */}
           {renderBookingDetail('User Type', bookingType === 'resident' ? 'Resident' : 'Visitor')}
-          {renderBookingDetail('Booking Type', formatBookingType(bookingData.rateType))}
+          {renderBookingDetail('Booking Type', formatBookingType(localBookingData.rateType))}
           {renderBookingDetail('Booked By', renderBookedBy())}
           {renderBookingDetail('Slot', selectedSlot)}
           {renderBookingDetail('Floor', selectedFloor)}
-          {bookingData.entryDate && renderBookingDetail('Entry Date', bookingData.entryDate)}
-          {bookingData.entryTime && renderBookingDetail('Entry Time', bookingData.entryTime)}
-          {bookingData.exitDate && renderBookingDetail('Exit Date', bookingData.exitDate)}
-          {bookingData.exitTime && renderBookingDetail('Exit Time', bookingData.exitTime)}
+          {localBookingData.entryDate && renderBookingDetail('Entry Date', localBookingData.entryDate)}
+          {localBookingData.entryTime && renderBookingDetail('Entry Time', localBookingData.entryTime)}
+          {localBookingData.exitDate && renderBookingDetail('Exit Date', localBookingData.exitDate)}
+          {localBookingData.exitTime && renderBookingDetail('Exit Time', localBookingData.exitTime)}
           {renderBookingDetail('License Plate', residentLicense)}
-          {bookingData.durationMonths &&
-            renderBookingDetail('Duration (Months)', bookingData.durationMonths)}
+          {localBookingData.durationMonths &&
+            renderBookingDetail('Duration (Months)', localBookingData.durationMonths)}
+          
+          {/* [แก้ไข] เพิ่มการแสดงผล durationHours ถ้ามี */}
+          {localBookingData.rateType === 'hourly' && localBookingData.durationHours &&
+            renderBookingDetail('Duration (Hours)', localBookingData.durationHours)}
 
-          {bookingType === 'visitor' && bookingData.visitorInfo && (
+          {bookingType === 'visitor' && localBookingData.visitorInfo && (
             <View style={styles.visitorSection}>
               <Text style={styles.sectionTitle}>Visitor Information</Text>
-              {renderBookingDetail('Visitor Name', bookingData.visitorInfo.visitorUsername)}
-              {renderBookingDetail('Phone', bookingData.visitorInfo.phoneNumber)}
-              {renderBookingDetail('Email', bookingData.visitorInfo.email)}
-              {renderBookingDetail('License Plate', bookingData.visitorInfo.licensePlate)}
+              {renderBookingDetail('Visitor Name', localBookingData.visitorInfo.visitorUsername)}
+              {renderBookingDetail('Phone', localBookingData.visitorInfo.phoneNumber)}
+              {renderBookingDetail('Email', localBookingData.visitorInfo.email)}
+              {renderBookingDetail('License Plate', localBookingData.visitorInfo.licensePlate)}
             </View>
           )}
 
@@ -509,7 +580,8 @@ const PaymentScreen = ({ navigation, route }) => {
                   <Ionicons name="ticket-outline" size={64} color="#CCC" />
                   <Text style={styles.noCouponsText}>No coupons available</Text>
                   <Text style={styles.noCouponsSubtext}>
-                    No matching coupons for {formatBookingType(bookingData.rateType)} booking
+                    {/* [แก้ไข] */}
+                    No matching coupons for {formatBookingType(localBookingData.rateType)} booking
                   </Text>
                 </View>
               )}
