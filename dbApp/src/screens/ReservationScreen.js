@@ -12,12 +12,13 @@ const ReservationScreen = ({ navigation, route }) => {
   const [selectedFloor, setSelectedFloor] = useState('1st Floor');
   const [showFloorDropdown, setShowFloorDropdown] = useState(false);
 
-  const [selectedEntryDate, setSelectedEntryDate] = useState(
-    bookingData.entryDate.slice(0, 10)
-  );
+  // ✅ รับข้อมูลวันที่และเวลาจาก bookingData ให้ครบถ้วน
+  const [selectedEntryDate, setSelectedEntryDate] = useState(bookingData.entryDate);
   const [selectedExitDate, setSelectedExitDate] = useState(
-    bookingData.rateType === 'hourly' ? bookingData.entryDate.slice(0, 10) : bookingData.exitDate.slice(0, 10)
+    bookingData.rateType === 'hourly' ? bookingData.entryDate : bookingData.exitDate
   );
+  const [entryTime, setEntryTime] = useState(bookingData.entryTime || '00:00');
+  const [exitTime, setExitTime] = useState(bookingData.exitTime || '23:59');
 
   const floors = ['1st Floor', '2nd Floor', '3rd Floor', '4th Floor'];
 
@@ -38,14 +39,14 @@ const ReservationScreen = ({ navigation, route }) => {
     '4th Floor': createSlotsForFloor(['J', 'K', 'L']),
   };
 
-  // สำหรับ hourly booking ให้ exitDate = entryDate
+  // ✅ สำหรับ hourly booking ให้ exitDate = entryDate
   useEffect(() => {
     if (bookingData.rateType === 'hourly') {
       setSelectedExitDate(selectedEntryDate);
     }
   }, [selectedEntryDate, bookingData.rateType]);
 
-  // โหลดข้อมูล slots และเช็คซ้อนทับ
+  // ✅ โหลดข้อมูล slots และเช็คซ้อนทับ - แก้ไข logic การเช็ค
   useEffect(() => {
     const slotsRef = ref(db, 'parkingSlots');
     const bookingsRef = ref(db, 'bookings');
@@ -78,21 +79,15 @@ const ReservationScreen = ({ navigation, route }) => {
             }
 
             if (booking.slotId === slotId && booking.floor === floor) {
+              // ✅ สร้าง Date objects สำหรับการเปรียบเทียบที่สอดคล้องกัน
               const bookingEntry = new Date(`${booking.entryDate}T${booking.entryTime || '00:00'}`);
               const bookingExit = new Date(`${booking.exitDate}T${booking.exitTime || '23:59'}`);
-              const selectedEntry = new Date(`${selectedEntryDate}T${bookingData.entryTime || '00:00'}`);
-              const selectedExit = new Date(`${selectedExitDate}T${bookingData.exitTime || '23:59'}`);
+              const selectedEntry = new Date(`${selectedEntryDate}T${entryTime}`);
+              const selectedExit = new Date(`${selectedExitDate}T${exitTime}`);
 
-              if (bookingData.rateType === 'hourly') {
-                // เช็คช่วงเวลาซ้อนทับสำหรับ hourly
-                if (selectedEntry < bookingExit && selectedExit > bookingEntry) {
-                  updatedSlots[floor][slotId].status = 'unavailable';
-                }
-              } else {
-                // เช็ควันซ้อนทับสำหรับ daily/monthly
-                if (selectedEntryDate <= booking.exitDate && selectedExitDate >= booking.entryDate) {
-                  updatedSlots[floor][slotId].status = 'unavailable';
-                }
+              // ✅ ใช้ logic เดียวกันสำหรับทุกประเภทการจอง
+              if (selectedEntry < bookingExit && selectedExit > bookingEntry) {
+                updatedSlots[floor][slotId].status = 'unavailable';
               }
             }
           });
@@ -104,7 +99,7 @@ const ReservationScreen = ({ navigation, route }) => {
     });
 
     return () => unsubscribeSlots();
-  }, [selectedEntryDate, selectedExitDate, selectedFloor, bookingData]);
+  }, [selectedEntryDate, selectedExitDate, selectedFloor, bookingData, entryTime, exitTime]);
 
   const handleSlotSelection = (slotId) => {
     if (slots[slotId]?.status === 'available') {
@@ -152,6 +147,8 @@ const ReservationScreen = ({ navigation, route }) => {
             ...bookingData,
             entryDate: selectedEntryDate,
             exitDate: selectedExitDate,
+            entryTime: entryTime,
+            exitTime: exitTime,
             licensePlate: bookingData.licensePlate,
             visitorInfo: bookingData.visitorInfo,
           },
@@ -306,7 +303,6 @@ const ReservationScreen = ({ navigation, route }) => {
     </View>
   );
 };
-
 
 const styles = StyleSheet.create({
   container: 

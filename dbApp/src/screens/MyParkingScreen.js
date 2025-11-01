@@ -774,7 +774,7 @@ const MyParkingScreen = ({ route, navigation }) => {
   };
 
 
-  // Booking Reminder Logic
+  // Booking Reminder Logic - แก้ไขแล้วให้ Daily ใช้เหมือน Hourly
   const showBookingReminder = async (booking) => {
     if (activeReminderBookings.current.has(booking.id)) return;
     activeReminderBookings.current.add(booking.id);
@@ -837,8 +837,9 @@ const MyParkingScreen = ({ route, navigation }) => {
     for (const booking of activeBookings) {
       if (!booking.rateType) continue;
 
+      // สำหรับ Hourly และ Daily - แจ้งเตือน 10 นาทีก่อน exitTime
       if (
-        booking.rateType === "hourly" &&
+        (booking.rateType === "hourly" || booking.rateType === "daily") &&
         booking.entryDate &&
         booking.exitTime
       ) {
@@ -853,19 +854,19 @@ const MyParkingScreen = ({ route, navigation }) => {
           booking.notifiedHour = true;
           await showBookingReminder(booking);
         }
-      } else if (
-        (booking.rateType === "daily" || booking.rateType === "monthly") &&
+      } 
+      // สำหรับ Monthly ยังใช้ logic เดิม (แจ้งเตือน 23:50 น. ของวันสิ้นสุด)
+      else if (
+        booking.rateType === "monthly" &&
         booking.exitDate
       ) {
         const [year, month, day] = booking.exitDate.split("-").map(Number);
         const reminderTime = new Date(year, month - 1, day, 23, 50, 0);
-        const notifiedKey =
-          booking.rateType === "daily" ? "notifiedDaily" : "notifiedMonthly";
 
-        if (now >= reminderTime && !booking[notifiedKey]) {
+        if (now >= reminderTime && !booking.notifiedMonthly) {
           const bookingRef = ref(db, `bookings/${booking.id}`);
-          await update(bookingRef, { [notifiedKey]: true });
-          booking[notifiedKey] = true;
+          await update(bookingRef, { notifiedMonthly: true });
+          booking.notifiedMonthly = true;
           await showBookingReminder(booking);
         }
       }

@@ -213,6 +213,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
             let matchingKey = null;
             const bookingTimeRange = `${bookingData.entryTime}-${bookingData.exitTime}`;
 
+            // --- หา matchingKey (เหมือนเดิม) ---
             for (const key in slotData) {
                 const parkedBooking = slotData[key];
                 if (typeof parkedBooking === 'object' && parkedBooking !== null) {
