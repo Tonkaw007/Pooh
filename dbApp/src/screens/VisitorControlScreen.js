@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-// 1. เพิ่ม TextInput, ActivityIndicator
+import React, { useState, useEffect, useRef } from 'react';
 import { 
     View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, 
     KeyboardAvoidingView, Platform, TextInput, ActivityIndicator 
@@ -8,11 +7,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { db } from '../firebaseConfig'; 
 import { ref, push, get } from 'firebase/database';
 
-// 🚀 [ส่วนที่ 1] เพิ่ม VERCEL API URL 🚀
-// URL หลักของ Backend ที่เรา Deploy บน Vercel
 const VERCEL_API_URL = "https://pooh-backend.vercel.app"; 
-// 🚀 (เราลบ comment ของ Firebase Functions เก่าทิ้งไปแล้ว) 🚀
-
 
 const VisitorControlScreen = ({ route, navigation }) => {
     const { sessionId } = route.params || {}; 
@@ -20,22 +15,25 @@ const VisitorControlScreen = ({ route, navigation }) => {
         ? sessionId.substring(0, sessionId.lastIndexOf('-')) 
         : sessionId;
 
-    // --- 1. STATES ใหม่สำหรับ Verification ---
-    const [verificationStep, setVerificationStep] = useState('plate'); // 'plate', 'otp', 'verified'
-    const [pageLoading, setPageLoading] = useState(true); // โหลด booking data ครั้งแรก
-    const [actionLoading, setActionLoading] = useState(false); // โหลดตอนกดปุ่ม Verify
+    // --- 1. STATES ---
+    const [verificationStep, setVerificationStep] = useState('plate');
+    const [pageLoading, setPageLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState(false);
     
     const [inputPlate, setInputPlate] = useState('');
-    const [inputOtp, setInputOtp] = useState('');
+    // 🔥 เปลี่ยนจาก inputOtp เป็น array 6 ตัว
+    const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
     const [errorMessage, setErrorMessage] = useState('');
 
-    // --- 2. STATES เดิม (จะถูกโหลดหลัง verify ผ่าน) ---
     const [payFineStatus, setPayFineStatus] = useState('unpaid');
     const [barrierLocked, setBarrierLocked] = useState(true);
     const [bookingData, setBookingData] = useState(null);
+    const [isBarrierEnabled, setIsBarrierEnabled] = useState(false);
 
-    // --- 3. MODIFIED useEffect (โหลดเฉพาะข้อมูลที่จำเป็นก่อน) ---
-    // (โค้ดส่วนนี้เหมือนเดิม)
+    // 🔥 สร้าง refs สำหรับ TextInput แต่ละช่อง
+    const otpInputRefs = useRef([]);
+
+    // --- 2. useEffect เดิม ---
     useEffect(() => {
         if (!sessionKey) {
             setPageLoading(false);
@@ -46,7 +44,9 @@ const VisitorControlScreen = ({ route, navigation }) => {
         get(ref(db, `bookings/${sessionKey}`))
             .then(bookingSnap => {
                 if (bookingSnap.exists()) {
-                    setBookingData(bookingSnap.val());
+                    const data = bookingSnap.val();
+                    setBookingData(data);
+                    checkBarrierAccessTime(data);
                 } else {
                     setErrorMessage("Booking not found.");
                 }
@@ -59,8 +59,43 @@ const VisitorControlScreen = ({ route, navigation }) => {
             });
     }, [sessionKey]);
 
-    // --- 4. ฟังก์ชันสำหรับโหลดสถานะ Barrier (หลัง Verify ผ่าน) ---
-    // (โค้ดส่วนนี้เหมือนเดิม)
+    const checkBarrierAccessTime = (bookingData) => {
+        if (!bookingData) return;
+
+        const now = new Date();
+        
+        if (bookingData.rateType === 'hourly' && bookingData.exitTime) {
+            const entryDateTime = new Date(`${bookingData.entryDate}T${bookingData.entryTime}`);
+            const exitDateTime = new Date(`${bookingData.exitDate}T${bookingData.exitTime}`);
+            
+            if (now >= entryDateTime && now <= exitDateTime) {
+                setIsBarrierEnabled(true);
+            } else {
+                setIsBarrierEnabled(false);
+            }
+        }
+        else if (bookingData.rateType === 'daily') {
+            const entryDateTime = new Date(`${bookingData.entryDate}T${bookingData.entryTime || '00:00'}`);
+            const exitDateTime = new Date(`${bookingData.exitDate}T23:59`);
+            
+            if (now >= entryDateTime && now <= exitDateTime) {
+                setIsBarrierEnabled(true);
+            } else {
+                setIsBarrierEnabled(false);
+            }
+        }
+        else if (bookingData.rateType === 'monthly') {
+            const entryDateTime = new Date(`${bookingData.entryDate}T${bookingData.entryTime || '00:00'}`);
+            const exitDateTime = new Date(`${bookingData.exitDate}T23:59`);
+            
+            if (now >= entryDateTime && now <= exitDateTime) {
+                setIsBarrierEnabled(true);
+            } else {
+                setIsBarrierEnabled(false);
+            }
+        }
+    };
+
     const loadBarrierStatus = () => {
         get(ref(db, `payFine/${sessionKey}`))
             .then(snapshot => {
@@ -76,15 +111,12 @@ const VisitorControlScreen = ({ route, navigation }) => {
                 else if (data.rateType === 'daily' || data.rateType === 'monthly') {
                     setBarrierLocked(snapshot.exists() && payStatus !== 'paid');
                 }
+
+                checkBarrierAccessTime(data);
             })
             .catch(error => console.error('Failed to fetch payFineStatus:', error));
     };
 
-
-    // --- 5. ฟังก์ชัน VERIFICATION (ส่วนที่ติดต่อ Backend) ---
-
-    // 🚀 [ส่วนที่ 2] แก้ไข handlePlateVerification 🚀
-    // (เปลี่ยนจากโค้ดจำลอง เป็นการเรียก Vercel API จริงด้วย fetch)
     const handlePlateVerification = async () => {
         if (!bookingData?.visitorInfo?.licensePlate) {
             setErrorMessage("Visitor information not found.");
@@ -103,39 +135,58 @@ const VisitorControlScreen = ({ route, navigation }) => {
         setErrorMessage('');
         
         try {
-            // --- 🚀 นี่คือโค้ดใหม่ที่เรียก Vercel ---
             const response = await fetch(`${VERCEL_API_URL}/api/send-otp`, {
-                method: 'POST', // ต้องเป็น POST
+                method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json', // บอกว่าเราส่ง JSON
+                    'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    bookingId: sessionKey // ส่ง bookingId ไปใน body
+                    bookingId: sessionKey
                 }),
             });
 
-            const data = await response.json(); // อ่านค่าที่ Vercel ตอบกลับมา
+            const data = await response.json();
 
             if (!response.ok) {
-                // ถ้า Vercel ตอบ error (เช่น 404, 500)
                 throw new Error(data.error || "Failed to send OTP.");
             }
-            // --- 🚀 สิ้นสุดโค้ดใหม่ ---
             
-            setVerificationStep('otp'); // ไปขั้นตอนถัดไป (เหมือนเดิม)
+            setVerificationStep('otp');
             Alert.alert("OTP Sent", `An OTP has been sent to ${bookingData.visitorInfo.email}`);
 
         } catch (error) {
             console.error("Error sending OTP:", error);
-            setErrorMessage(error.message); // แสดง Error จริงจาก Vercel
+            setErrorMessage(error.message);
         }
         setActionLoading(false);
     };
 
-    // 🚀 [ส่วนที่ 3] แก้ไข handleOtpVerification 🚀
-    // (เปลี่ยนจากโค้ดจำลอง "123456" เป็นการเรียก Vercel API จริงด้วย fetch)
+    // 🔥 ฟังก์ชันจัดการ OTP แบบใหม่
+    const handleOtpChange = (value, index) => {
+        // อนุญาตเฉพาะตัวเลข
+        if (value && !/^\d+$/.test(value)) return;
+
+        const newOtpDigits = [...otpDigits];
+        newOtpDigits[index] = value;
+        setOtpDigits(newOtpDigits);
+
+        // ถ้ามีค่าและยังไม่ใช่ช่องสุดท้าย ให้เลื่อนไปช่องถัดไป
+        if (value && index < 5) {
+            otpInputRefs.current[index + 1]?.focus();
+        }
+    };
+
+    const handleOtpKeyPress = (e, index) => {
+        // ถ้ากด Backspace และช่องปัจจุบันว่าง ให้ย้อนกลับไปช่องก่อนหน้า
+        if (e.nativeEvent.key === 'Backspace' && !otpDigits[index] && index > 0) {
+            otpInputRefs.current[index - 1]?.focus();
+        }
+    };
+
     const handleOtpVerification = async () => {
-        if (inputOtp.length < 6) {
+        const otp = otpDigits.join('');
+        
+        if (otp.length < 6) {
             setErrorMessage('Please enter a 6-digit OTP.');
             return;
         }
@@ -144,44 +195,54 @@ const VisitorControlScreen = ({ route, navigation }) => {
         setErrorMessage('');
 
         try {
-            // --- 🚀 นี่คือโค้ดใหม่ที่เรียก Vercel ---
             const response = await fetch(`${VERCEL_API_URL}/api/verify-otp`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    bookingId: sessionKey, // ส่ง bookingId
-                    otp: inputOtp          // และ OTP ที่ผู้ใช้กรอก
+                    bookingId: sessionKey,
+                    otp: otp
                 }),
             });
 
             const data = await response.json();
 
             if (!response.ok || data.verified !== true) {
-                // ถ้า Vercel ตอบ error หรือ verified ไม่ใช่ true
                 throw new Error(data.error || "Invalid or expired OTP.");
             }
-            // --- 🚀 สิ้นสุดโค้ดใหม่ ---
 
-            // ถ้า OTP ถูกต้อง
-            setVerificationStep('verified'); // ยืนยันตัวตนสำเร็จ!
-            loadBarrierStatus(); // โหลดสถานะที่กั้น (ของเดิม)
+            setVerificationStep('verified');
+            loadBarrierStatus();
 
         } catch (error) {
             console.error("Error verifying OTP:", error);
-            setErrorMessage(error.message); // แสดง Error จริงจาก Vercel
+            setErrorMessage(error.message);
         }
         setActionLoading(false);
     };
 
-    // --- 6. ฟังก์ชัน HandleControl (ของเดิม) ---
-    // (โค้ดส่วนนี้เหมือนเดิม)
     const handleControl = async (action) => {
         if (!sessionId) {
             Alert.alert("Error", "Session ID is missing.");
             return;
         }
+        
+        if (!isBarrierEnabled) {
+            let message = "Barrier access is only available during your booked time period.";
+            
+            if (bookingData.rateType === 'hourly') {
+                message += `\n\nYour booking period:\n${formatDate(bookingData.entryDate)} ${bookingData.entryTime} - ${formatDate(bookingData.exitDate)} ${bookingData.exitTime}`;
+            } else if (bookingData.rateType === 'daily') {
+                message += `\n\nYour booking period:\n${formatDate(bookingData.entryDate)} ${bookingData.entryTime || '00:00'} - ${formatDate(bookingData.exitDate)} 23:59`;
+            } else {
+                message += `\n\nYour booking period:\n${formatDate(bookingData.entryDate)} ${bookingData.entryTime || '00:00'} - ${formatDate(bookingData.exitDate)} 23:59`;
+            }
+            
+            Alert.alert("Barrier Access Not Available", message);
+            return;
+        }
+
         if (barrierLocked) {
             Alert.alert("Action not allowed", "Please pay the fine first.");
             return;
@@ -201,12 +262,18 @@ const VisitorControlScreen = ({ route, navigation }) => {
             Alert.alert("Error", "Failed to log barrier action.");
         }
     };
-    
 
-    // --- 7. RENDER FUNCTIONS (สำหรับแต่ละสถานะ) ---
-    // (โค้ดส่วนนี้ทั้งหมดเหมือนเดิม)
+    const formatDate = (dateString) => {
+        if (!dateString) return '-';
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        } catch (error) {
+            return dateString;
+        }
+    };
 
-    // 7.1 หน้าจอโหลด
+    // --- RENDER FUNCTIONS ---
     if (pageLoading) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -216,7 +283,6 @@ const VisitorControlScreen = ({ route, navigation }) => {
         );
     }
     
-    // 7.2 หน้าจอกรณี Error (เช่น หา booking ไม่เจอ)
     if (!bookingData && !pageLoading) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -227,7 +293,6 @@ const VisitorControlScreen = ({ route, navigation }) => {
         );
     }
 
-    // 7.3 หน้าจอกรอกทะเบียนรถ (State 1)
     const renderPlateInput = () => (
         <ScrollView contentContainerStyle={styles.scrollContainer}>
             <View style={styles.header}>
@@ -262,7 +327,7 @@ const VisitorControlScreen = ({ route, navigation }) => {
         </ScrollView>
     );
 
-    // 7.4 หน้าจอกรอก OTP (State 2)
+    // 🔥 แก้ไข renderOtpInput ให้เป็นช่องตัวเลข 6 ช่อง
     const renderOtpInput = () => (
         <ScrollView contentContainerStyle={styles.scrollContainer}>
             <View style={styles.header}>
@@ -274,42 +339,65 @@ const VisitorControlScreen = ({ route, navigation }) => {
                     <Ionicons name="keypad" size={24} color="#4CAF50" />
                     <Text style={styles.cardTitle}>Enter Verification Code</Text>
                 </View>
-                <TextInput
-                    style={styles.inputField}
-                    placeholder="OTP"
-                    value={inputOtp}
-                    onChangeText={setInputOtp}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    editable={!actionLoading}
-                />
+                
+                {/* 🔥 OTP Input Boxes */}
+                <View style={styles.otpContainer}>
+                    {otpDigits.map((digit, index) => (
+                        <TextInput
+                            key={index}
+                            ref={ref => otpInputRefs.current[index] = ref}
+                            style={[
+                                styles.otpBox,
+                                digit ? styles.otpBoxFilled : {},
+                            ]}
+                            value={digit}
+                            onChangeText={(value) => handleOtpChange(value, index)}
+                            onKeyPress={(e) => handleOtpKeyPress(e, index)}
+                            keyboardType="number-pad"
+                            maxLength={1}
+                            editable={!actionLoading}
+                            selectTextOnFocus
+                        />
+                    ))}
+                </View>
+
                 {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+                
                 <TouchableOpacity
-                    style={[styles.verifyButton, (actionLoading || inputOtp.length < 6) && styles.disabledButton]}
+                    style={[
+                        styles.verifyButton, 
+                        (actionLoading || otpDigits.join('').length < 6) && styles.disabledButton
+                    ]}
                     onPress={handleOtpVerification}
-                    disabled={actionLoading || inputOtp.length < 6}
+                    disabled={actionLoading || otpDigits.join('').length < 6}
                 >
                     {actionLoading 
                         ? <ActivityIndicator color="white" /> 
                         : <Text style={styles.verifyButtonText}>Verify & Continue</Text>
                     }
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => {setVerificationStep('plate'); setErrorMessage('');}} style={styles.linkButton}>
+                
+                <TouchableOpacity 
+                    onPress={() => {
+                        setVerificationStep('plate'); 
+                        setErrorMessage('');
+                        setOtpDigits(['', '', '', '', '', '']);
+                    }} 
+                    style={styles.linkButton}
+                >
                     <Text style={styles.linkButtonText}>Wrong License Plate?</Text>
                 </TouchableOpacity>
             </View>
         </ScrollView>
     );
 
-    // 7.5 หน้าจอควบคุม (State 3 - UI เดิมของคุณ)
     const renderBarrierControl = () => (
         <ScrollView contentContainerStyle={styles.scrollContainer}>
-            {/* Header (UI เดิม) */}
             <View style={styles.header}>
                 <Text style={styles.title}>Visitor Control</Text>
                 <Text style={styles.subtitle}>Parking Barrier Access</Text>
             </View>
-            {/* ข้อมูล Session (UI เดิม) */}
+            
             <View style={styles.infoCard}>
                 <View style={styles.cardHeader}>
                     <Ionicons name="key" size={24} color="#FF9800" />
@@ -319,8 +407,24 @@ const VisitorControlScreen = ({ route, navigation }) => {
                     <Text style={styles.sessionLabel}>Session ID:</Text>
                     <Text style={styles.sessionValue}>{sessionId || 'N/A'}</Text>
                 </View>
+                
+                <View style={styles.timeInfoContainer}>
+                    <Ionicons name="time-outline" size={16} color="#FF9800" />
+                    <Text style={styles.timeInfoText}>
+                        Barrier access available only during booked period:
+                    </Text>
+                    {bookingData.rateType === 'hourly' ? (
+                        <Text style={styles.timeDetailText}>
+                            {formatDate(bookingData.entryDate)} {bookingData.entryTime} - {formatDate(bookingData.exitDate)} {bookingData.exitTime}
+                        </Text>
+                    ) : (
+                        <Text style={styles.timeDetailText}>
+                            {formatDate(bookingData.entryDate)} {bookingData.entryTime || '00:00'} - {formatDate(bookingData.exitDate)} 23:59
+                        </Text>
+                    )}
+                </View>
             </View>
-            {/* ปุ่มควบคุม Barrier (UI เดิม) */}
+            
             <View style={styles.controlCard}>
                 <View style={styles.cardHeader}>
                     <Ionicons name="car" size={24} color="#2196F3" />
@@ -334,11 +438,11 @@ const VisitorControlScreen = ({ route, navigation }) => {
                         style={[
                             styles.controlButton, 
                             styles.openButton,
-                            barrierLocked ? { backgroundColor: '#B0BEC5' } : {}
+                            (!isBarrierEnabled || barrierLocked) ? { backgroundColor: '#B0BEC5' } : {}
                         ]}
                         onPress={() => handleControl('Open Barrier')}
                         activeOpacity={0.8}
-                        disabled={barrierLocked}
+                        disabled={!isBarrierEnabled || barrierLocked}
                     >
                         <View style={styles.buttonContent}>
                             <Ionicons name="arrow-up" size={32} color="white" />
@@ -349,11 +453,11 @@ const VisitorControlScreen = ({ route, navigation }) => {
                         style={[
                             styles.controlButton, 
                             styles.closeButton,
-                            barrierLocked ? { backgroundColor: '#B0BEC5' } : {}
+                            (!isBarrierEnabled || barrierLocked) ? { backgroundColor: '#B0BEC5' } : {}
                         ]}
                         onPress={() => handleControl('Close Barrier')}
                         activeOpacity={0.8}
-                        disabled={barrierLocked}
+                        disabled={!isBarrierEnabled || barrierLocked}
                     >
                         <View style={styles.buttonContent}>
                             <Ionicons name="arrow-down" size={32} color="white" />
@@ -361,8 +465,20 @@ const VisitorControlScreen = ({ route, navigation }) => {
                         </View>
                     </TouchableOpacity>
                 </View>
+                
+                {(!isBarrierEnabled || barrierLocked) && (
+                    <View style={styles.warningContainer}>
+                        <Ionicons name="warning" size={16} color="#FF6B6B" />
+                        <Text style={styles.warningText}>
+                            {!isBarrierEnabled 
+                                ? "Barrier access is currently unavailable. Please check your booking period." 
+                                : "Please pay the fine first to unlock barrier control."
+                            }
+                        </Text>
+                    </View>
+                )}
             </View>
-            {/* Instructions (UI เดิม) */}
+            
             <View style={styles.instructionsCard}>
                 <View style={styles.cardHeader}>
                     <Ionicons name="information-circle" size={24} color="#6C757D" />
@@ -371,13 +487,11 @@ const VisitorControlScreen = ({ route, navigation }) => {
                 <Text style={styles.instructionText}>• Use "Lift the barrier up" when arriving at the parking</Text>
                 <Text style={styles.instructionText}>• Use "Lower the barrier down" after your vehicle has passed</Text>
                 <Text style={styles.instructionText}>• Make sure the area is clear before operating</Text>
-                <Text style={styles.instructionText}>• This session will expire automatically</Text>
+                <Text style={styles.instructionText}>• Barrier access is only available during your booked time period</Text>
             </View>
         </ScrollView>
     );
 
-    // --- 8. MAIN RETURN (เลือก RENDER ตามสถานะ) ---
-    // (โค้ดส่วนนี้เหมือนเดิม)
     return (
         <KeyboardAvoidingView 
             style={styles.container} 
@@ -390,8 +504,6 @@ const VisitorControlScreen = ({ route, navigation }) => {
     );
 };
 
-// --- 9. STYLES (รวมของเดิมและของใหม่) ---
-// (โค้ดส่วนนี้ทั้งหมดเหมือนเดิม)
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -481,6 +593,46 @@ const styles = StyleSheet.create({
         color: '#2D3748',
         fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
+    timeInfoContainer: {
+        flexDirection: 'column',
+        alignItems: 'center',
+        marginTop: 10,
+        padding: 10,
+        backgroundColor: '#FFF3E0',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#FFB74D',
+    },
+    timeInfoText: {
+        color: '#E65100',
+        fontSize: 12,
+        fontWeight: '600',
+        marginBottom: 5,
+        textAlign: 'center',
+    },
+    timeDetailText: {
+        color: '#E65100',
+        fontSize: 11,
+        fontWeight: '500',
+        textAlign: 'center',
+    },
+    warningContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 15,
+        padding: 10,
+        backgroundColor: '#FFEBEE',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#FFCDD2',
+    },
+    warningText: {
+        color: '#D32F2F',
+        fontSize: 12,
+        fontWeight: '500',
+        marginLeft: 8,
+        flex: 1,
+    },
     controlDescription: {
         fontSize: 14,
         color: '#718096',
@@ -535,6 +687,29 @@ const styles = StyleSheet.create({
         marginBottom: 10,
         textAlign: 'center',
     },
+    // 🔥 เพิ่ม styles สำหรับ OTP boxes
+    otpContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginVertical: 20,
+        paddingHorizontal: 10,
+    },
+    otpBox: {
+        width: 45,
+        height: 55,
+        borderWidth: 2,
+        borderColor: '#E2E8F0',
+        borderRadius: 12,
+        textAlign: 'center',
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#2D3748',
+        backgroundColor: '#F7FAFC',
+    },
+    otpBoxFilled: {
+        borderColor: '#4CAF50',
+        backgroundColor: '#E8F5E9',
+    },
     errorText: {
         color: 'red',
         marginTop: 5,
@@ -542,7 +717,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     verifyButton: {
-        backgroundColor: '#4CAF50', // สีเขียว
+        backgroundColor: '#4CAF50',
         padding: 16,
         borderRadius: 15,
         alignItems: 'center',
@@ -554,7 +729,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     disabledButton: {
-        backgroundColor: '#B0BEC5', // สีเทา
+        backgroundColor: '#B0BEC5',
     },
     linkButton: {
         marginTop: 20,

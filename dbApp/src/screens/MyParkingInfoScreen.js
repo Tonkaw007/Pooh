@@ -11,6 +11,7 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
     const [payFineStatus, setPayFineStatus] = useState(null);
     const [showPayFineButton, setShowPayFineButton] = useState(false);
     const [couponDetails, setCouponDetails] = useState(null);
+    const [isBarrierEnabled, setIsBarrierEnabled] = useState(false); // เพิ่ม state ใหม่
 
     const now = new Date();
 
@@ -50,6 +51,68 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
     }, [bookingData.id]);
 
     const isPaidFine = payFineStatus === 'paid';
+
+    // 🔥 เพิ่ม Logic ตรวจสอบเวลาเพื่อเปิด/ปิดปุ่ม Barrier
+    useEffect(() => {
+        const checkBarrierAccessTime = () => {
+            // ถ้าเป็น visitor booking ไม่ต้องตรวจสอบเวลา
+            if (bookingData.bookingType === 'visitor') {
+                setIsBarrierEnabled(true);
+                return;
+            }
+
+            // ถ้าไม่มีข้อมูลเวลา entry/exit ให้ปิดปุ่ม
+            if (!bookingData.entryDate || !bookingData.entryTime || !bookingData.exitDate) {
+                setIsBarrierEnabled(false);
+                return;
+            }
+
+            const now = new Date();
+            
+            // สำหรับ hourly - ใช้ entryDate+entryTime และ exitDate+exitTime จริง
+            if (bookingData.rateType === 'hourly' && bookingData.exitTime) {
+                const entryDateTime = new Date(`${bookingData.entryDate}T${bookingData.entryTime}`);
+                const exitDateTime = new Date(`${bookingData.exitDate}T${bookingData.exitTime}`);
+                
+                // อนุญาตให้ใช้ barrier เฉพาะในช่วงเวลาจอง
+                if (now >= entryDateTime && now <= exitDateTime) {
+                    setIsBarrierEnabled(true);
+                } else {
+                    setIsBarrierEnabled(false);
+                }
+            }
+            // สำหรับ daily - ใช้ entryDate+entryTime และ exitDate+23:59
+            else if (bookingData.rateType === 'daily') {
+                const entryDateTime = new Date(`${bookingData.entryDate}T${bookingData.entryTime || '00:00'}`);
+                const exitDateTime = new Date(`${bookingData.exitDate}T23:59`);
+                
+                // อนุญาตให้ใช้ barrier เฉพาะในช่วงเวลาจอง
+                if (now >= entryDateTime && now <= exitDateTime) {
+                    setIsBarrierEnabled(true);
+                } else {
+                    setIsBarrierEnabled(false);
+                }
+            }
+            // สำหรับ monthly - ใช้ entryDate+entryTime และ exitDate+23:59
+            else if (bookingData.rateType === 'monthly') {
+                const entryDateTime = new Date(`${bookingData.entryDate}T${bookingData.entryTime || '00:00'}`);
+                const exitDateTime = new Date(`${bookingData.exitDate}T23:59`);
+                
+                // อนุญาตให้ใช้ barrier เฉพาะในช่วงเวลาจอง
+                if (now >= entryDateTime && now <= exitDateTime) {
+                    setIsBarrierEnabled(true);
+                } else {
+                    setIsBarrierEnabled(false);
+                }
+            }
+        };
+
+        checkBarrierAccessTime();
+        
+        // อัพเดททุกนาทีเพื่อตรวจสอบเวลาแบบ real-time
+        const interval = setInterval(checkBarrierAccessTime, 60000);
+        return () => clearInterval(interval);
+    }, [bookingData]);
 
     // Logic แสดงปุ่ม Pay Fine
     useEffect(() => {
@@ -150,6 +213,24 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
             Alert.alert("Action not allowed", "Please pay the fine first.");
             return;
         }
+        
+        // 🔥 เพิ่มการตรวจสอบเวลา
+        if (!isBarrierEnabled) {
+            let message = "Barrier access is only available during your booked time period.";
+            
+            // แสดงช่วงเวลาที่จองแบบละเอียด
+            if (bookingData.rateType === 'hourly') {
+                message += `\n\nYour booking period:\n${formatDate(bookingData.entryDate)} ${bookingData.entryTime} - ${formatDate(bookingData.exitDate)} ${bookingData.exitTime}`;
+            } else if (bookingData.rateType === 'daily') {
+                message += `\n\nYour booking period:\n${formatDate(bookingData.entryDate)} ${bookingData.entryTime || '00:00'} - ${formatDate(bookingData.exitDate)} 23:59`;
+            } else { // monthly
+                message += `\n\nYour booking period:\n${formatDate(bookingData.entryDate)} ${bookingData.entryTime || '00:00'} - ${formatDate(bookingData.exitDate)} 23:59`;
+            }
+            
+            Alert.alert("Barrier Access Not Available", message);
+            return;
+        }
+        
         setShowBarrierModal(true);
     };
 
@@ -463,10 +544,12 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                                 <TouchableOpacity
                                     style={[
                                         styles.barrierButton,
-                                        showPayFineButton ? { backgroundColor: '#B0BEC5' } : {},
+                                        // 🔥 เพิ่มเงื่อนไขตรวจสอบเวลา
+                                        (!isBarrierEnabled || showPayFineButton) ? { backgroundColor: '#B0BEC5' } : {},
                                     ]}
                                     onPress={handleControlBarrier}
-                                    disabled={showPayFineButton}
+                                    // 🔥 ปิดปุ่มเมื่อไม่ใช่เวลาจองหรือมีค่าปรับ
+                                    disabled={!isBarrierEnabled || showPayFineButton}
                                 >
                                     <Ionicons name="lock-open" size={20} color="white" />
                                     <Text style={styles.barrierButtonText}>Control Barrier</Text>
@@ -478,6 +561,25 @@ const MyParkingInfoScreen = ({ route, navigation }) => {
                                 <Text style={styles.cancelButtonText}>Cancel Booking</Text>
                             </TouchableOpacity>
                         </View>
+
+                        {/* 🔥 แสดงข้อมูลช่วงเวลาจองเมื่อปุ่ม Barrier ใช้งานไม่ได้ */}
+                        {!isBarrierEnabled && bookingData.bookingType !== 'visitor' && (
+                            <View style={styles.timeInfoContainer}>
+                                <Ionicons name="time-outline" size={16} color="#FF9800" />
+                                <Text style={styles.timeInfoText}>
+                                    Barrier access available only during booked period:
+                                </Text>
+                                {bookingData.rateType === 'hourly' ? (
+                                    <Text style={styles.timeDetailText}>
+                                        {formatDate(bookingData.entryDate)} {bookingData.entryTime} - {formatDate(bookingData.exitDate)} {bookingData.exitTime}
+                                    </Text>
+                                ) : (
+                                    <Text style={styles.timeDetailText}>
+                                        {formatDate(bookingData.entryDate)} {bookingData.entryTime || '00:00'} - {formatDate(bookingData.exitDate)} 23:59
+                                    </Text>
+                                )}
+                            </View>
+                        )}
 
                         {/* Render ปุ่ม Pay Fine */}
                         {showPayFineButton && (
@@ -728,6 +830,30 @@ const styles = StyleSheet.create({
         color: 'white',
         fontWeight: '600',
         fontSize: 14,
+    },
+    // 🔥 เพิ่มสไตล์ใหม่สำหรับแสดงข้อมูลเวลา
+    timeInfoContainer: {
+        flexDirection: 'column',
+        alignItems: 'center',
+        marginTop: 10,
+        padding: 10,
+        backgroundColor: '#FFF3E0',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#FFB74D',
+    },
+    timeInfoText: {
+        color: '#E65100',
+        fontSize: 12,
+        fontWeight: '600',
+        marginBottom: 5,
+        textAlign: 'center',
+    },
+    timeDetailText: {
+        color: '#E65100',
+        fontSize: 11,
+        fontWeight: '500',
+        textAlign: 'center',
     },
     payFineWrapper: {
         marginTop: 10,

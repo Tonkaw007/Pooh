@@ -40,23 +40,41 @@ const BookParkingScreen = ({ navigation, route }) => {
     { id: 'monthly', label: 'Monthly', price: '3,000 baht/month' }
   ];
 
-  // --- Logic คำนวณเวลาออก สำหรับ hourly และ daily ---
+  // --- ✅ แก้ไข: Logic คำนวณเวลาออก สำหรับ hourly และ daily (ป้องกัน infinite loop) ---
   useEffect(() => {
     if (selectedRate === 'hourly') {
       const entryDateTime = new Date(entryDate);
       entryDateTime.setHours(entryTime.getHours(), entryTime.getMinutes(), 0, 0);
       const exitDateTime = new Date(entryDateTime.getTime() + durationHours * 60 * 60 * 1000);
       
-      setExitDate(exitDateTime);
-      setExitTime(exitDateTime);
+      // ✅ ใช้ functional update และเช็คว่าค่าเปลี่ยนจริงๆ ก่อน set
+      setExitDate(prev => {
+        const newTime = exitDateTime.getTime();
+        return prev.getTime() === newTime ? prev : new Date(newTime);
+      });
+      
+      setExitTime(prev => {
+        const newTime = exitDateTime.getTime();
+        return prev.getTime() === newTime ? prev : new Date(newTime);
+      });
 
     } else if (selectedRate === 'daily') {
       const newExit = new Date(entryDate);
       newExit.setDate(newExit.getDate() + durationDays);
-      setExitDate(newExit);
-      setExitTime(new Date(entryTime));
+      
+      setExitDate(prev => {
+        const newTime = newExit.getTime();
+        return prev.getTime() === newTime ? prev : new Date(newTime);
+      });
+      
+      // ✅ สร้าง exitTime ใหม่ที่ไม่ depend on state เดิม
+      const newExitTime = new Date(entryTime);
+      setExitTime(prev => {
+        const newTime = newExitTime.getTime();
+        return prev.getTime() === newTime ? prev : new Date(newTime);
+      });
     }
-  }, [entryDate, entryTime, durationHours, durationDays, selectedRate]);
+  }, [entryDate, entryTime.getTime(), durationHours, durationDays, selectedRate]);
 
   // --- Logic คำนวณเวลาออก สำหรับ monthly ---
   useEffect(() => {
@@ -83,25 +101,43 @@ const BookParkingScreen = ({ navigation, route }) => {
     }
   }, [entryDate, durationMonths, selectedRate]);
 
-  // Auto-scroll to selected hour in vertical picker
+  // ✅ แก้ไข: Auto-scroll to selected hour in vertical picker
   useEffect(() => {
-    if (scrollViewRef.current && selectedRate === 'hourly') {
-      const scrollPosition = (durationHours - 1) * 60;
-      scrollViewRef.current.scrollTo({
-        y: scrollPosition,
-        animated: true
-      });
+    if (scrollViewRef.current && selectedRate === 'hourly' && durationHours) {
+      const scrollPosition = Math.max(0, (durationHours - 1) * 60);
+      
+      const timer = setTimeout(() => {
+        try {
+          scrollViewRef.current?.scrollTo({
+            y: scrollPosition,
+            animated: true
+          });
+        } catch (error) {
+          console.log('Scroll error:', error);
+        }
+      }, 150);
+      
+      return () => clearTimeout(timer);
     }
   }, [selectedRate, durationHours]);
 
-  // Auto-scroll to selected day in daily picker
+  // ✅ แก้ไข: Auto-scroll to selected day in daily picker
   useEffect(() => {
-    if (dailyScrollViewRef.current && selectedRate === 'daily') {
-      const scrollPosition = (durationDays - 1) * 60;
-      dailyScrollViewRef.current.scrollTo({
-        y: scrollPosition,
-        animated: true
-      });
+    if (dailyScrollViewRef.current && selectedRate === 'daily' && durationDays) {
+      const scrollPosition = Math.max(0, (durationDays - 1) * 60);
+      
+      const timer = setTimeout(() => {
+        try {
+          dailyScrollViewRef.current?.scrollTo({
+            y: scrollPosition,
+            animated: true
+          });
+        } catch (error) {
+          console.log('Scroll error:', error);
+        }
+      }, 150);
+      
+      return () => clearTimeout(timer);
     }
   }, [selectedRate, durationDays]);
 
@@ -166,7 +202,6 @@ const BookParkingScreen = ({ navigation, route }) => {
 
     const price = calculatePrice();
 
-    // ✅ แก้ไข: ส่งข้อมูลเวลาให้ครบถ้วนสำหรับทุกประเภทการจอง
     const bookingData = {
       username,
       bookingType,
@@ -177,12 +212,10 @@ const BookParkingScreen = ({ navigation, route }) => {
       exitDate: toLocalISOString(exitDateTime),
       bookingDate: toLocalISOString(new Date()), 
       licensePlate: bookingType === 'resident' ? residentLicensePlate : undefined,
-      // ✅ ส่งข้อมูลเวลาให้ครบทุกประเภท
       entryTime: formatTime(entryTime),
       exitTime: formatTime(exitTime),
     };
 
-    // ✅ เพิ่มข้อมูล duration ตามประเภท
     if (selectedRate === 'hourly') {
       bookingData.durationHours = durationHours;
     } else if (selectedRate === 'daily') {
@@ -207,20 +240,15 @@ const BookParkingScreen = ({ navigation, route }) => {
 
   // สร้างตัวเลือกชั่วโมงตั้งแต่ 1 ถึง 12
   const hourOptions = Array.from({ length: 12 }, (_, i) => i + 1);
-  // สร้างตัวเลือกวันตั้งแต่ 1 ถึง 7 (เปลี่ยนจาก 14 เป็น 7)
+  // สร้างตัวเลือกวันตั้งแต่ 1 ถึง 7
   const dayOptions = Array.from({ length: 7 }, (_, i) => i + 1);
-
-  const handleHourSelect = (hour) => {
-    setDurationHours(hour);
-  };
-
-  const handleDaySelect = (day) => {
-    setDurationDays(day);
-  };
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior="padding">
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+      >
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
@@ -292,11 +320,13 @@ const BookParkingScreen = ({ navigation, route }) => {
                         snapToInterval={60}
                         decelerationRate="fast"
                         contentContainerStyle={styles.pickerScrollContent}
+                        style={styles.pickerScrollView}
                         onMomentumScrollEnd={(event) => {
                           const offsetY = event.nativeEvent.contentOffset.y;
-                          const index = Math.round(offsetY / 60);
+                          const index = Math.max(0, Math.min(Math.round(offsetY / 60), hourOptions.length - 1));
                           const selectedHour = hourOptions[index];
-                          if (selectedHour && selectedHour !== durationHours) {
+                          
+                          if (selectedHour !== undefined && selectedHour !== durationHours) {
                             setDurationHours(selectedHour);
                           }
                         }}
@@ -366,11 +396,13 @@ const BookParkingScreen = ({ navigation, route }) => {
                         snapToInterval={60}
                         decelerationRate="fast"
                         contentContainerStyle={styles.pickerScrollContent}
+                        style={styles.pickerScrollView}
                         onMomentumScrollEnd={(event) => {
                           const offsetY = event.nativeEvent.contentOffset.y;
-                          const index = Math.round(offsetY / 60);
+                          const index = Math.max(0, Math.min(Math.round(offsetY / 60), dayOptions.length - 1));
                           const selectedDay = dayOptions[index];
-                          if (selectedDay && selectedDay !== durationDays) {
+                          
+                          if (selectedDay !== undefined && selectedDay !== durationDays) {
                             setDurationDays(selectedDay);
                           }
                         }}
@@ -501,7 +533,6 @@ const BookParkingScreen = ({ navigation, route }) => {
   );
 };
 
-// Styles เดิมทั้งหมดเหมือนเดิม
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
@@ -509,7 +540,8 @@ const styles = StyleSheet.create({
   },
   scrollContainer: { 
     padding: 25, 
-    paddingTop: 60 
+    paddingTop: 60,
+    paddingBottom: 40,
   },
   backButton: { 
     position: 'absolute', 
@@ -651,6 +683,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 15,
   },
+  pickerScrollView: {
+    flex: 1,
+  },
   pickerScrollContent: {
     alignItems: 'center',
   },
@@ -663,7 +698,7 @@ const styles = StyleSheet.create({
   pickerItemText: {
     fontSize: 32,
     fontWeight: '600',
-    color: '#ccc',
+    color: '#666666',
   },
   pickerItemTextSelected: {
     fontSize: 40,
@@ -690,7 +725,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 120,
-    background: 'linear-gradient(to bottom, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%)',
+    backgroundColor: 'rgba(255,255,255,0.9)',
     zIndex: 2,
     pointerEvents: 'none',
   },
@@ -700,7 +735,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 120,
-    background: 'linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%)',
+    backgroundColor: 'rgba(255,255,255,0.9)',
     zIndex: 2,
     pointerEvents: 'none',
   },
