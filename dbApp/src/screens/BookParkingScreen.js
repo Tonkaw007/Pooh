@@ -32,6 +32,7 @@ const BookParkingScreen = ({ navigation, route }) => {
 
   const scrollViewRef = useRef(null);
   const dailyScrollViewRef = useRef(null);
+  const hasSetMonthlyTimes = useRef(false);
 
   const rates = [
     { id: 'hourly', label: 'Hourly', price: '40 baht/hour' },
@@ -39,7 +40,7 @@ const BookParkingScreen = ({ navigation, route }) => {
     { id: 'monthly', label: 'Monthly', price: '3,000 baht/month' }
   ];
 
-  // --- Logic คำนวณเวลาออก ---
+  // --- Logic คำนวณเวลาออก สำหรับ hourly และ daily ---
   useEffect(() => {
     if (selectedRate === 'hourly') {
       const entryDateTime = new Date(entryDate);
@@ -54,16 +55,33 @@ const BookParkingScreen = ({ navigation, route }) => {
       newExit.setDate(newExit.getDate() + durationDays);
       setExitDate(newExit);
       setExitTime(new Date(entryTime));
+    }
+  }, [entryDate, entryTime, durationHours, durationDays, selectedRate]);
 
-    } else if (selectedRate === 'monthly') {
+  // --- Logic คำนวณเวลาออก สำหรับ monthly ---
+  useEffect(() => {
+    if (selectedRate === 'monthly') {
       const newExit = new Date(entryDate);
       newExit.setMonth(newExit.getMonth() + durationMonths);
       setExitDate(newExit);
-      // สำหรับ monthly ตั้งค่าเวลา default
-      setEntryTime(new Date(entryDate.setHours(0, 0, 0, 0)));
-      setExitTime(new Date(newExit.setHours(23, 59, 0, 0)));
+      
+      // ตั้งค่าเวลา default เพียงครั้งเดียวเมื่อเปลี่ยนเป็น monthly
+      if (!hasSetMonthlyTimes.current) {
+        const defaultEntryTime = new Date(entryDate);
+        defaultEntryTime.setHours(0, 0, 0, 0);
+        setEntryTime(defaultEntryTime);
+        
+        const defaultExitTime = new Date(newExit);
+        defaultExitTime.setHours(23, 59, 0, 0);
+        setExitTime(defaultExitTime);
+        
+        hasSetMonthlyTimes.current = true;
+      }
+    } else {
+      // รีเซ็ตเมื่อเปลี่ยนไปใช้ rate อื่น
+      hasSetMonthlyTimes.current = false;
     }
-  }, [entryDate, entryTime, durationHours, durationDays, durationMonths, selectedRate]);
+  }, [entryDate, durationMonths, selectedRate]);
 
   // Auto-scroll to selected hour in vertical picker
   useEffect(() => {
@@ -74,7 +92,7 @@ const BookParkingScreen = ({ navigation, route }) => {
         animated: true
       });
     }
-  }, [selectedRate]);
+  }, [selectedRate, durationHours]);
 
   // Auto-scroll to selected day in daily picker
   useEffect(() => {
@@ -85,7 +103,7 @@ const BookParkingScreen = ({ navigation, route }) => {
         animated: true
       });
     }
-  }, [selectedRate]);
+  }, [selectedRate, durationDays]);
 
   const calculatePrice = () => {
     if (!selectedRate) return 0;

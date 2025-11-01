@@ -12,7 +12,7 @@ const ReservationScreen = ({ navigation, route }) => {
   const [selectedFloor, setSelectedFloor] = useState('1st Floor');
   const [showFloorDropdown, setShowFloorDropdown] = useState(false);
 
-  // ✅ รับข้อมูลวันที่และเวลาจาก bookingData ให้ครบถ้วน
+  // รับข้อมูลวันที่และเวลาจาก bookingData ให้ครบถ้วน
   const [selectedEntryDate, setSelectedEntryDate] = useState(bookingData.entryDate);
   const [selectedExitDate, setSelectedExitDate] = useState(
     bookingData.rateType === 'hourly' ? bookingData.entryDate : bookingData.exitDate
@@ -20,7 +20,7 @@ const ReservationScreen = ({ navigation, route }) => {
   const [entryTime, setEntryTime] = useState(bookingData.entryTime || '00:00');
   const [exitTime, setExitTime] = useState(bookingData.exitTime || '23:59');
 
-  const floors = ['1st Floor', '2nd Floor', '3rd Floor', '4th Floor'];
+  const [floors, setFloors] = useState([]); // เปลี่ยนเป็น state ให้รอรับข้อมูล
 
   const createSlotsForFloor = (prefixes) => {
     const floorData = {};
@@ -37,16 +37,17 @@ const ReservationScreen = ({ navigation, route }) => {
     '2nd Floor': createSlotsForFloor(['D', 'E', 'F']),
     '3rd Floor': createSlotsForFloor(['G', 'H', 'I']),
     '4th Floor': createSlotsForFloor(['J', 'K', 'L']),
+    '5th Floor': createSlotsForFloor(['M', 'N', 'O']),
   };
 
-  // ✅ สำหรับ hourly booking ให้ exitDate = entryDate
+  // สำหรับ hourly booking ให้ exitDate = entryDate
   useEffect(() => {
     if (bookingData.rateType === 'hourly') {
       setSelectedExitDate(selectedEntryDate);
     }
   }, [selectedEntryDate, bookingData.rateType]);
 
-  // ✅ โหลดข้อมูล slots และเช็คซ้อนทับ - แก้ไข logic การเช็ค
+  // โหลดข้อมูล slots และเช็คซ้อนทับ 
   useEffect(() => {
     const slotsRef = ref(db, 'parkingSlots');
     const bookingsRef = ref(db, 'bookings');
@@ -57,6 +58,8 @@ const ReservationScreen = ({ navigation, route }) => {
         await update(ref(db), { parkingSlots: floorSlots });
         slotData = floorSlots;
       }
+
+      setFloors(Object.keys(slotData)); 
 
       const bookingSnapshot = await new Promise((resolve) => {
         onValue(bookingsRef, resolve, { onlyOnce: true });
@@ -79,13 +82,13 @@ const ReservationScreen = ({ navigation, route }) => {
             }
 
             if (booking.slotId === slotId && booking.floor === floor) {
-              // ✅ สร้าง Date objects สำหรับการเปรียบเทียบที่สอดคล้องกัน
+              //  สร้าง Date objects สำหรับการเปรียบเทียบที่สอดคล้องกัน
               const bookingEntry = new Date(`${booking.entryDate}T${booking.entryTime || '00:00'}`);
               const bookingExit = new Date(`${booking.exitDate}T${booking.exitTime || '23:59'}`);
               const selectedEntry = new Date(`${selectedEntryDate}T${entryTime}`);
               const selectedExit = new Date(`${selectedExitDate}T${exitTime}`);
 
-              // ✅ ใช้ logic เดียวกันสำหรับทุกประเภทการจอง
+              //  ใช้ logic เดียวกันสำหรับทุกประเภทการจอง
               if (selectedEntry < bookingExit && selectedExit > bookingEntry) {
                 updatedSlots[floor][slotId].status = 'unavailable';
               }
